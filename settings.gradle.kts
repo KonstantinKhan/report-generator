@@ -12,4 +12,5 @@ include(
     "report-layout-ir",
     "report-layout",
     "report-render-svg",
+    "report-render-pdf",
 )
