@@ -37,14 +37,13 @@ fun main(args: Array<String>) {
         }.readBytes()
 
     val registry = FontRegistry()
+    // GOST Type A: real font not available/licensed — PT Sans Regular remains a stand-in.
     val regularRef = registry.register("gost-type-a", loadFont("PT_Sans-Regular.ttf"))
-    // Stand-in for the real ГОСТ 2.304 Type B face (upright, heavier strokes than Type A) — we
-    // don't have that font licensed/available, so PT Sans Bold plays the same visual role: a
-    // distinct weight for header labels vs. body text, resolved by TextStyle.fontFamily.
-    val boldRef = registry.register("gost-type-b", loadFont("PT_Sans-Bold.ttf"))
+    // GOST Type B: real ASCON font (KOMPAS-3D), licensed for this use.
+    val gostBRef = registry.register("gost-type-b", loadFont("GOST-Type-B.ttf"))
 
     fun fontResolver(style: TextStyle) =
-        if (style.fontFamily == "GOST Type B") boldRef else regularRef
+        if (style.fontFamily == "GOST Type B") gostBRef else regularRef
 
     val textMeasurer = PdfBoxTextMeasurer(registry, ::fontResolver)
 
