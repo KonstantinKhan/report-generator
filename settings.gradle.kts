@@ -16,4 +16,5 @@ include(
     "report-api",
     "report-data",
     "reports:specification",
+    "report-cli",
 )
