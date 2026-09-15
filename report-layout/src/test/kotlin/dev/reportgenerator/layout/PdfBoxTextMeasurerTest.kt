@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 class PdfBoxTextMeasurerTest {
 
     private lateinit var measurer: PdfBoxTextMeasurer
-    private val style = TextStyle(fontFamily = "PT Sans", fontSizePt = 10.0)
+    private val style = TextStyle(fontFamily = "PT Sans", fontSizeMm = 3.5)
 
     @BeforeTest
     fun setUp() {

@@ -7,3 +7,4 @@ build/
 out/
 docs/.claude/
 report-cli/output/
+/output/

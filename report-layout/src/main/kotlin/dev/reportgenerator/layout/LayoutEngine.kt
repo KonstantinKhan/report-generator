@@ -165,7 +165,7 @@ private fun drawRow(row: MeasuredRow, top: Length, fontResolver: (TextStyle) -> 
                 width = line.width,
                 height = row.lineHeight
             ),
-            style = ResolvedTextStyle(fontResolver(line.style), line.style.fontSizePt)
+            style = ResolvedTextStyle(fontResolver(line.style), line.style.fontSizeMm / PT_TO_MM)
         )
     }
 
@@ -207,7 +207,7 @@ private fun drawTitleBlock(
         PositionedText(
             text = text,
             rect = Rect(left + 2.mm, top + 2.mm + TITLE_LINE_HEIGHT * index, width - 4.mm, TITLE_LINE_HEIGHT),
-            style = ResolvedTextStyle(fontResolver(style), style.fontSizePt)
+            style = ResolvedTextStyle(fontResolver(style), style.fontSizeMm / PT_TO_MM)
         )
     }
 

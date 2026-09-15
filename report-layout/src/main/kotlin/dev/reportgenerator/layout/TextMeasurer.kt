@@ -28,9 +28,10 @@ class PdfBoxTextMeasurer(
         if (text.isEmpty()) return TextMeasurement(Length.ZERO, Length.ZERO, 0, emptyList())
 
         val font = fontRegistry.loadInto(measurementDocument, fontResolver(style))
-        val lines = wrapIntoLines(text, font, style.fontSizePt, maxWidth)
-        val width = lines.maxOf { lineWidth(it, font, style.fontSizePt) }
-        val lineHeight = Length.ofMillimeters(style.fontSizePt * PT_TO_MM * LINE_HEIGHT_FACTOR)
+        val sizePt = style.fontSizeMm / PT_TO_MM
+        val lines = wrapIntoLines(text, font, sizePt, maxWidth)
+        val width = lines.maxOf { lineWidth(it, font, sizePt) }
+        val lineHeight = Length.ofMillimeters(style.fontSizeMm * LINE_HEIGHT_FACTOR)
 
         return TextMeasurement(width, lineHeight * lines.size, lines.size, lines)
     }
