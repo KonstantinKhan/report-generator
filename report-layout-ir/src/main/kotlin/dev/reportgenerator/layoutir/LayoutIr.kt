@@ -1,6 +1,7 @@
 package dev.reportgenerator.layoutir
 
 import dev.reportgenerator.geometry.Length
+import dev.reportgenerator.geometry.PageFormat
 import dev.reportgenerator.geometry.Point
 import dev.reportgenerator.geometry.Rect
 
@@ -11,11 +12,6 @@ data class Page(
     val format: PageFormat,
     val elements: List<PageElement>
 )
-
-enum class PageFormat(val width: Length, val height: Length) {
-    A4(Length.ofMillimeters(210), Length.ofMillimeters(297)),
-    A3(Length.ofMillimeters(297), Length.ofMillimeters(420))
-}
 
 sealed interface PageElement
 

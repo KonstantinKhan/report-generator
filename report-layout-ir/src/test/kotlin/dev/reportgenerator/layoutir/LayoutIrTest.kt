@@ -1,6 +1,7 @@
 package dev.reportgenerator.layoutir
 
 import dev.reportgenerator.geometry.Length
+import dev.reportgenerator.geometry.PageFormat
 import dev.reportgenerator.geometry.Point
 import dev.reportgenerator.geometry.Rect
 import dev.reportgenerator.geometry.mm

@@ -13,7 +13,8 @@ interface TextMeasurer {
 data class TextMeasurement(
     val width: Length,
     val height: Length,
-    val lineCount: Int
+    val lineCount: Int,
+    val lines: List<String>
 )
 
 class PdfBoxTextMeasurer(
@@ -24,14 +25,14 @@ class PdfBoxTextMeasurer(
     private val measurementDocument = PDDocument()
 
     override fun measure(text: String, style: TextStyle, maxWidth: Length): TextMeasurement {
-        if (text.isEmpty()) return TextMeasurement(Length.ZERO, Length.ZERO, 0)
+        if (text.isEmpty()) return TextMeasurement(Length.ZERO, Length.ZERO, 0, emptyList())
 
         val font = fontRegistry.loadInto(measurementDocument, fontResolver(style))
         val lines = wrapIntoLines(text, font, style.fontSizePt, maxWidth)
         val width = lines.maxOf { lineWidth(it, font, style.fontSizePt) }
         val lineHeight = Length.ofMillimeters(style.fontSizePt * PT_TO_MM * LINE_HEIGHT_FACTOR)
 
-        return TextMeasurement(width, lineHeight * lines.size, lines.size)
+        return TextMeasurement(width, lineHeight * lines.size, lines.size, lines)
     }
 
     private fun lineWidth(line: String, font: PDFont, sizePt: Double): Length {
