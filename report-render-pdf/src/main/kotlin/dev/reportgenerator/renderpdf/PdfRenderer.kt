@@ -9,11 +9,13 @@ import dev.reportgenerator.layoutir.PageElement
 import dev.reportgenerator.layoutir.PositionedImage
 import dev.reportgenerator.layoutir.PositionedText
 import dev.reportgenerator.layoutir.Rectangle
+import dev.reportgenerator.layoutir.TextOrientation
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.PDPageContentStream
 import org.apache.pdfbox.pdmodel.common.PDRectangle
 import org.apache.pdfbox.pdmodel.font.PDFont
+import org.apache.pdfbox.util.Matrix
 import java.awt.Color
 import java.io.ByteArrayOutputStream
 
@@ -77,6 +79,19 @@ private fun renderText(
     pageHeightPt: Float
 ) {
     val font = fontCache.getOrPut(text.style.font.id) { fontRegistry.loadInto(pdf, text.style.font) }
+
+    when (text.orientation) {
+        TextOrientation.HORIZONTAL -> renderHorizontalText(stream, text, font, pageHeightPt)
+        TextOrientation.VERTICAL_BOTTOM_TO_TOP -> renderVerticalText(stream, text, font, pageHeightPt)
+    }
+}
+
+private fun renderHorizontalText(
+    stream: PDPageContentStream,
+    text: PositionedText,
+    font: PDFont,
+    pageHeightPt: Float
+) {
     val x = text.rect.x.toPt()
     val topY = text.rect.y.toPt()
     val heightPt = text.rect.height.toPt()
@@ -86,6 +101,27 @@ private fun renderText(
     stream.beginText()
     stream.setFont(font, text.style.sizePt.toFloat())
     stream.newLineAtOffset(x, pdfY)
+    stream.showText(text.text)
+    stream.endText()
+}
+
+// PDF space is already y-up with a standard-math rotation convention (positive = counterclockwise,
+// and "counterclockwise" here means the same thing visually as it does on paper — unlike SVG,
+// there's no coordinate-flip to compensate for). So +90° here produces the same on-page result as
+// rotate(-90) in the SVG renderer: bottom-to-top reading, baseline side on the right. Anchor is the
+// physical bottom of the cell box — same point as the SVG version, just expressed after the Y flip.
+private fun renderVerticalText(
+    stream: PDPageContentStream,
+    text: PositionedText,
+    font: PDFont,
+    pageHeightPt: Float
+) {
+    val anchorX = (text.rect.x + text.rect.width / 2).toPt()
+    val anchorY = flip((text.rect.y + text.rect.height).toPt(), pageHeightPt)
+
+    stream.beginText()
+    stream.setFont(font, text.style.sizePt.toFloat())
+    stream.setTextMatrix(Matrix.getRotateInstance(Math.toRadians(90.0), anchorX, anchorY))
     stream.showText(text.text)
     stream.endText()
 }

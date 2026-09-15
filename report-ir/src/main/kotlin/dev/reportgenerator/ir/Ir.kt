@@ -27,7 +27,10 @@ data class IrColumn(
     val header: String? = null
 )
 
-data class IrTableHeader(val cells: List<IrCell>)
+data class IrTableHeader(
+    val cells: List<IrCell>,
+    val height: Length? = null
+)
 
 sealed interface IrTableElement
 
@@ -42,7 +45,11 @@ data class IrRow(
     val constraints: LayoutConstraints = LayoutConstraints.Default
 ) : IrTableElement
 
+enum class TextOrientation { HORIZONTAL, VERTICAL_BOTTOM_TO_TOP }
+
 data class IrCell(
     val text: String,
-    val style: TextStyle = Styles.tableText
+    val style: TextStyle = Styles.tableText,
+    val orientation: TextOrientation = TextOrientation.HORIZONTAL,
+    val manualLines: List<String>? = null
 )

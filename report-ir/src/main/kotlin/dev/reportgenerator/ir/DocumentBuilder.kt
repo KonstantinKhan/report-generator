@@ -53,6 +53,10 @@ class TableBuilder {
         header = IrTableHeader(cells.map { IrCell(it) })
     }
 
+    fun header(height: Length, block: HeaderBuilder.() -> Unit) {
+        header = IrTableHeader(HeaderBuilder().apply(block).build(), height = height)
+    }
+
     fun group(
         title: String,
         constraints: LayoutConstraints = LayoutConstraints.Default,
@@ -62,6 +66,21 @@ class TableBuilder {
     }
 
     fun build(): IrTable = IrTable(columns, header, content, style)
+}
+
+class HeaderBuilder {
+    private val cells = mutableListOf<IrCell>()
+
+    fun cell(
+        text: String,
+        orientation: TextOrientation = TextOrientation.HORIZONTAL,
+        style: TextStyle = Styles.tableText,
+        manualLines: List<String>? = null
+    ) {
+        cells += IrCell(text = text, style = style, orientation = orientation, manualLines = manualLines)
+    }
+
+    fun build(): List<IrCell> = cells
 }
 
 class ColumnsBuilder {

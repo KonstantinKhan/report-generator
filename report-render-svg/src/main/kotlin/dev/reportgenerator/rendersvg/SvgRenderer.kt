@@ -8,6 +8,7 @@ import dev.reportgenerator.layoutir.PageElement
 import dev.reportgenerator.layoutir.PositionedImage
 import dev.reportgenerator.layoutir.PositionedText
 import dev.reportgenerator.layoutir.Rectangle
+import dev.reportgenerator.layoutir.TextOrientation
 
 private const val PT_TO_MM = 25.4 / 72.0
 private const val BASELINE_RATIO = 0.8
@@ -34,7 +35,12 @@ private fun renderElement(element: PageElement): String = when (element) {
     is PositionedImage -> renderImagePlaceholder(element)
 }
 
-private fun renderText(text: PositionedText): String {
+private fun renderText(text: PositionedText): String = when (text.orientation) {
+    TextOrientation.HORIZONTAL -> renderHorizontalText(text)
+    TextOrientation.VERTICAL_BOTTOM_TO_TOP -> renderVerticalText(text)
+}
+
+private fun renderHorizontalText(text: PositionedText): String {
     val x = text.rect.x.toMillimeters()
     val top = text.rect.y.toMillimeters()
     val height = text.rect.height.toMillimeters()
@@ -42,6 +48,19 @@ private fun renderText(text: PositionedText): String {
     val fontSizeMm = text.style.sizePt * PT_TO_MM
 
     return """<text x="$x" y="$baseline" font-size="$fontSizeMm" font-family="sans-serif">${escapeXml(text.text)}</text>"""
+}
+
+// rotate(-90) = counterclockwise in SVG's clockwise-positive convention: local +x (reading
+// direction) maps to page "up", local +y (below baseline) maps to page "right" — so text reads
+// bottom-to-top with the baseline side on the right, matching the ESKD "Формат"/"Зона" columns.
+// Anchor point is the BOTTOM of the cell's box (rect.y + rect.height): text starts there and
+// extends upward for exactly its own measured length, which is what rect.height already equals.
+private fun renderVerticalText(text: PositionedText): String {
+    val px = (text.rect.x + text.rect.width / 2).toMillimeters()
+    val py = (text.rect.y + text.rect.height).toMillimeters()
+    val fontSizeMm = text.style.sizePt * PT_TO_MM
+
+    return """<text x="0" y="0" font-size="$fontSizeMm" font-family="sans-serif" transform="translate($px, $py) rotate(-90)">${escapeXml(text.text)}</text>"""
 }
 
 private fun renderLine(line: Line): String {

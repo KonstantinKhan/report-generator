@@ -15,10 +15,13 @@ data class Page(
 
 sealed interface PageElement
 
+enum class TextOrientation { HORIZONTAL, VERTICAL_BOTTOM_TO_TOP }
+
 data class PositionedText(
     val text: String,
     val rect: Rect,
-    val style: ResolvedTextStyle
+    val style: ResolvedTextStyle,
+    val orientation: TextOrientation = TextOrientation.HORIZONTAL
 ) : PageElement
 
 data class Line(
