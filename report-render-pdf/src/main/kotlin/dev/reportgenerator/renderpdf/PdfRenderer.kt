@@ -2,6 +2,7 @@ package dev.reportgenerator.renderpdf
 
 import dev.reportgenerator.geometry.Length
 import dev.reportgenerator.layout.FontRegistry
+import dev.reportgenerator.layoutir.BASELINE_RATIO
 import dev.reportgenerator.layoutir.LaidOutDocument
 import dev.reportgenerator.layoutir.Line
 import dev.reportgenerator.layoutir.Page
@@ -20,7 +21,6 @@ import java.awt.Color
 import java.io.ByteArrayOutputStream
 
 private const val MM_TO_PT = 72.0 / 25.4
-private const val BASELINE_RATIO = 0.8f
 
 fun renderToPdf(document: LaidOutDocument, fontRegistry: FontRegistry): ByteArray {
     PDDocument().use { pdf ->
@@ -95,7 +95,7 @@ private fun renderHorizontalText(
     val x = text.rect.x.toPt()
     val topY = text.rect.y.toPt()
     val heightPt = text.rect.height.toPt()
-    val baselineLayoutY = topY + heightPt * BASELINE_RATIO
+    val baselineLayoutY = topY + heightPt * BASELINE_RATIO.toFloat()
     val pdfY = flip(baselineLayoutY, pageHeightPt)
 
     stream.beginText()
@@ -121,7 +121,7 @@ private fun renderVerticalText(
     font: PDFont,
     pageHeightPt: Float
 ) {
-    val anchorX = (text.rect.x + text.rect.width * BASELINE_RATIO.toDouble()).toPt()
+    val anchorX = (text.rect.x + text.rect.width * BASELINE_RATIO).toPt()
     val anchorY = flip((text.rect.y + text.rect.height).toPt(), pageHeightPt)
 
     stream.beginText()

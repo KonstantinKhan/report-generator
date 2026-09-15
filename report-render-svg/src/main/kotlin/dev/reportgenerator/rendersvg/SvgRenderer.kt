@@ -1,5 +1,6 @@
 package dev.reportgenerator.rendersvg
 
+import dev.reportgenerator.layoutir.BASELINE_RATIO
 import dev.reportgenerator.layoutir.Color
 import dev.reportgenerator.layoutir.LaidOutDocument
 import dev.reportgenerator.layoutir.Line
@@ -11,7 +12,6 @@ import dev.reportgenerator.layoutir.Rectangle
 import dev.reportgenerator.layoutir.TextOrientation
 
 private const val PT_TO_MM = 25.4 / 72.0
-private const val BASELINE_RATIO = 0.8
 
 fun render(document: LaidOutDocument): List<String> = document.pages.map { renderPage(it) }
 

@@ -3,6 +3,7 @@ package dev.reportgenerator.cli
 import dev.reportgenerator.api.ItemDto
 import dev.reportgenerator.api.SpecificationDto
 import dev.reportgenerator.data.mapToSpecificationData
+import dev.reportgenerator.ir.FontFamilies
 import dev.reportgenerator.ir.TextStyle
 import dev.reportgenerator.layout.FontRegistry
 import dev.reportgenerator.layout.PdfBoxTextMeasurer
@@ -43,7 +44,7 @@ fun main(args: Array<String>) {
     val gostBRef = registry.register("gost-type-b", loadFont("GOST-Type-B.ttf"))
 
     fun fontResolver(style: TextStyle) =
-        if (style.fontFamily == "GOST Type B") gostBRef else regularRef
+        if (style.fontFamily == FontFamilies.GOST_TYPE_B) gostBRef else regularRef
 
     val textMeasurer = PdfBoxTextMeasurer(registry, ::fontResolver)
 

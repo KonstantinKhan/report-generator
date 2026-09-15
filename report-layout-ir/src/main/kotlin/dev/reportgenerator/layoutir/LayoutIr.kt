@@ -17,6 +17,12 @@ sealed interface PageElement
 
 enum class TextOrientation { HORIZONTAL, VERTICAL_BOTTOM_TO_TOP }
 
+// Where a PositionedText's baseline sits within rect.height, as a fraction from the top (bigger
+// ascent than descent, so > 0.5). Both renderers (SVG, PDF) must agree on this to draw identical
+// output from the same Layout IR — it lives here, not duplicated per-renderer, for exactly that
+// reason. Also used, negated to the perpendicular axis, to center VERTICAL_BOTTOM_TO_TOP text.
+const val BASELINE_RATIO: Double = 0.8
+
 data class PositionedText(
     val text: String,
     val rect: Rect,
