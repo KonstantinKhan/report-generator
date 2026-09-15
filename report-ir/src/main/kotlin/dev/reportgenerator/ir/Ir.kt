@@ -47,9 +47,12 @@ data class IrRow(
 
 enum class TextOrientation { HORIZONTAL, VERTICAL_BOTTOM_TO_TOP }
 
+enum class TextAlign { LEFT, CENTER }
+
 data class IrCell(
     val text: String,
     val style: TextStyle = Styles.tableText,
     val orientation: TextOrientation = TextOrientation.HORIZONTAL,
+    val align: TextAlign = TextAlign.LEFT,
     val manualLines: List<String>? = null
 )

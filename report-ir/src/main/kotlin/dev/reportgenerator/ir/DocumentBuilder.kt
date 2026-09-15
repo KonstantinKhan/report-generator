@@ -74,10 +74,11 @@ class HeaderBuilder {
     fun cell(
         text: String,
         orientation: TextOrientation = TextOrientation.HORIZONTAL,
-        style: TextStyle = Styles.tableText,
+        align: TextAlign = TextAlign.CENTER,
+        style: TextStyle = Styles.tableHeader,
         manualLines: List<String>? = null
     ) {
-        cells += IrCell(text = text, style = style, orientation = orientation, manualLines = manualLines)
+        cells += IrCell(text = text, style = style, orientation = orientation, align = align, manualLines = manualLines)
     }
 
     fun build(): List<IrCell> = cells

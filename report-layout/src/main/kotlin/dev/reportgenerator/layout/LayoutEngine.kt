@@ -14,6 +14,7 @@ import dev.reportgenerator.ir.IrTableHeader
 import dev.reportgenerator.ir.LayoutConstraints
 import dev.reportgenerator.ir.PageSetup
 import dev.reportgenerator.ir.Styles
+import dev.reportgenerator.ir.TextAlign
 import dev.reportgenerator.ir.TextStyle
 import dev.reportgenerator.ir.TitleBlockSpec
 import dev.reportgenerator.ir.BorderStyle as IrBorderStyle
@@ -206,12 +207,19 @@ private fun drawRichHeader(
         val columnWidth = columns[index].width
         val x = offsets[index]
 
-        when (cell.orientation) {
+        val border = Rectangle(
+            rect = Rect(x, top, columnWidth, height),
+            style = LayoutBorderStyle(width = ptToLength(Styles.tableBorder.widthPt))
+        )
+
+        val text = when (cell.orientation) {
             IrTextOrientation.HORIZONTAL ->
                 drawHorizontalHeaderCell(cell, x, top, columnWidth, height, textMeasurer, fontResolver)
             IrTextOrientation.VERTICAL_BOTTOM_TO_TOP ->
                 drawVerticalHeaderCell(cell, x, top, columnWidth, height, textMeasurer, fontResolver)
         }
+
+        listOf<PageElement>(border) + text
     }.flatten()
 
 // Fixed row height (unlike data rows): text is vertically centered within it rather than
@@ -225,20 +233,28 @@ private fun drawHorizontalHeaderCell(
     textMeasurer: TextMeasurer,
     fontResolver: (TextStyle) -> FontRef
 ): List<PageElement> {
-    // lineHeight only depends on style (font size), not content, so measuring cell.text here is
-    // safe even when manualLines overrides what actually gets drawn.
-    val measurement = textMeasurer.measure(cell.text, cell.style, columnWidth)
-    val lineHeight = if (measurement.lineCount > 0) measurement.height / measurement.lineCount else Length.ZERO
     // manualLines bypasses auto-wrap entirely — the cell is expected to fit as given (e.g. a
     // deliberate hyphenated break like "Приме-" / "чание"), not re-measured against columnWidth.
-    val lines = cell.manualLines ?: measurement.lines
+    val lines = cell.manualLines ?: textMeasurer.measure(cell.text, cell.style, columnWidth).lines
+    // Re-measure each line individually: manual lines were never measured above, and centering
+    // needs each line's own width, not just the cell's overall wrapped width.
+    val lineMeasurements = lines.map { line -> textMeasurer.measure(line, cell.style, columnWidth) }
+    val lineHeight = lineMeasurements.firstOrNull { it.lineCount > 0 }
+        ?.let { it.height / it.lineCount }
+        ?: Length.ZERO
     val totalTextHeight = lineHeight * lines.size
     val startY = top + (rowHeight - totalTextHeight) / 2
 
     return lines.mapIndexed { index, line ->
+        val lineWidth = lineMeasurements[index].width
+        val lineX = when (cell.align) {
+            TextAlign.LEFT -> x
+            TextAlign.CENTER -> x + (columnWidth - lineWidth) / 2
+        }
+
         PositionedText(
             text = line,
-            rect = Rect(x, startY + lineHeight * index, columnWidth, lineHeight),
+            rect = Rect(lineX, startY + lineHeight * index, lineWidth, lineHeight),
             style = ResolvedTextStyle(fontResolver(cell.style), cell.style.fontSizeMm / PT_TO_MM)
         )
     }

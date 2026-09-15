@@ -3,6 +3,7 @@ package dev.reportgenerator.cli
 import dev.reportgenerator.api.ItemDto
 import dev.reportgenerator.api.SpecificationDto
 import dev.reportgenerator.data.mapToSpecificationData
+import dev.reportgenerator.ir.TextStyle
 import dev.reportgenerator.layout.FontRegistry
 import dev.reportgenerator.layout.PdfBoxTextMeasurer
 import dev.reportgenerator.layout.layOut
@@ -30,16 +31,25 @@ fun main(args: Array<String>) {
         documentName = "Тестовое изделие"
     )
 
-    val fontBytes = requireNotNull(Resources.javaClass.getResourceAsStream("/fonts/PT_Sans-Regular.ttf")) {
-        "font resource missing — expected report-cli/src/main/resources/fonts/PT_Sans-Regular.ttf"
-    }.readBytes()
+    fun loadFont(name: String): ByteArray =
+        requireNotNull(Resources.javaClass.getResourceAsStream("/fonts/$name")) {
+            "font resource missing — expected report-cli/src/main/resources/fonts/$name"
+        }.readBytes()
 
     val registry = FontRegistry()
-    val fontRef = registry.register("pt-sans", fontBytes)
-    val textMeasurer = PdfBoxTextMeasurer(registry) { fontRef }
+    val regularRef = registry.register("gost-type-a", loadFont("PT_Sans-Regular.ttf"))
+    // Stand-in for the real ГОСТ 2.304 Type B face (upright, heavier strokes than Type A) — we
+    // don't have that font licensed/available, so PT Sans Bold plays the same visual role: a
+    // distinct weight for header labels vs. body text, resolved by TextStyle.fontFamily.
+    val boldRef = registry.register("gost-type-b", loadFont("PT_Sans-Bold.ttf"))
+
+    fun fontResolver(style: TextStyle) =
+        if (style.fontFamily == "GOST Type B") boldRef else regularRef
+
+    val textMeasurer = PdfBoxTextMeasurer(registry, ::fontResolver)
 
     val document = specification(data)
-    val laidOut = layOut(document, textMeasurer) { fontRef }
+    val laidOut = layOut(document, textMeasurer, ::fontResolver)
 
     val svgFile = File(outputDir, "specification.svg")
     svgFile.writeText(render(laidOut).single())

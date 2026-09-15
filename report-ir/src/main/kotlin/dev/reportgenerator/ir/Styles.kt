@@ -20,5 +20,6 @@ object Styles {
     val tableText = TextStyle(fontFamily = "GOST Type A", fontSizeMm = 2.5)
     val heading = TextStyle(fontFamily = "GOST Type A", fontSizeMm = 5.0, bold = true)
     val designation = TextStyle(fontFamily = "GOST Type A", fontSizeMm = 2.5)
+    val tableHeader = TextStyle(fontFamily = "GOST Type B", fontSizeMm = 2.5)
     val tableBorder = BorderStyle(widthPt = 2.0)
 }
