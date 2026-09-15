@@ -13,4 +13,7 @@ include(
     "report-layout",
     "report-render-svg",
     "report-render-pdf",
+    "report-api",
+    "report-data",
+    "reports:specification",
 )
