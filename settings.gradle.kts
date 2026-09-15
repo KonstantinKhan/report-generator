@@ -11,4 +11,5 @@ include(
     "report-ir",
     "report-layout-ir",
     "report-layout",
+    "report-render-svg",
 )
