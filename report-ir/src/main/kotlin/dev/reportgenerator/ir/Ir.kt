@@ -2,7 +2,10 @@ package dev.reportgenerator.ir
 
 import dev.reportgenerator.geometry.Length
 
-data class IrDocument(val elements: List<IrElement>)
+data class IrDocument(
+    val pageSetup: PageSetup,
+    val elements: List<IrElement>
+)
 
 sealed interface IrElement
 

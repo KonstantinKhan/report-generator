@@ -1,6 +1,9 @@
 package dev.reportgenerator.ir
 
+import dev.reportgenerator.geometry.Insets
 import dev.reportgenerator.geometry.Length
+import dev.reportgenerator.geometry.PageFormat
+import dev.reportgenerator.geometry.mm
 
 fun document(block: DocumentBuilder.() -> Unit): IrDocument {
     val builder = DocumentBuilder()
@@ -9,7 +12,19 @@ fun document(block: DocumentBuilder.() -> Unit): IrDocument {
 }
 
 class DocumentBuilder {
+    private var currentPageSetup: PageSetup = PageSetup(
+        format = PageFormat.A4,
+        margins = Insets(top = 5.mm, right = 5.mm, bottom = 5.mm, left = 20.mm)
+    )
     private val elements = mutableListOf<IrElement>()
+
+    fun pageSetup(
+        format: PageFormat = currentPageSetup.format,
+        margins: Insets = currentPageSetup.margins,
+        titleBlock: TitleBlockSpec? = currentPageSetup.titleBlock
+    ) {
+        currentPageSetup = PageSetup(format, margins, titleBlock = titleBlock)
+    }
 
     fun title(text: String, style: TextStyle = Styles.heading) {
         elements += IrText(text, style)
@@ -21,7 +36,7 @@ class DocumentBuilder {
         elements += builder.build()
     }
 
-    fun build(): IrDocument = IrDocument(elements)
+    fun build(): IrDocument = IrDocument(currentPageSetup, elements)
 }
 
 class TableBuilder {
