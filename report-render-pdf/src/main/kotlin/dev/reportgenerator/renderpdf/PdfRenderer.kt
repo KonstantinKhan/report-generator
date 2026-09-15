@@ -110,13 +110,18 @@ private fun renderHorizontalText(
 // there's no coordinate-flip to compensate for). So +90° here produces the same on-page result as
 // rotate(-90) in the SVG renderer: bottom-to-top reading, baseline side on the right. Anchor is the
 // physical bottom of the cell box — same point as the SVG version, just expressed after the Y flip.
+//
+// anchorX is NOT the box's horizontal center, same reasoning as the SVG renderer: ascent (bigger
+// than descent) maps to page-left under this rotation, so a center anchor leaves ascent overhanging
+// the left edge. rect.width is one line height; placing the anchor at BASELINE_RATIO across it
+// (not 50%) gives ascent the larger margin it needs and centers the visible glyphs.
 private fun renderVerticalText(
     stream: PDPageContentStream,
     text: PositionedText,
     font: PDFont,
     pageHeightPt: Float
 ) {
-    val anchorX = (text.rect.x + text.rect.width / 2).toPt()
+    val anchorX = (text.rect.x + text.rect.width * BASELINE_RATIO.toDouble()).toPt()
     val anchorY = flip((text.rect.y + text.rect.height).toPt(), pageHeightPt)
 
     stream.beginText()

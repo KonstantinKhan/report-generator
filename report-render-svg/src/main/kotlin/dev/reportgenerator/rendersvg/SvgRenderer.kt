@@ -55,8 +55,16 @@ private fun renderHorizontalText(text: PositionedText): String {
 // bottom-to-top with the baseline side on the right, matching the ESKD "Формат"/"Зона" columns.
 // Anchor point is the BOTTOM of the cell's box (rect.y + rect.height): text starts there and
 // extends upward for exactly its own measured length, which is what rect.height already equals.
+//
+// px is NOT the box's horizontal center. A font's ascent (above baseline) is bigger than its
+// descent (below) — under this rotation, ascent maps to page-left and descent to page-right, so
+// anchoring at the center leaves the (larger) ascent overhanging the left edge: text visibly
+// drifts left. rect.width here IS one line height (the box's on-page thickness, set when this
+// PositionedText was built), so BASELINE_RATIO applied the same way as horizontal text — baseline
+// sitting 80% of the way across, not 50% — gives ascent the 80%-sized margin it actually needs and
+// centers the visible glyphs, not the baseline point.
 private fun renderVerticalText(text: PositionedText): String {
-    val px = (text.rect.x + text.rect.width / 2).toMillimeters()
+    val px = (text.rect.x + text.rect.width * BASELINE_RATIO).toMillimeters()
     val py = (text.rect.y + text.rect.height).toMillimeters()
     val fontSizeMm = text.style.sizePt * PT_TO_MM
 

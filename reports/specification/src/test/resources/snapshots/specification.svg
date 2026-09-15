@@ -21,17 +21,17 @@
 <text x="173.0" y="55.4" font-size="2.5" font-family="sans-serif">8</text>
 <rect x="20.0" y="5.0" width="185.0" height="287.0" fill="none" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
 <rect x="20.0" y="5.0" width="6.0" height="15.0" fill="none" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
-<text x="0" y="0" font-size="2.5" font-family="sans-serif" transform="translate(23.0, 16.74) rotate(-90)">Формат</text>
+<text x="0" y="0" font-size="2.5" font-family="sans-serif" transform="translate(23.9, 16.74) rotate(-90)">Формат</text>
 <rect x="26.0" y="5.0" width="6.0" height="15.0" fill="none" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
-<text x="0" y="0" font-size="2.5" font-family="sans-serif" transform="translate(29.0, 15.14) rotate(-90)">Зона</text>
+<text x="0" y="0" font-size="2.5" font-family="sans-serif" transform="translate(29.9, 15.14) rotate(-90)">Зона</text>
 <rect x="32.0" y="5.0" width="8.0" height="15.0" fill="none" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
-<text x="0" y="0" font-size="2.5" font-family="sans-serif" transform="translate(36.0, 14.81) rotate(-90)">Поз.</text>
+<text x="0" y="0" font-size="2.5" font-family="sans-serif" transform="translate(36.9, 14.81) rotate(-90)">Поз.</text>
 <rect x="40.0" y="5.0" width="70.0" height="15.0" fill="none" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
 <text x="67.72" y="13.4" font-size="2.5" font-family="sans-serif">Обозначение</text>
 <rect x="110.0" y="5.0" width="63.0" height="15.0" fill="none" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
 <text x="133.33" y="13.4" font-size="2.5" font-family="sans-serif">Наименование</text>
 <rect x="173.0" y="5.0" width="10.0" height="15.0" fill="none" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
-<text x="0" y="0" font-size="2.5" font-family="sans-serif" transform="translate(178.0, 14.83) rotate(-90)">Кол.</text>
+<text x="0" y="0" font-size="2.5" font-family="sans-serif" transform="translate(178.9, 14.83) rotate(-90)">Кол.</text>
 <rect x="183.0" y="5.0" width="22.0" height="15.0" fill="none" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
 <text x="189.92" y="11.9" font-size="2.5" font-family="sans-serif">Приме-</text>
 <text x="190.77" y="14.9" font-size="2.5" font-family="sans-serif">чание</text>
