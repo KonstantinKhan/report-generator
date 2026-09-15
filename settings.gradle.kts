@@ -10,4 +10,5 @@ include(
     "report-geometry",
     "report-ir",
     "report-layout-ir",
+    "report-layout",
 )
