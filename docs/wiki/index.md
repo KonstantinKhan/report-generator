@@ -27,6 +27,8 @@
 - **[design-decisions.md](design-decisions.md)** — почему сделано именно так
   (fixed-point Length, FontRegistry на байтах не PDFont, overflow policy,
   разделение TextAlign/TextOrientation между слоями и т.д.)
+- **[architecture-improvements.md](architecture-improvements.md)** — потенциальные
+  архитектурные рефакторинги и идеи на будущее (упразднение report-api модуля и т.д.)
 - **[eskd-specification-header.md](eskd-specification-header.md)** — как
   устроен заголовок таблицы спецификации (форма 1 по ГОСТ Р 2.106-2019):
   вертикальный текст, математика поворота, откуда взялись конкретные размеры
