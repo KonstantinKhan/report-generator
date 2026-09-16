@@ -3,7 +3,13 @@ package dev.reportgenerator.layout
 import dev.reportgenerator.geometry.Insets
 import dev.reportgenerator.geometry.Length
 import dev.reportgenerator.geometry.PageFormat
+import dev.reportgenerator.geometry.Rect
+import dev.reportgenerator.geometry.Size
 import dev.reportgenerator.geometry.mm
+import dev.reportgenerator.ir.FrameBindings
+import dev.reportgenerator.ir.FrameCell
+import dev.reportgenerator.ir.FrameField
+import dev.reportgenerator.ir.FrameSpec
 import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrColumn
 import dev.reportgenerator.ir.IrDocument
@@ -14,7 +20,6 @@ import dev.reportgenerator.ir.IrTableHeader
 import dev.reportgenerator.ir.LayoutConstraints
 import dev.reportgenerator.ir.PageSetup
 import dev.reportgenerator.ir.TextStyle
-import dev.reportgenerator.ir.TitleBlockSpec
 import dev.reportgenerator.layoutir.FontRef
 import dev.reportgenerator.layoutir.PositionedText
 import kotlin.test.BeforeTest
@@ -137,16 +142,28 @@ class LayoutEngineTest {
         }
     }
 
+    private fun tinyFrameSpec() = FrameSpec(
+        size = Size(20.mm, 10.mm),
+        cells = listOf(
+            FrameCell.Dynamic(Rect(0.mm, 0.mm, 20.mm, 5.mm), FrameField.DESIGNATION),
+            FrameCell.Dynamic(Rect(0.mm, 5.mm, 20.mm, 5.mm), FrameField.SHEETS_TOTAL)
+        )
+    )
+
     @Test
-    fun `title block appears only on the first page`() {
+    fun `frame appears only on the first page`() {
         val columns = listOf(column("name", 60.mm))
         val rows = (1..40).map { IrRow(listOf(cell("Деталь $it"))) }
         val table = IrTable(columns = columns, header = null, content = listOf(IrGroup("Детали", rows)))
 
         val tinyFormat = PageFormat("tiny", width = 80.mm, height = 40.mm)
-        val titleBlock = TitleBlockSpec(designation = "AAA.001", name = "Корпус")
         val document = IrDocument(
-            pageSetup = PageSetup(tinyFormat, Insets(2.mm, 2.mm, 2.mm, 2.mm), titleBlock = titleBlock),
+            pageSetup = PageSetup(
+                tinyFormat,
+                Insets(2.mm, 2.mm, 2.mm, 2.mm),
+                frame = tinyFrameSpec(),
+                frameBindings = FrameBindings(designation = "AAA.001")
+            ),
             elements = listOf(table)
         )
 
@@ -154,15 +171,36 @@ class LayoutEngineTest {
 
         assertTrue(result.pages.size > 1)
 
-        val firstPageHasTitle = result.pages.first().elements
-            .filterIsInstance<PositionedText>()
-            .any { it.text.contains("AAA.001") }
-        val laterPagesHaveTitle = result.pages.drop(1).any { page ->
+        val firstPageTexts = result.pages.first().elements.filterIsInstance<PositionedText>()
+        assertTrue(firstPageTexts.any { it.text.contains("AAA.001") })
+
+        // Regression test for the two-pass chrome rewrite: SHEETS_TOTAL couldn't be known when
+        // page 1's chrome used to be drawn eagerly, before later pages existed.
+        assertTrue(firstPageTexts.any { it.text == result.pages.size.toString() })
+
+        val laterPagesHaveFrame = result.pages.drop(1).any { page ->
             page.elements.filterIsInstance<PositionedText>().any { it.text.contains("AAA.001") }
         }
+        assertTrue(!laterPagesHaveFrame)
+    }
 
-        assertTrue(firstPageHasTitle)
-        assertTrue(!laterPagesHaveTitle)
+    @Test
+    fun `dynamic frame field without a supplied binding fails fast`() {
+        val columns = listOf(column("name", 60.mm))
+        val table = IrTable(columns = columns, header = null, content = listOf(IrRow(listOf(cell("Вал")))))
+
+        val frameSpec = FrameSpec(
+            size = Size(20.mm, 5.mm),
+            cells = listOf(FrameCell.Dynamic(Rect(0.mm, 0.mm, 20.mm, 5.mm), FrameField.NAME))
+        )
+        val document = IrDocument(
+            pageSetup = PageSetup(PageFormat.A4, defaultMargins(), frame = frameSpec, frameBindings = null),
+            elements = listOf(table)
+        )
+
+        assertFailsWith<IllegalStateException> {
+            layOut(document, textMeasurer, stubFontResolver)
+        }
     }
 
     @Test

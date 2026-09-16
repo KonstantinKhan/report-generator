@@ -1,6 +1,7 @@
 package dev.reportgenerator.ir
 
 import dev.reportgenerator.geometry.PageFormat
+import dev.reportgenerator.ir.frames.FrameSpecs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -18,13 +19,17 @@ class PageSetupTest {
     }
 
     @Test
-    fun `pageSetup block overrides format and title block`() {
+    fun `pageSetup block overrides format and frame`() {
         val doc = document {
-            pageSetup(format = PageFormat.A3, titleBlock = TitleBlockSpec(designation = "X.001", name = "Test"))
+            pageSetup(
+                format = PageFormat.A3,
+                frame = FrameSpecs.firstPageStamp,
+                frameBindings = FrameBindings(designation = "X.001", name = "Test")
+            )
             table { columns { } }
         }
 
         assertEquals(PageFormat.A3, doc.pageSetup.format)
-        assertEquals("X.001", doc.pageSetup.titleBlock?.designation)
+        assertEquals("X.001", doc.pageSetup.frameBindings?.designation)
     }
 }

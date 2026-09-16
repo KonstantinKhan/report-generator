@@ -6,11 +6,13 @@ import dev.reportgenerator.data.SpecificationItem
 import dev.reportgenerator.geometry.Length
 import dev.reportgenerator.geometry.mm
 import dev.reportgenerator.ir.ColumnsBuilder
+import dev.reportgenerator.ir.FrameBindings
 import dev.reportgenerator.ir.GroupBuilder
 import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrDocument
 import dev.reportgenerator.ir.TextOrientation
 import dev.reportgenerator.ir.document
+import dev.reportgenerator.ir.frames.FrameSpecs
 
 // Column widths (6+6+8+70+63+10+22=185mm) fill A4's content width exactly (210 - 20 left margin
 // - 5 right margin), matching the ГОСТ 2.106 specification form header this table represents.
@@ -19,6 +21,12 @@ fun specification(data: SpecificationData): IrDocument {
 
     return document {
         title(data.documentName)
+
+        pageSetup(
+            frame = FrameSpecs.firstPageStamp,
+            frameBindings = FrameBindings(designation = data.documentDesignation, name = data.documentName),
+            leftMarginFrame = FrameSpecs.leftMarginTable
+        )
 
         table {
             columns {

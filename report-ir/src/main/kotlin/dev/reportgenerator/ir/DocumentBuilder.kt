@@ -21,9 +21,11 @@ class DocumentBuilder {
     fun pageSetup(
         format: PageFormat = currentPageSetup.format,
         margins: Insets = currentPageSetup.margins,
-        titleBlock: TitleBlockSpec? = currentPageSetup.titleBlock
+        frame: FrameSpec? = currentPageSetup.frame,
+        frameBindings: FrameBindings? = currentPageSetup.frameBindings,
+        leftMarginFrame: FrameSpec? = currentPageSetup.leftMarginFrame
     ) {
-        currentPageSetup = PageSetup(format, margins, titleBlock = titleBlock)
+        currentPageSetup = PageSetup(format, margins, frame = frame, frameBindings = frameBindings, leftMarginFrame = leftMarginFrame)
     }
 
     fun title(text: String, style: TextStyle = Styles.heading) {

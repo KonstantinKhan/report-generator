@@ -7,11 +7,7 @@ data class PageSetup(
     val format: PageFormat,
     val margins: Insets,
     val frameStyle: BorderStyle = Styles.tableBorder,
-    val titleBlock: TitleBlockSpec? = null
-)
-
-data class TitleBlockSpec(
-    val designation: String,
-    val name: String,
-    val sheetsTotal: Int = 1
+    val frame: FrameSpec? = null,
+    val frameBindings: FrameBindings? = null,
+    val leftMarginFrame: FrameSpec? = null
 )

@@ -30,5 +30,11 @@ object Styles {
     val heading = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 5.0, bold = true)
     val designation = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 2.5)
     val tableHeader = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5)
+    val frameText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5)
+    val frameTextLarge = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 7.0)
     val tableBorder = BorderStyle(widthPt = 2.0)
+
+    // GOST 2.303: thin line = S/3..S/2 of the thick line (S == tableBorder, ~0.706mm here),
+    // i.e. 0.235-0.353mm. 0.7pt ~= 0.247mm, inside that range.
+    val tableBorderThin = BorderStyle(widthPt = 0.7)
 }

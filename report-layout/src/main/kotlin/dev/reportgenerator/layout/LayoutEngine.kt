@@ -3,8 +3,13 @@ package dev.reportgenerator.layout
 import dev.reportgenerator.geometry.Insets
 import dev.reportgenerator.geometry.Length
 import dev.reportgenerator.geometry.PageFormat
+import dev.reportgenerator.geometry.Point
 import dev.reportgenerator.geometry.Rect
-import dev.reportgenerator.geometry.mm
+import dev.reportgenerator.ir.BorderWeight
+import dev.reportgenerator.ir.FrameCell
+import dev.reportgenerator.ir.FrameBindings
+import dev.reportgenerator.ir.FrameField
+import dev.reportgenerator.ir.FrameSpec
 import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrColumn
 import dev.reportgenerator.ir.IrDocument
@@ -16,21 +21,20 @@ import dev.reportgenerator.ir.PageSetup
 import dev.reportgenerator.ir.Styles
 import dev.reportgenerator.ir.TextAlign
 import dev.reportgenerator.ir.TextStyle
-import dev.reportgenerator.ir.TitleBlockSpec
 import dev.reportgenerator.ir.BorderStyle as IrBorderStyle
 import dev.reportgenerator.ir.TextOrientation as IrTextOrientation
 import dev.reportgenerator.layoutir.BorderStyle as LayoutBorderStyle
 import dev.reportgenerator.layoutir.TextOrientation as LayoutTextOrientation
 import dev.reportgenerator.layoutir.FontRef
 import dev.reportgenerator.layoutir.LaidOutDocument
+import dev.reportgenerator.layoutir.Line
+import dev.reportgenerator.layoutir.LineStyle
 import dev.reportgenerator.layoutir.Page
 import dev.reportgenerator.layoutir.PageElement
 import dev.reportgenerator.layoutir.PositionedText
 import dev.reportgenerator.layoutir.Rectangle
 import dev.reportgenerator.layoutir.ResolvedTextStyle
 
-private val TITLE_BLOCK_HEIGHT: Length = 20.mm
-private val TITLE_LINE_HEIGHT: Length = 5.mm
 private const val PT_TO_MM = 25.4 / 72.0
 
 class LayoutOverflowException(
@@ -44,12 +48,12 @@ data class PageLayoutMetrics(
     val format: PageFormat,
     val margins: Insets,
     val headerHeight: Length,
-    val titleBlockHeight: Length
+    val frameHeight: Length
 ) {
     val contentTop: Length get() = margins.top + headerHeight
 
     fun contentBottom(isFirstPage: Boolean): Length {
-        val reserved = if (isFirstPage) titleBlockHeight else Length.ZERO
+        val reserved = if (isFirstPage) frameHeight else Length.ZERO
         return format.height - margins.bottom - reserved
     }
 }
@@ -61,13 +65,19 @@ fun layOut(
 ): LaidOutDocument {
     val setup = document.pageSetup
     val table = document.elements.filterIsInstance<IrTable>().firstOrNull()
-    val titleBlockHeight = if (setup.titleBlock != null) TITLE_BLOCK_HEIGHT else Length.ZERO
+    val frameHeight = setup.frame?.size?.height ?: Length.ZERO
 
     if (table == null) {
-        val metrics = PageLayoutMetrics(setup.format, setup.margins, Length.ZERO, titleBlockHeight)
+        val metrics = PageLayoutMetrics(setup.format, setup.margins, Length.ZERO, frameHeight)
         val elements = mutableListOf<PageElement>()
         elements += frameRectangle(metrics, setup.frameStyle)
-        setup.titleBlock?.let { elements += drawTitleBlock(it, metrics, fontResolver) }
+        setup.frame?.let { spec ->
+            val bindings = resolveBindings(setup.frameBindings, pageNumber = 1, totalPages = 1)
+            elements += drawFrame(spec, frameOrigin(metrics, spec), bindings, textMeasurer, fontResolver)
+        }
+        setup.leftMarginFrame?.let { spec ->
+            elements += drawFrame(spec, leftMarginFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
+        }
         return LaidOutDocument(listOf(Page(1, setup.format, elements)))
     }
 
@@ -84,10 +94,10 @@ fun layOut(
         format = setup.format,
         margins = setup.margins,
         headerHeight = headerLayout.height,
-        titleBlockHeight = titleBlockHeight
+        frameHeight = frameHeight
     )
 
-    return renderPages(units, metrics, headerLayout.elements, setup, fontResolver)
+    return renderPages(units, metrics, headerLayout.elements, setup, textMeasurer, fontResolver)
 }
 
 private data class HeaderLayout(val elements: List<PageElement>, val height: Length)
@@ -111,37 +121,24 @@ private fun buildHeaderLayout(
     }
 }
 
+// Two passes: content first, chrome (frame/header/stamp) second. The stamp's SHEET_NUMBER/
+// SHEETS_TOTAL bindings need the final page count, which isn't known until pagination finishes —
+// drawing chrome per-page as each page closed (the old approach) couldn't supply that on page 1.
 private fun renderPages(
     units: List<List<LayoutBlock>>,
     metrics: PageLayoutMetrics,
     headerElements: List<PageElement>,
     setup: PageSetup,
+    textMeasurer: TextMeasurer,
     fontResolver: (TextStyle) -> FontRef
 ): LaidOutDocument {
-    val pages = mutableListOf<Page>()
-    var elements = mutableListOf<PageElement>()
+    val pageContents = mutableListOf(mutableListOf<PageElement>())
     var y = metrics.contentTop
-    var pageNumber = 1
 
-    fun isFirstPage() = pageNumber == 1
-
-    fun drawChrome() {
-        elements += frameRectangle(metrics, setup.frameStyle)
-        elements += headerElements
-        if (isFirstPage()) {
-            setup.titleBlock?.let { elements += drawTitleBlock(it, metrics, fontResolver) }
-        }
-    }
-
-    fun finishPage() {
-        drawChrome()
-        pages += Page(pageNumber, metrics.format, elements)
-    }
+    fun isFirstPage() = pageContents.size == 1
 
     fun startNewPage() {
-        finishPage()
-        pageNumber += 1
-        elements = mutableListOf()
+        pageContents.add(mutableListOf())
         y = metrics.contentTop
     }
 
@@ -149,7 +146,7 @@ private fun renderPages(
         val unitHeight = unit.fold(Length.ZERO) { acc, block -> acc + block.height }
 
         if (y + unitHeight > metrics.contentBottom(isFirstPage())) {
-            if (elements.isNotEmpty() || isFirstPage()) {
+            if (pageContents.last().isNotEmpty() || isFirstPage()) {
                 startNewPage()
             }
         }
@@ -159,18 +156,35 @@ private fun renderPages(
             throw LayoutOverflowException(
                 elementPath = first.path,
                 constraint = describeConstraint(first.constraints),
-                pageNumber = pageNumber,
-                message = "Block '${first.path}' height ${unitHeight.toMillimeters()}mm exceeds available content height on page $pageNumber"
+                pageNumber = pageContents.size,
+                message = "Block '${first.path}' height ${unitHeight.toMillimeters()}mm exceeds available content height on page ${pageContents.size}"
             )
         }
 
         for (block in unit) {
-            elements += drawRow(block.row, y, fontResolver)
+            pageContents.last() += drawRow(block.row, y, fontResolver)
             y += block.height
         }
     }
 
-    finishPage()
+    val totalPages = pageContents.size
+    val pages = pageContents.mapIndexed { index, content ->
+        val pageNumber = index + 1
+        val chrome = mutableListOf<PageElement>()
+        chrome += frameRectangle(metrics, setup.frameStyle)
+        chrome += headerElements
+        if (pageNumber == 1) {
+            setup.frame?.let { spec ->
+                val bindings = resolveBindings(setup.frameBindings, pageNumber, totalPages)
+                chrome += drawFrame(spec, frameOrigin(metrics, spec), bindings, textMeasurer, fontResolver)
+            }
+            setup.leftMarginFrame?.let { spec ->
+                chrome += drawFrame(spec, leftMarginFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
+            }
+        }
+        Page(pageNumber, metrics.format, chrome + content)
+    }
+
     return LaidOutDocument(pages)
 }
 
@@ -305,34 +319,101 @@ private fun frameRectangle(metrics: PageLayoutMetrics, style: IrBorderStyle): Re
         style = LayoutBorderStyle(width = ptToLength(style.widthPt))
     )
 
-private fun drawTitleBlock(
-    spec: TitleBlockSpec,
-    metrics: PageLayoutMetrics,
-    fontResolver: (TextStyle) -> FontRef
-): List<PageElement> {
-    val top = metrics.format.height - metrics.margins.bottom - TITLE_BLOCK_HEIGHT
-    val left = metrics.margins.left
-    val width = metrics.format.width - metrics.margins.left - metrics.margins.right
-    val style = Styles.designation
+private fun frameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point = Point(
+    x = metrics.format.width - metrics.margins.right - spec.size.width,
+    y = metrics.format.height - metrics.margins.bottom - spec.size.height
+)
 
-    val box = Rectangle(
-        rect = Rect(left, top, width, TITLE_BLOCK_HEIGHT),
-        style = LayoutBorderStyle(width = ptToLength(Styles.tableBorder.widthPt))
-    )
+// Outside the main frame, in the left margin gutter — its right edge touches the frame's left
+// border from the outside, it doesn't eat into the content area. Bottom of the strip = bottom of
+// the main frame itself (5mm from the sheet edge, same as the frame's own bottom line) — safe to
+// go all the way down because, being outside the frame (x < margins.left), it sits in a different
+// x-range than the stamp entirely, so there's no overlap to worry about (unlike when it was
+// briefly placed inside the frame).
+private fun leftMarginFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point = Point(
+    x = metrics.margins.left - spec.size.width,
+    y = metrics.format.height - metrics.margins.bottom - spec.size.height
+)
 
-    val lines = listOf(
-        "Обозначение: ${spec.designation}",
-        "Наименование: ${spec.name}",
-        "Лист 1 из ${spec.sheetsTotal}"
-    )
-
-    val texts = lines.mapIndexed { index, text ->
-        PositionedText(
-            text = text,
-            rect = Rect(left + 2.mm, top + 2.mm + TITLE_LINE_HEIGHT * index, width - 4.mm, TITLE_LINE_HEIGHT),
-            style = ResolvedTextStyle(fontResolver(style), style.fontSizeMm / PT_TO_MM)
-        )
+private fun resolveBindings(bindings: FrameBindings?, pageNumber: Int, totalPages: Int): Map<FrameField, String> =
+    buildMap {
+        bindings?.designation?.let { put(FrameField.DESIGNATION, it) }
+        bindings?.name?.let { put(FrameField.NAME, it) }
+        put(FrameField.SHEET_NUMBER, pageNumber.toString())
+        put(FrameField.SHEETS_TOTAL, totalPages.toString())
     }
 
-    return listOf(box) + texts
+private fun borderLineStyle(weight: BorderWeight): LineStyle {
+    val widthPt = if (weight == BorderWeight.THICK) Styles.tableBorder.widthPt else Styles.tableBorderThin.widthPt
+    return LineStyle(width = ptToLength(widthPt))
+}
+
+private fun halfWidth(weight: BorderWeight): Length = borderLineStyle(weight).width / 2
+
+// Keeps left-aligned text (e.g. "Разраб.") off the cell border it would otherwise touch exactly;
+// applied uniformly (also to centered cells) rather than only for LEFT, since it's harmless there.
+private val FRAME_CELL_PADDING: Length = Length.ofMillimeters(1.0)
+
+private fun drawFrame(
+    spec: FrameSpec,
+    origin: Point,
+    bindings: Map<FrameField, String>,
+    textMeasurer: TextMeasurer,
+    fontResolver: (TextStyle) -> FontRef
+): List<PageElement> = spec.cells.flatMap { cell ->
+    val rect = Rect(origin.x + cell.rect.x, origin.y + cell.rect.y, cell.rect.width, cell.rect.height)
+
+    val text = when (cell) {
+        is FrameCell.Constant -> cell.text
+        is FrameCell.Dynamic -> checkNotNull(bindings[cell.field]) {
+            "FrameSpec references ${cell.field} but no value was supplied"
+        }
+    }
+
+    // Each side is stretched by half its own width beyond the corner (a manual square line cap —
+    // Line/LineStyle has no cap concept, so it's done here in coordinates). Without it, two butt-
+    // capped segments meeting exactly at a corner leave a small square notch unpainted there: a
+    // horizontal line only ever paints y in [top-w/2, top+w/2] for x >= its own left endpoint, so
+    // the diagonal quadrant beyond the corner (x < left, y < top) is covered by neither segment.
+    val topHalf = halfWidth(cell.borders.top)
+    val rightHalf = halfWidth(cell.borders.right)
+    val bottomHalf = halfWidth(cell.borders.bottom)
+    val leftHalf = halfWidth(cell.borders.left)
+    val borders = listOf(
+        Line(Point(rect.left - topHalf, rect.top), Point(rect.right + topHalf, rect.top), borderLineStyle(cell.borders.top)),
+        Line(Point(rect.right, rect.top - rightHalf), Point(rect.right, rect.bottom + rightHalf), borderLineStyle(cell.borders.right)),
+        Line(Point(rect.left - bottomHalf, rect.bottom), Point(rect.right + bottomHalf, rect.bottom), borderLineStyle(cell.borders.bottom)),
+        Line(Point(rect.left, rect.top - leftHalf), Point(rect.left, rect.bottom + leftHalf), borderLineStyle(cell.borders.left))
+    )
+
+    val texts = if (text.isEmpty()) {
+        emptyList()
+    } else {
+        val irCell = IrCell(text = text, style = cell.style, align = cell.align)
+        when (cell.orientation) {
+            IrTextOrientation.HORIZONTAL -> drawHorizontalHeaderCell(
+                irCell,
+                rect.x + FRAME_CELL_PADDING,
+                rect.y,
+                rect.width - FRAME_CELL_PADDING * 2,
+                rect.height,
+                textMeasurer,
+                fontResolver
+            )
+            // No padding here: drawVerticalHeaderCell already centers on both axes (unlike the
+            // horizontal path, it ignores cell.align entirely — there's no LEFT variant for
+            // rotated text in this codebase), so text never touches the cell border.
+            IrTextOrientation.VERTICAL_BOTTOM_TO_TOP -> drawVerticalHeaderCell(
+                irCell,
+                rect.x,
+                rect.y,
+                rect.width,
+                rect.height,
+                textMeasurer,
+                fontResolver
+            )
+        }
+    }
+
+    borders + texts
 }
