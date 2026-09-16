@@ -100,10 +100,19 @@ private fun renderHorizontalText(
 
     stream.beginText()
     stream.setFont(font, text.style.sizePt.toFloat())
-    stream.newLineAtOffset(x, pdfY)
+    stream.setTextMatrix(italicMatrix(x, pdfY, text.style.italic))
     stream.showText(text.text)
     stream.endText()
 }
+
+// No italic variant of GOST Type A/B is loaded (see fonts-and-licensing.md), so italic is a
+// synthetic oblique: a horizontal shear proportional to height above the baseline, same trick
+// most renderers use for a "fake italic". ~11° slant (tan ≈ 0.2), applied via the c component of
+// the PDF text matrix [a b c d e f], which maps (px, py) -> (px + c*py + e, d*py + f).
+private const val ITALIC_SHEAR = 0.2f
+
+private fun italicMatrix(x: Float, y: Float, italic: Boolean): Matrix =
+    if (italic) Matrix(1f, 0f, ITALIC_SHEAR, 1f, x, y) else Matrix.getTranslateInstance(x, y)
 
 // PDF space is already y-up with a standard-math rotation convention (positive = counterclockwise,
 // and "counterclockwise" here means the same thing visually as it does on paper — unlike SVG,

@@ -100,7 +100,7 @@ fun layOut(
         frameHeight = frameHeight
     )
 
-    return renderPages(units, metrics, headerLayout.elements, setup, textMeasurer, fontResolver)
+    return renderPages(units, metrics, headerLayout.elements, setup, textMeasurer, fontResolver, table, offsets)
 }
 
 private data class HeaderLayout(val elements: List<PageElement>, val height: Length)
@@ -133,14 +133,20 @@ private fun renderPages(
     headerElements: List<PageElement>,
     setup: PageSetup,
     textMeasurer: TextMeasurer,
-    fontResolver: (TextStyle) -> FontRef
+    fontResolver: (TextStyle) -> FontRef,
+    table: IrTable,
+    offsets: List<Length>
 ): LaidOutDocument {
     val pageContents = mutableListOf(mutableListOf<PageElement>())
+    // Final `y` of each page at the moment it closes — needed after the loop to know how much
+    // space is left to fill with blank bordered rows (fixed-rowHeight tables only, see below).
+    val pageFinalY = mutableListOf<Length>()
     var y = metrics.contentTop
 
     fun isFirstPage() = pageContents.size == 1
 
     fun startNewPage() {
+        pageFinalY += y
         pageContents.add(mutableListOf())
         y = metrics.contentTop
     }
@@ -165,8 +171,35 @@ private fun renderPages(
         }
 
         for (block in unit) {
-            pageContents.last() += drawRow(block.row, y, fontResolver)
+            val elements = when (block) {
+                is GroupHeaderBlock -> drawRow(block.row, y, fontResolver)
+                is DataRowBlock -> drawRow(block.row, y, fontResolver)
+                is BorderedRowBlock -> drawBorderedRow(block, y, textMeasurer, fontResolver)
+            }
+            pageContents.last() += elements
             y += block.height
+        }
+    }
+
+    pageFinalY += y
+
+    // Fixed-rowHeight tables (IrTable.rowHeight != null): the page must be fully covered with
+    // bordered rows down to the frame/margin, even past the last real row (or with zero elements
+    // at all) — not just as far as content happened to reach.
+    val rowHeight = table.rowHeight
+    if (rowHeight != null) {
+        pageContents.forEachIndexed { index, content ->
+            val bottom = metrics.contentBottom(index == 0)
+            var fillY = pageFinalY[index]
+            while (fillY + rowHeight <= bottom) {
+                content += drawBorderedRow(
+                    blankBorderedRow(table.columns, offsets, rowHeight, "Document/Table/Filler"),
+                    fillY,
+                    textMeasurer,
+                    fontResolver
+                )
+                fillY += rowHeight
+            }
         }
     }
 
@@ -210,9 +243,84 @@ private fun drawRow(row: MeasuredRow, top: Length, fontResolver: (TextStyle) -> 
                 width = line.width,
                 height = row.lineHeight
             ),
-            style = ResolvedTextStyle(fontResolver(line.style), line.style.fontSizeMm / PT_TO_MM)
+            style = ResolvedTextStyle(fontResolver(line.style), line.style.fontSizeMm / PT_TO_MM, italic = line.style.italic)
         )
     }
+
+// Every column of a fixed-height physical row (data, group title, or blank spacer/filler) gets
+// its own border, per §"границы ячеек по ширине заголовков, высота 8 мм" — unlike the legacy
+// drawRow() path, which draws no borders at all for body rows. Text reuses drawHorizontalHeaderCell
+// (already handles cell.align + vertical centering within a fixed height) instead of drawRow's
+// left-anchored, non-centering line placement.
+private fun drawBorderedRow(
+    block: BorderedRowBlock,
+    top: Length,
+    textMeasurer: TextMeasurer,
+    fontResolver: (TextStyle) -> FontRef
+): List<PageElement> = block.cells.mapIndexed { index, cell ->
+    val x = block.offsets[index]
+    val width = block.columns[index].width
+
+    // Thin per GOST 2.303 (§"граница ячеек для данных тонкая") — distinct from the thick outer
+    // page frame (frameRectangle) and the thick header-row grid (drawRichHeader).
+    val border = Rectangle(
+        rect = Rect(x, top, width, block.rowHeight),
+        style = LayoutBorderStyle(width = ptToLength(Styles.tableBorderThin.widthPt))
+    )
+
+    // Left-aligned text sits flush against the column's left border without this — only LEFT
+    // needs it, CENTER already keeps clear of both edges on its own.
+    val (textX, textWidth) = if (cell.align == TextAlign.LEFT) {
+        (x + FRAME_CELL_PADDING) to (width - FRAME_CELL_PADDING)
+    } else {
+        x to width
+    }
+
+    val text = drawHorizontalHeaderCell(cell, textX, top, textWidth, block.rowHeight, textMeasurer, fontResolver)
+    val underline = if (cell.style.underline) {
+        underlineElements(cell, textX, top, textWidth, block.rowHeight, textMeasurer)
+    } else {
+        emptyList()
+    }
+
+    listOf<PageElement>(border) + text + underline
+}.flatten()
+
+// Underline is drawn as an explicit Line under each text line rather than a font/renderer
+// concept (§12: renderers stay dumb, and there's no italic/underline font variant loaded anyway —
+// same known gap as Styles.heading.bold, see fonts-and-licensing.md). Mirrors
+// drawHorizontalHeaderCell's own centering math so the line sits exactly under the glyphs it
+// belongs to, not the cell's full box.
+private fun underlineElements(
+    cell: IrCell,
+    x: Length,
+    top: Length,
+    columnWidth: Length,
+    rowHeight: Length,
+    textMeasurer: TextMeasurer
+): List<PageElement> {
+    val lines = textMeasurer.measure(cell.text, cell.style, columnWidth).lines
+    val lineMeasurements = lines.map { line -> textMeasurer.measure(line, cell.style, columnWidth) }
+    val lineHeight = lineMeasurements.firstOrNull { it.lineCount > 0 }
+        ?.let { it.height / it.lineCount }
+        ?: Length.ZERO
+    val totalTextHeight = lineHeight * lines.size
+    val startY = top + (rowHeight - totalTextHeight) / 2
+
+    return lines.mapIndexed { index, line ->
+        val lineWidth = lineMeasurements[index].width
+        val lineX = when (cell.align) {
+            TextAlign.LEFT -> x
+            TextAlign.CENTER -> x + (columnWidth - lineWidth) / 2
+        }
+        val underlineY = startY + lineHeight * (index + 1)
+        Line(
+            Point(lineX, underlineY),
+            Point(lineX + lineWidth, underlineY),
+            LineStyle(width = ptToLength(Styles.tableBorderThin.widthPt))
+        )
+    }
+}
 
 private fun drawRichHeader(
     header: IrTableHeader,
@@ -275,7 +383,7 @@ private fun drawHorizontalHeaderCell(
         PositionedText(
             text = line,
             rect = Rect(lineX, startY + lineHeight * index, lineWidth, lineHeight),
-            style = ResolvedTextStyle(fontResolver(cell.style), cell.style.fontSizeMm / PT_TO_MM)
+            style = ResolvedTextStyle(fontResolver(cell.style), cell.style.fontSizeMm / PT_TO_MM, italic = cell.style.italic)
         )
     }
 }
@@ -306,7 +414,7 @@ private fun drawVerticalHeaderCell(
         PositionedText(
             text = measurement.lines.firstOrNull() ?: cell.text,
             rect = Rect(boxX, boxY, boxWidth, boxHeight),
-            style = ResolvedTextStyle(fontResolver(cell.style), cell.style.fontSizeMm / PT_TO_MM),
+            style = ResolvedTextStyle(fontResolver(cell.style), cell.style.fontSizeMm / PT_TO_MM, italic = cell.style.italic),
             orientation = LayoutTextOrientation.VERTICAL_BOTTOM_TO_TOP
         )
     )

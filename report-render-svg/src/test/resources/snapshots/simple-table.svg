@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="100.0mm" height="60.0mm" viewBox="0 0 100.0 60.0">
 <rect x="0" y="0" width="100.0" height="60.0" fill="white"/>
 <rect x="10.0" y="5.0" width="85.0" height="50.0" fill="none" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
-<text x="10.0" y="7.4" font-size="2.5" font-family="sans-serif">Наименование</text>
-<text x="10.0" y="13.8" font-size="5.0" font-family="sans-serif">Детали</text>
-<text x="10.0" y="18.4" font-size="2.5" font-family="sans-serif">Вал</text>
-<text x="10.0" y="22.4" font-size="2.5" font-family="sans-serif">Втулка</text>
+<text x="10.0" y="8.36" font-size="3.4999999999999996" font-family="sans-serif">Наименование</text>
+<text x="10.0" y="15.0" font-size="5.0" font-family="sans-serif">Детали</text>
+<text x="10.0" y="20.56" font-size="3.4999999999999996" font-family="sans-serif">Вал</text>
+<text x="10.0" y="25.759999999999998" font-size="3.4999999999999996" font-family="sans-serif">Втулка</text>
 </svg>

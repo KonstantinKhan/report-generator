@@ -10,6 +10,8 @@ import dev.reportgenerator.ir.FrameBindings
 import dev.reportgenerator.ir.GroupBuilder
 import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrDocument
+import dev.reportgenerator.ir.TableBuilder
+import dev.reportgenerator.ir.TextAlign
 import dev.reportgenerator.ir.TextOrientation
 import dev.reportgenerator.ir.document
 import dev.reportgenerator.ir.frames.FrameSpecs
@@ -29,7 +31,7 @@ fun specification(data: SpecificationData): IrDocument {
             belowFrame = FrameSpecs.belowFrameNotes
         )
 
-        table {
+        table(rowHeight = 8.mm, groupTitleColumn = "name") {
             columns {
                 formatColumn(6.mm)
                 zoneColumn(6.mm)
@@ -50,27 +52,35 @@ fun specification(data: SpecificationData): IrDocument {
                 cell("Примечание", manualLines = listOf("Приме-", "чание"))
             }
 
-            group("Сборочные единицы") {
-                data.items.filter { it.kind == ItemKind.ASSEMBLY }.forEach { item ->
-                    nextPosition += 1
-                    row(item, nextPosition)
-                }
+            groupIfNotEmpty("Сборочные единицы", data.items.filter { it.kind == ItemKind.ASSEMBLY }) { item ->
+                nextPosition += 1
+                row(item, nextPosition)
             }
 
-            group("Детали") {
-                data.items.filter { it.kind == ItemKind.PART }.forEach { item ->
-                    nextPosition += 1
-                    row(item, nextPosition)
-                }
+            groupIfNotEmpty("Детали", data.items.filter { it.kind == ItemKind.PART }) { item ->
+                nextPosition += 1
+                row(item, nextPosition)
             }
 
-            group("Стандартные изделия") {
-                data.items.filter { it.kind == ItemKind.STANDARD }.forEach { item ->
-                    nextPosition += 1
-                    row(item, nextPosition)
-                }
+            groupIfNotEmpty("Стандартные изделия", data.items.filter { it.kind == ItemKind.STANDARD }) { item ->
+                nextPosition += 1
+                row(item, nextPosition)
+            }
+
+            groupIfNotEmpty("Материалы", data.items.filter { it.kind == ItemKind.MATERIAL }) { item ->
+                nextPosition += 1
+                row(item, nextPosition)
             }
         }
+    }
+}
+
+// Пустой блок (0 элементов данного вида) не должен появляться в документе вообще —
+// ни заголовка, ни строк под ним.
+private fun TableBuilder.groupIfNotEmpty(title: String, items: List<SpecificationItem>, block: GroupBuilder.(SpecificationItem) -> Unit) {
+    if (items.isEmpty()) return
+    group(title) {
+        items.forEach { item -> block(item) }
     }
 }
 
@@ -87,13 +97,13 @@ private fun ColumnsBuilder.noteColumn(width: Length) = column("note", width, hea
 private fun GroupBuilder.row(item: SpecificationItem, position: Int) {
     row(
         listOf(
-            IrCell(""),
-            IrCell(""),
-            IrCell(position.toString()),
+            IrCell("", align = TextAlign.CENTER),
+            IrCell("", align = TextAlign.CENTER),
+            IrCell(position.toString(), align = TextAlign.CENTER),
             IrCell(item.designation),
             IrCell(item.name),
-            IrCell(item.quantity.toString()),
-            IrCell("")
+            IrCell(item.quantity.toString(), align = TextAlign.CENTER),
+            IrCell("", align = TextAlign.CENTER)
         )
     )
 }

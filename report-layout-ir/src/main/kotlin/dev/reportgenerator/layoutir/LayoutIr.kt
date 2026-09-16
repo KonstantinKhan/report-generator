@@ -58,7 +58,10 @@ data class Color(val r: Int, val g: Int, val b: Int) {
 
 data class ResolvedTextStyle(
     val font: FontRef,
-    val sizePt: Double
+    val sizePt: Double,
+    // Synthetic slant, not a font swap — no italic variant of GOST Type A/B is loaded (see
+    // fonts-and-licensing.md). Renderers apply a shear/skew transform when this is set.
+    val italic: Boolean = false
 )
 
 data class LineStyle(

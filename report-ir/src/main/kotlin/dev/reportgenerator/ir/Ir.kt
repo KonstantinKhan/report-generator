@@ -18,7 +18,12 @@ data class IrTable(
     val columns: List<IrColumn>,
     val header: IrTableHeader?,
     val content: List<IrTableElement>,
-    val style: TableStyle = TableStyle(Styles.tableBorder)
+    val style: TableStyle = TableStyle(Styles.tableBorder),
+    val rowHeight: Length? = null,
+    // Column id (IrColumn.id) that carries a group's title text when rowHeight is fixed — the
+    // title row then has the same per-column cells as a data row, instead of one full-width cell.
+    // null keeps the old full-width single-cell title row.
+    val groupTitleColumn: String? = null
 ) : IrElement
 
 data class IrColumn(

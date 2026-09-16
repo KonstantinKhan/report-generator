@@ -23,5 +23,6 @@ fun mapToSpecificationData(
 private fun mapKind(raw: String): ItemKind = when (raw.uppercase()) {
     "ASSEMBLY" -> ItemKind.ASSEMBLY
     "STANDARD" -> ItemKind.STANDARD
+    "MATERIAL" -> ItemKind.MATERIAL
     else -> ItemKind.PART
 }

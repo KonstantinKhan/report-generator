@@ -46,8 +46,9 @@ private fun renderHorizontalText(text: PositionedText): String {
     val height = text.rect.height.toMillimeters()
     val baseline = top + height * BASELINE_RATIO
     val fontSizeMm = text.style.sizePt * PT_TO_MM
+    val fontStyle = if (text.style.italic) """ font-style="italic"""" else ""
 
-    return """<text x="$x" y="$baseline" font-size="$fontSizeMm" font-family="sans-serif">${escapeXml(text.text)}</text>"""
+    return """<text x="$x" y="$baseline" font-size="$fontSizeMm" font-family="sans-serif"$fontStyle>${escapeXml(text.text)}</text>"""
 }
 
 // rotate(-90) = counterclockwise in SVG's clockwise-positive convention: local +x (reading
@@ -67,8 +68,9 @@ private fun renderVerticalText(text: PositionedText): String {
     val px = (text.rect.x + text.rect.width * BASELINE_RATIO).toMillimeters()
     val py = (text.rect.y + text.rect.height).toMillimeters()
     val fontSizeMm = text.style.sizePt * PT_TO_MM
+    val fontStyle = if (text.style.italic) """ font-style="italic"""" else ""
 
-    return """<text x="0" y="0" font-size="$fontSizeMm" font-family="sans-serif" transform="translate($px, $py) rotate(-90)">${escapeXml(text.text)}</text>"""
+    return """<text x="0" y="0" font-size="$fontSizeMm" font-family="sans-serif" transform="translate($px, $py) rotate(-90)"$fontStyle>${escapeXml(text.text)}</text>"""
 }
 
 private fun renderLine(line: Line): String {

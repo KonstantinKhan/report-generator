@@ -4,7 +4,8 @@ data class TextStyle(
     val fontFamily: String,
     val fontSizeMm: Double,
     val bold: Boolean = false,
-    val italic: Boolean = false
+    val italic: Boolean = false,
+    val underline: Boolean = false
 )
 
 data class BorderStyle(
@@ -26,10 +27,11 @@ object FontFamilies {
 
 object Styles {
     val mainText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 3.5)
-    val tableText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 2.5)
+    val tableText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 3.5)
     val heading = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 5.0, bold = true)
     val designation = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 2.5)
     val tableHeader = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5)
+    val groupHeader = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5, italic = true, underline = true)
     val frameText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5)
     val frameTextLarge = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 7.0)
     val tableBorder = BorderStyle(widthPt = 2.0)

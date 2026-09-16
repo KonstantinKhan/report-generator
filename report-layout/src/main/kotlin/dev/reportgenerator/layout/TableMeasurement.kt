@@ -2,12 +2,14 @@ package dev.reportgenerator.layout
 
 import dev.reportgenerator.geometry.Length
 import dev.reportgenerator.geometry.mm
+import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrColumn
 import dev.reportgenerator.ir.IrGroup
 import dev.reportgenerator.ir.IrRow
 import dev.reportgenerator.ir.IrTable
 import dev.reportgenerator.ir.LayoutConstraints
 import dev.reportgenerator.ir.Styles
+import dev.reportgenerator.ir.TextAlign
 import dev.reportgenerator.ir.TextStyle
 
 private val CELL_PADDING: Length = 1.mm
@@ -27,23 +29,42 @@ data class MeasuredRow(
 )
 
 sealed interface LayoutBlock {
-    val row: MeasuredRow
     val constraints: LayoutConstraints
     val path: String
-    val height: Length get() = row.height
+    val height: Length
 }
 
+// Legacy path (IrTable.rowHeight == null): auto height, no cell borders. Untouched by the
+// fixed-height/bordered rewrite below — still exercised by generic (non-specification) tables.
 data class GroupHeaderBlock(
-    override val row: MeasuredRow,
+    val row: MeasuredRow,
     override val constraints: LayoutConstraints,
     override val path: String
-) : LayoutBlock
+) : LayoutBlock {
+    override val height: Length get() = row.height
+}
 
 data class DataRowBlock(
-    override val row: MeasuredRow,
+    val row: MeasuredRow,
     override val constraints: LayoutConstraints,
     override val path: String
-) : LayoutBlock
+) : LayoutBlock {
+    override val height: Length get() = row.height
+}
+
+// IrTable.rowHeight != null path: every physical row (data, group-title, blank spacer/filler) is
+// one of these — fixed height, always bordered per column (LayoutEngine.drawBorderedRow), text
+// alignment honored (unlike the legacy path, where IrCell.align is ignored for body rows).
+data class BorderedRowBlock(
+    val cells: List<IrCell>,
+    val columns: List<IrColumn>,
+    val offsets: List<Length>,
+    val rowHeight: Length,
+    override val constraints: LayoutConstraints,
+    override val path: String
+) : LayoutBlock {
+    override val height: Length get() = rowHeight
+}
 
 fun columnOffsets(columns: List<IrColumn>, contentLeft: Length): List<Length> {
     var x = contentLeft
@@ -99,12 +120,57 @@ fun measureGroupHeader(
     return MeasuredRow(lines, lineHeight, height)
 }
 
+// A logical IrRow can wrap (by word, per column) into several physical table rows when
+// IrTable.rowHeight is fixed: rather than growing one row's height to fit multiple lines (the
+// legacy auto-height behavior), overflow spills into a whole new bordered physical row. Columns
+// that don't need continuation (position/quantity/etc., normally single-line) naturally come back
+// blank on lineIndex > 0 — no separate "don't repeat on continuation" branch needed.
+fun splitRowIntoPhysicalRows(row: IrRow, columns: List<IrColumn>, textMeasurer: TextMeasurer): List<List<IrCell>> {
+    val linesPerColumn = row.cells.mapIndexed { index, cell ->
+        textMeasurer.measure(cell.text, cell.style, columns[index].width).lines
+    }
+    val physicalCount = (linesPerColumn.maxOfOrNull { it.size } ?: 0).coerceAtLeast(1)
+
+    return (0 until physicalCount).map { lineIndex ->
+        row.cells.mapIndexed { index, cell ->
+            cell.copy(text = linesPerColumn[index].getOrNull(lineIndex) ?: "")
+        }
+    }
+}
+
+fun blankBorderedRow(columns: List<IrColumn>, offsets: List<Length>, rowHeight: Length, path: String): BorderedRowBlock =
+    BorderedRowBlock(
+        cells = columns.map { IrCell("") },
+        columns = columns,
+        offsets = offsets,
+        rowHeight = rowHeight,
+        constraints = LayoutConstraints.Default,
+        path = path
+    )
+
 private fun withKeepWithNext(block: LayoutBlock): LayoutBlock = when (block) {
     is GroupHeaderBlock -> block.copy(constraints = block.constraints.copy(keepWithNext = true))
     is DataRowBlock -> block.copy(constraints = block.constraints.copy(keepWithNext = true))
+    is BorderedRowBlock -> block.copy(constraints = block.constraints.copy(keepWithNext = true))
 }
 
 fun buildBlocks(
+    table: IrTable,
+    offsets: List<Length>,
+    tableWidth: Length,
+    contentLeft: Length,
+    textMeasurer: TextMeasurer,
+    tablePath: String
+): List<LayoutBlock> {
+    val rowHeight = table.rowHeight
+    return if (rowHeight != null) {
+        buildBorderedBlocks(table, offsets, tableWidth, contentLeft, rowHeight, textMeasurer, tablePath)
+    } else {
+        buildLegacyBlocks(table, offsets, tableWidth, contentLeft, textMeasurer, tablePath)
+    }
+}
+
+private fun buildLegacyBlocks(
     table: IrTable,
     offsets: List<Length>,
     tableWidth: Length,
@@ -140,6 +206,90 @@ fun buildBlocks(
             is IrRow -> {
                 val rowPath = "$tablePath/Row[$elementIndex]"
                 blocks += DataRowBlock(measureRow(element, table.columns, offsets, textMeasurer), element.constraints, rowPath)
+            }
+        }
+    }
+
+    return blocks
+}
+
+// Every physical row — group title, blank spacer, or a (possibly word-wrapped) data line — is a
+// BorderedRowBlock so it's uniformly bordered per column. The "2 blank before / 1 blank after"
+// spacer rule around a group title is expressed here as an unconditional keepWithNext chain
+// (blank, blank, header all bind to the next block) so they can never be split by a page break —
+// independent of the group's own keepTogether (which, as before, only decides whether the header
+// unit also binds to the first data row).
+private fun buildBorderedBlocks(
+    table: IrTable,
+    offsets: List<Length>,
+    tableWidth: Length,
+    contentLeft: Length,
+    rowHeight: Length,
+    textMeasurer: TextMeasurer,
+    tablePath: String
+): List<LayoutBlock> {
+    val blocks = mutableListOf<LayoutBlock>()
+
+    fun physicalRowBlocks(row: IrRow, path: String): List<BorderedRowBlock> =
+        splitRowIntoPhysicalRows(row, table.columns, textMeasurer).mapIndexed { lineIndex, cells ->
+            BorderedRowBlock(cells, table.columns, offsets, rowHeight, row.constraints, "$path/Line[$lineIndex]")
+        }
+
+    table.content.forEachIndexed { elementIndex, element ->
+        when (element) {
+            is IrGroup -> {
+                val headerPath = "$tablePath/Group[${element.title}]"
+                val titleColumnIndex = table.groupTitleColumn?.let { id -> table.columns.indexOfFirst { it.id == id } }
+
+                // A title too wide for its cell must wrap onto a new physical row, exactly like a
+                // data cell would (splitRowIntoPhysicalRows) — not overflow its fixed 8mm height
+                // into the rows around it.
+                val headerBlocks = if (titleColumnIndex != null && titleColumnIndex >= 0) {
+                    val titleRow = IrRow(
+                        cells = table.columns.mapIndexed { i, _ ->
+                            if (i == titleColumnIndex) IrCell(element.title, style = Styles.groupHeader, align = TextAlign.CENTER) else IrCell("")
+                        },
+                        constraints = element.constraints
+                    )
+                    physicalRowBlocks(titleRow, headerPath)
+                } else {
+                    listOf(
+                        BorderedRowBlock(
+                            cells = listOf(IrCell(element.title, style = Styles.groupHeader, align = TextAlign.CENTER)),
+                            columns = listOf(IrColumn("groupHeader", tableWidth)),
+                            offsets = listOf(contentLeft),
+                            rowHeight = rowHeight,
+                            constraints = element.constraints,
+                            path = headerPath
+                        )
+                    )
+                }
+
+                val blankBefore1 = blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[0]")
+                val blankBefore2 = blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[1]")
+                val blankAfter = blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[2]")
+
+                val rowBlocks = element.rows.flatMapIndexed { rowIndex, row ->
+                    physicalRowBlocks(row, "$headerPath/Row[$rowIndex]")
+                }
+
+                val prefix = listOf(blankBefore1, blankBefore2) + headerBlocks + listOf(blankAfter)
+                val unit = prefix + rowBlocks
+
+                val effective = unit.mapIndexed { i, block ->
+                    // Every block up to and including the last header line binds forward
+                    // (blanks -> header line(s) -> next header line -> blankAfter) unconditionally;
+                    // only blankAfter's own binding into the data rows depends on keepTogether.
+                    val spacerAndHeader = i < prefix.size - 1
+                    val boundToRows = element.constraints.keepTogether && i < unit.lastIndex
+                    if (spacerAndHeader || boundToRows) withKeepWithNext(block) else block
+                }
+
+                blocks += effective
+            }
+
+            is IrRow -> {
+                blocks += physicalRowBlocks(element, "$tablePath/Row[$elementIndex]")
             }
         }
     }

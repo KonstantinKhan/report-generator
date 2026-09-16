@@ -1,6 +1,6 @@
 package dev.reportgenerator.data
 
-enum class ItemKind { ASSEMBLY, PART, STANDARD }
+enum class ItemKind { ASSEMBLY, PART, STANDARD, MATERIAL }
 
 data class SpecificationItem(
     val designation: String,

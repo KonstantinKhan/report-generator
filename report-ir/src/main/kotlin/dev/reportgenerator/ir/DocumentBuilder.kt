@@ -37,8 +37,8 @@ class DocumentBuilder {
         elements += IrText(text, style)
     }
 
-    fun table(block: TableBuilder.() -> Unit) {
-        val builder = TableBuilder()
+    fun table(rowHeight: Length? = null, groupTitleColumn: String? = null, block: TableBuilder.() -> Unit) {
+        val builder = TableBuilder(rowHeight, groupTitleColumn)
         builder.block()
         elements += builder.build()
     }
@@ -46,7 +46,7 @@ class DocumentBuilder {
     fun build(): IrDocument = IrDocument(currentPageSetup, elements)
 }
 
-class TableBuilder {
+class TableBuilder(private val rowHeight: Length? = null, private val groupTitleColumn: String? = null) {
     private val columns = mutableListOf<IrColumn>()
     private val content = mutableListOf<IrTableElement>()
     private var header: IrTableHeader? = null
@@ -72,7 +72,7 @@ class TableBuilder {
         content += GroupBuilder(title, constraints).apply(block).build()
     }
 
-    fun build(): IrTable = IrTable(columns, header, content, style)
+    fun build(): IrTable = IrTable(columns, header, content, style, rowHeight, groupTitleColumn)
 }
 
 class HeaderBuilder {
