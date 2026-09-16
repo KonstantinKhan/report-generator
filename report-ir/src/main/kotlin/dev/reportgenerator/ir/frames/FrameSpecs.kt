@@ -139,11 +139,13 @@ object FrameSpecs {
         )
     )
 
-    // Continuation page frame (§34.3 ЕСКД): 70x14mm stamp in top-left corner of pages 2+.
-    // Only first 3 rows of the header strip (two blank rows + row with Изм/Лист/№ докум./Подп./Дата).
+    // Continuation page stamp (§34.3 ЕСКД): 185x15mm stamp for pages 2+.
+    // Only first 3 rows of header strip (two blank + row with Изм/Лист/№ докум./Подп./Дата).
+    // No signature block rows below, unlike firstPageStamp.
     val continuationPageStamp: FrameSpec = FrameSpec(
-        size = Size(70.mm, 14.mm),
+        size = Size(185.mm, 15.mm),
         cells = listOf(
+            // Header strip, y=0..15mm (same as firstPageStamp rows 0-3).
             FrameCell.Constant(rect(0, 0, 7, 5), ""),
             FrameCell.Constant(rect(7, 0, 10, 5), ""),
             FrameCell.Constant(rect(17, 0, 23, 5), ""),
@@ -160,7 +162,9 @@ object FrameSpecs {
             FrameCell.Constant(rect(7, 10, 10, 5), "Лист", align = TextAlign.CENTER),
             FrameCell.Constant(rect(17, 10, 23, 5), "№ докум.", align = TextAlign.CENTER),
             FrameCell.Constant(rect(40, 10, 15, 5), "Подп.", align = TextAlign.CENTER),
-            FrameCell.Constant(rect(55, 10, 10, 5), "Дата", align = TextAlign.CENTER)
+            FrameCell.Constant(rect(55, 10, 10, 5), "Дата", align = TextAlign.CENTER),
+
+            FrameCell.Dynamic(rect(65, 0, 120, 15), FrameField.DESIGNATION, style = Styles.frameTextLarge, align = TextAlign.CENTER)
         )
     )
 }

@@ -223,8 +223,10 @@ private fun renderPages(
         } else {
             setup.continuationFrame?.let { spec ->
                 val bindings = resolveBindings(setup.frameBindings, pageNumber, totalPages)
-                val origin = Point(metrics.margins.left, metrics.contentTop)
-                chrome += drawFrame(spec, origin, bindings, textMeasurer, fontResolver)
+                chrome += drawFrame(spec, frameOrigin(metrics, spec), bindings, textMeasurer, fontResolver)
+            }
+            setup.leftMarginFrame?.let { spec ->
+                chrome += drawFrame(spec, leftMarginFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
             }
         }
         Page(pageNumber, metrics.format, chrome + content)
