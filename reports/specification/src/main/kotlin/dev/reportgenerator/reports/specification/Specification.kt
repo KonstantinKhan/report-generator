@@ -85,13 +85,13 @@ private fun TableBuilder.groupIfNotEmpty(title: String, items: List<Specificatio
     }
 }
 
-private fun ColumnsBuilder.formatColumn(width: Length) = column("format", width, header = "Формат")
-private fun ColumnsBuilder.zoneColumn(width: Length) = column("zone", width, header = "Зона")
-private fun ColumnsBuilder.position(width: Length) = column("position", width, header = "Поз.", stickToLastRow = true)
+private fun ColumnsBuilder.formatColumn(width: Length) = column("format", width, header = "Формат", stickToFirstRow = true)
+private fun ColumnsBuilder.zoneColumn(width: Length) = column("zone", width, header = "Зона", stickToFirstRow = true)
+private fun ColumnsBuilder.position(width: Length) = column("position", width, header = "Поз.", stickToFirstRow = true)
 private fun ColumnsBuilder.designationColumn(width: Length) = column("designation", width, header = "Обозначение")
 private fun ColumnsBuilder.nameColumn(width: Length) = column("name", width, header = "Наименование")
 private fun ColumnsBuilder.quantityColumn(width: Length) = column("quantity", width, header = "Кол.", stickToLastRow = true)
-private fun ColumnsBuilder.noteColumn(width: Length) = column("note", width, header = "Примечание")
+private fun ColumnsBuilder.noteColumn(width: Length) = column("note", width, header = "Примечание", stickToLastRow = true)
 
 // Формат/Зона/Примечание aren't modeled in SpecificationItem yet — left blank per row, matching
 // column order (7 columns must line up between header and every data row).

@@ -30,6 +30,7 @@ data class IrColumn(
     val id: String,
     val width: Length,
     val header: String? = null,
+    val stickToFirstRow: Boolean = false,
     val stickToLastRow: Boolean = false
 )
 

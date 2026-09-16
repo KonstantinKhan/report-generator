@@ -25,6 +25,7 @@ import dev.reportgenerator.ir.BorderStyle as IrBorderStyle
 import dev.reportgenerator.ir.TextOrientation as IrTextOrientation
 import dev.reportgenerator.layoutir.BorderStyle as LayoutBorderStyle
 import dev.reportgenerator.layoutir.TextOrientation as LayoutTextOrientation
+import dev.reportgenerator.layoutir.Color
 import dev.reportgenerator.layoutir.FontRef
 import dev.reportgenerator.layoutir.LaidOutDocument
 import dev.reportgenerator.layoutir.Line
@@ -48,12 +49,13 @@ data class PageLayoutMetrics(
     val format: PageFormat,
     val margins: Insets,
     val headerHeight: Length,
-    val frameHeight: Length
+    val frameHeight: Length,
+    val continuationFrameHeight: Length = Length.ZERO
 ) {
     val contentTop: Length get() = margins.top + headerHeight
 
     fun contentBottom(isFirstPage: Boolean): Length {
-        val reserved = if (isFirstPage) frameHeight else Length.ZERO
+        val reserved = if (isFirstPage) frameHeight else continuationFrameHeight
         return format.height - margins.bottom - reserved
     }
 }
@@ -68,7 +70,8 @@ fun layOut(
     val frameHeight = setup.frame?.size?.height ?: Length.ZERO
 
     if (table == null) {
-        val metrics = PageLayoutMetrics(setup.format, setup.margins, Length.ZERO, frameHeight)
+        val continuationFrameHeight = setup.continuationFrame?.size?.height ?: Length.ZERO
+        val metrics = PageLayoutMetrics(setup.format, setup.margins, Length.ZERO, frameHeight, continuationFrameHeight)
         val elements = mutableListOf<PageElement>()
         elements += frameRectangle(metrics, setup.frameStyle)
         setup.frame?.let { spec ->
@@ -93,11 +96,13 @@ fun layOut(
     val blocks = buildBlocks(table, offsets, contentWidth, contentLeft, textMeasurer, "Document/Table")
     val units = groupIntoUnits(blocks)
 
+    val continuationFrameHeight = setup.continuationFrame?.size?.height ?: Length.ZERO
     val metrics = PageLayoutMetrics(
         format = setup.format,
         margins = setup.margins,
         headerHeight = headerLayout.height,
-        frameHeight = frameHeight
+        frameHeight = frameHeight,
+        continuationFrameHeight = continuationFrameHeight
     )
 
     return renderPages(units, metrics, headerLayout.elements, setup, textMeasurer, fontResolver, table, offsets)
@@ -150,7 +155,6 @@ private fun renderPages(
         pageContents.add(mutableListOf())
         y = metrics.contentTop
     }
-
     for (unit in units) {
         val unitHeight = unit.fold(Length.ZERO) { acc, block -> acc + block.height }
 
@@ -189,16 +193,35 @@ private fun renderPages(
     val rowHeight = table.rowHeight
     if (rowHeight != null) {
         pageContents.forEachIndexed { index, content ->
+            val pageNumber = index + 1
             val bottom = metrics.contentBottom(index == 0)
-            var fillY = pageFinalY[index]
-            while (fillY + rowHeight <= bottom) {
+            val contentStart = pageFinalY[index]
+            val available = bottom - contentStart
+
+            // Calculate full rows and remainder
+            val fullRowsCount = (available.raw / rowHeight.raw).toInt()
+            val remainderHeight = available - (rowHeight * fullRowsCount)
+
+            // Determine if this page has a bottom frame
+            val hasBottomFrame = if (pageNumber == 1) setup.frame != null else setup.continuationFrame != null
+
+            var fillY = contentStart
+            repeat(fullRowsCount) { rowIndex ->
+                val isLastRow = rowIndex == fullRowsCount - 1
+                // Last row includes the remainder height
+                val currentRowHeight = if (isLastRow && remainderHeight > Length.ZERO) {
+                    rowHeight + remainderHeight
+                } else {
+                    rowHeight
+                }
                 content += drawBorderedRow(
-                    blankBorderedRow(table.columns, offsets, rowHeight, "Document/Table/Filler"),
+                    blankBorderedRow(table.columns, offsets, currentRowHeight, "Document/Table/Filler"),
                     fillY,
                     textMeasurer,
-                    fontResolver
+                    fontResolver,
+                    removeBottomBorder = isLastRow && hasBottomFrame
                 )
-                fillY += rowHeight
+                fillY += currentRowHeight
             }
         }
     }
@@ -264,17 +287,28 @@ private fun drawBorderedRow(
     block: BorderedRowBlock,
     top: Length,
     textMeasurer: TextMeasurer,
-    fontResolver: (TextStyle) -> FontRef
+    fontResolver: (TextStyle) -> FontRef,
+    removeBottomBorder: Boolean = false
 ): List<PageElement> = block.cells.mapIndexed { index, cell ->
     val x = block.offsets[index]
     val width = block.columns[index].width
 
     // Thin per GOST 2.303 (§"граница ячеек для данных тонкая") — distinct from the thick outer
     // page frame (frameRectangle) and the thick header-row grid (drawRichHeader).
-    val border = Rectangle(
-        rect = Rect(x, top, width, block.rowHeight),
-        style = LayoutBorderStyle(width = ptToLength(Styles.tableBorderThin.widthPt))
-    )
+    val lineWidth = ptToLength(Styles.tableBorderThin.widthPt)
+    val lineStyle = LineStyle(width = lineWidth, color = Color(0, 0, 0))
+    val borders = buildList {
+        // Top border
+        add(Line(Point(x, top), Point(x + width, top), lineStyle))
+        // Right border
+        add(Line(Point(x + width, top), Point(x + width, top + block.rowHeight), lineStyle))
+        // Bottom border (unless removeBottomBorder is true)
+        if (!removeBottomBorder) {
+            add(Line(Point(x, top + block.rowHeight), Point(x + width, top + block.rowHeight), lineStyle))
+        }
+        // Left border
+        add(Line(Point(x, top), Point(x, top + block.rowHeight), lineStyle))
+    }
 
     // Left-aligned text sits flush against the column's left border without this — only LEFT
     // needs it, CENTER already keeps clear of both edges on its own.
@@ -291,7 +325,7 @@ private fun drawBorderedRow(
         emptyList()
     }
 
-    listOf<PageElement>(border) + text + underline
+    borders + text + underline
 }.flatten()
 
 // Underline is drawn as an explicit Line under each text line rather than a font/renderer

@@ -164,7 +164,11 @@ object FrameSpecs {
             FrameCell.Constant(rect(40, 10, 15, 5), "Подп.", align = TextAlign.CENTER),
             FrameCell.Constant(rect(55, 10, 10, 5), "Дата", align = TextAlign.CENTER),
 
-            FrameCell.Dynamic(rect(65, 0, 120, 15), FrameField.DESIGNATION, style = Styles.frameTextLarge, align = TextAlign.CENTER)
+            FrameCell.Dynamic(rect(65, 0, 120, 15), FrameField.DESIGNATION, style = Styles.frameTextLarge, align = TextAlign.CENTER),
+
+            // Right column: sheet number
+            FrameCell.Constant(rect(175, 0, 10, 5), "Лист", align = TextAlign.CENTER),
+            FrameCell.Dynamic(rect(175, 5, 10, 10), FrameField.SHEET_NUMBER, align = TextAlign.CENTER)
         )
     )
 }

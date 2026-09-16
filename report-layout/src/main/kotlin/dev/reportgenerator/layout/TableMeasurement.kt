@@ -133,11 +133,21 @@ fun splitRowIntoPhysicalRows(row: IrRow, columns: List<IrColumn>, textMeasurer: 
 
     return (0 until physicalCount).map { lineIndex ->
         row.cells.mapIndexed { index, cell ->
-            if (columns[index].stickToLastRow && lineIndex < physicalCount - 1) {
-                cell.copy(text = "")
-            } else {
-                cell.copy(text = linesPerColumn[index].getOrNull(lineIndex) ?: "")
+            val text = when {
+                columns[index].stickToFirstRow -> {
+                    // Show only on first physical row, using the first (and typically only) line
+                    if (lineIndex == 0) linesPerColumn[index].firstOrNull() ?: "" else ""
+                }
+                columns[index].stickToLastRow -> {
+                    // Show only on last physical row, using the first (and typically only) line
+                    if (lineIndex == physicalCount - 1) linesPerColumn[index].firstOrNull() ?: "" else ""
+                }
+                else -> {
+                    // Normal: show text for this line, empty if doesn't exist
+                    linesPerColumn[index].getOrNull(lineIndex) ?: ""
+                }
             }
+            cell.copy(text = text)
         }
     }
 }

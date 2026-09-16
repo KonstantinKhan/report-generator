@@ -96,8 +96,8 @@ class HeaderBuilder {
 class ColumnsBuilder {
     private val columns = mutableListOf<IrColumn>()
 
-    fun column(id: String, width: Length, header: String? = null, stickToLastRow: Boolean = false) {
-        columns += IrColumn(id, width, header, stickToLastRow)
+    fun column(id: String, width: Length, header: String? = null, stickToFirstRow: Boolean = false, stickToLastRow: Boolean = false) {
+        columns += IrColumn(id, width, header, stickToFirstRow, stickToLastRow)
     }
 
     fun build(): List<IrColumn> = columns
