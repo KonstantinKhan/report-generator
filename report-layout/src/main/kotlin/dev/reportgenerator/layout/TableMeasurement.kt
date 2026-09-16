@@ -133,7 +133,11 @@ fun splitRowIntoPhysicalRows(row: IrRow, columns: List<IrColumn>, textMeasurer: 
 
     return (0 until physicalCount).map { lineIndex ->
         row.cells.mapIndexed { index, cell ->
-            cell.copy(text = linesPerColumn[index].getOrNull(lineIndex) ?: "")
+            if (columns[index].stickToLastRow && lineIndex < physicalCount - 1) {
+                cell.copy(text = "")
+            } else {
+                cell.copy(text = linesPerColumn[index].getOrNull(lineIndex) ?: "")
+            }
         }
     }
 }

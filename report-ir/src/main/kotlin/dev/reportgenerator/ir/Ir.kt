@@ -29,7 +29,8 @@ data class IrTable(
 data class IrColumn(
     val id: String,
     val width: Length,
-    val header: String? = null
+    val header: String? = null,
+    val stickToLastRow: Boolean = false
 )
 
 data class IrTableHeader(

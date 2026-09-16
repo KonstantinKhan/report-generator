@@ -220,6 +220,12 @@ private fun renderPages(
             setup.belowFrame?.let { spec ->
                 chrome += drawFrame(spec, belowFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
             }
+        } else {
+            setup.continuationFrame?.let { spec ->
+                val bindings = resolveBindings(setup.frameBindings, pageNumber, totalPages)
+                val origin = Point(metrics.margins.left, metrics.contentTop)
+                chrome += drawFrame(spec, origin, bindings, textMeasurer, fontResolver)
+            }
         }
         Page(pageNumber, metrics.format, chrome + content)
     }

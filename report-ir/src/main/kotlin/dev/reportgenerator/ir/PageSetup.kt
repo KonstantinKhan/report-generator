@@ -9,6 +9,7 @@ data class PageSetup(
     val frameStyle: BorderStyle = Styles.tableBorder,
     val frame: FrameSpec? = null,
     val frameBindings: FrameBindings? = null,
+    val continuationFrame: FrameSpec? = null,
     val leftMarginFrame: FrameSpec? = null,
     val belowFrame: FrameSpec? = null
 )

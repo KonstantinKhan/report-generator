@@ -138,4 +138,29 @@ object FrameSpecs {
             FrameCell.Constant(rect(75, 0, 30, 5), "Формат", align = TextAlign.CENTER, borders = NO_BORDERS)
         )
     )
+
+    // Continuation page frame (§34.3 ЕСКД): 70x14mm stamp in top-left corner of pages 2+.
+    // Only first 3 rows of the header strip (two blank rows + row with Изм/Лист/№ докум./Подп./Дата).
+    val continuationPageStamp: FrameSpec = FrameSpec(
+        size = Size(70.mm, 14.mm),
+        cells = listOf(
+            FrameCell.Constant(rect(0, 0, 7, 5), ""),
+            FrameCell.Constant(rect(7, 0, 10, 5), ""),
+            FrameCell.Constant(rect(17, 0, 23, 5), ""),
+            FrameCell.Constant(rect(40, 0, 15, 5), ""),
+            FrameCell.Constant(rect(55, 0, 10, 5), ""),
+
+            FrameCell.Constant(rect(0, 5, 7, 5), ""),
+            FrameCell.Constant(rect(7, 5, 10, 5), ""),
+            FrameCell.Constant(rect(17, 5, 23, 5), ""),
+            FrameCell.Constant(rect(40, 5, 15, 5), ""),
+            FrameCell.Constant(rect(55, 5, 10, 5), ""),
+
+            FrameCell.Constant(rect(0, 10, 7, 5), "Изм", align = TextAlign.CENTER),
+            FrameCell.Constant(rect(7, 10, 10, 5), "Лист", align = TextAlign.CENTER),
+            FrameCell.Constant(rect(17, 10, 23, 5), "№ докум.", align = TextAlign.CENTER),
+            FrameCell.Constant(rect(40, 10, 15, 5), "Подп.", align = TextAlign.CENTER),
+            FrameCell.Constant(rect(55, 10, 10, 5), "Дата", align = TextAlign.CENTER)
+        )
+    )
 }

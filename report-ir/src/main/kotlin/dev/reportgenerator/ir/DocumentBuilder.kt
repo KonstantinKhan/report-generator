@@ -23,12 +23,14 @@ class DocumentBuilder {
         margins: Insets = currentPageSetup.margins,
         frame: FrameSpec? = currentPageSetup.frame,
         frameBindings: FrameBindings? = currentPageSetup.frameBindings,
+        continuationFrame: FrameSpec? = currentPageSetup.continuationFrame,
         leftMarginFrame: FrameSpec? = currentPageSetup.leftMarginFrame,
         belowFrame: FrameSpec? = currentPageSetup.belowFrame
     ) {
         currentPageSetup = PageSetup(
             format, margins,
             frame = frame, frameBindings = frameBindings,
+            continuationFrame = continuationFrame,
             leftMarginFrame = leftMarginFrame, belowFrame = belowFrame
         )
     }
@@ -94,8 +96,8 @@ class HeaderBuilder {
 class ColumnsBuilder {
     private val columns = mutableListOf<IrColumn>()
 
-    fun column(id: String, width: Length, header: String? = null) {
-        columns += IrColumn(id, width, header)
+    fun column(id: String, width: Length, header: String? = null, stickToLastRow: Boolean = false) {
+        columns += IrColumn(id, width, header, stickToLastRow)
     }
 
     fun build(): List<IrColumn> = columns
