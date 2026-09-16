@@ -1,7 +1,8 @@
 # Архитектура: pipeline и границы
 
-См. также: [architecture-0.1.md](../architecture-0.1.md) (полный оригинал),
-[modules.md](modules.md) (модули по отдельности).
+См. также: [architecture-0.2.md](../architecture-0.2.md) (полная актуальная
+версия — рамка/штамп как `FrameSpec`, §34), [architecture-0.1.md](../architecture-0.1.md)
+(исходная версия), [modules.md](modules.md) (модули по отдельности).
 
 ## Главный pipeline
 
