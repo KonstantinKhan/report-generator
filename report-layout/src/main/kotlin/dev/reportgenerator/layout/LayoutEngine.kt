@@ -78,6 +78,9 @@ fun layOut(
         setup.leftMarginFrame?.let { spec ->
             elements += drawFrame(spec, leftMarginFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
         }
+        setup.belowFrame?.let { spec ->
+            elements += drawFrame(spec, belowFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
+        }
         return LaidOutDocument(listOf(Page(1, setup.format, elements)))
     }
 
@@ -180,6 +183,9 @@ private fun renderPages(
             }
             setup.leftMarginFrame?.let { spec ->
                 chrome += drawFrame(spec, leftMarginFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
+            }
+            setup.belowFrame?.let { spec ->
+                chrome += drawFrame(spec, belowFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
             }
         }
         Page(pageNumber, metrics.format, chrome + content)
@@ -335,6 +341,14 @@ private fun leftMarginFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): 
     y = metrics.format.height - metrics.margins.bottom - spec.size.height
 )
 
+// Below the frame's bottom line, in the sheet's own bottom-right margin gutter (between the
+// frame and the physical page edge) — "Копировал"/"Формат" notes sit outside the frame entirely,
+// not inside it like the stamp does.
+private fun belowFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point = Point(
+    x = metrics.format.width - spec.size.width,
+    y = metrics.format.height - spec.size.height
+)
+
 private fun resolveBindings(bindings: FrameBindings?, pageNumber: Int, totalPages: Int): Map<FrameField, String> =
     buildMap {
         bindings?.designation?.let { put(FrameField.DESIGNATION, it) }
@@ -344,7 +358,11 @@ private fun resolveBindings(bindings: FrameBindings?, pageNumber: Int, totalPage
     }
 
 private fun borderLineStyle(weight: BorderWeight): LineStyle {
-    val widthPt = if (weight == BorderWeight.THICK) Styles.tableBorder.widthPt else Styles.tableBorderThin.widthPt
+    val widthPt = when (weight) {
+        BorderWeight.THICK -> Styles.tableBorder.widthPt
+        BorderWeight.THIN -> Styles.tableBorderThin.widthPt
+        BorderWeight.NONE -> 0.0
+    }
     return LineStyle(width = ptToLength(widthPt))
 }
 
@@ -379,12 +397,20 @@ private fun drawFrame(
     val rightHalf = halfWidth(cell.borders.right)
     val bottomHalf = halfWidth(cell.borders.bottom)
     val leftHalf = halfWidth(cell.borders.left)
-    val borders = listOf(
-        Line(Point(rect.left - topHalf, rect.top), Point(rect.right + topHalf, rect.top), borderLineStyle(cell.borders.top)),
-        Line(Point(rect.right, rect.top - rightHalf), Point(rect.right, rect.bottom + rightHalf), borderLineStyle(cell.borders.right)),
-        Line(Point(rect.left - bottomHalf, rect.bottom), Point(rect.right + bottomHalf, rect.bottom), borderLineStyle(cell.borders.bottom)),
-        Line(Point(rect.left, rect.top - leftHalf), Point(rect.left, rect.bottom + leftHalf), borderLineStyle(cell.borders.left))
-    )
+    val borders = buildList {
+        if (cell.borders.top != BorderWeight.NONE) {
+            add(Line(Point(rect.left - topHalf, rect.top), Point(rect.right + topHalf, rect.top), borderLineStyle(cell.borders.top)))
+        }
+        if (cell.borders.right != BorderWeight.NONE) {
+            add(Line(Point(rect.right, rect.top - rightHalf), Point(rect.right, rect.bottom + rightHalf), borderLineStyle(cell.borders.right)))
+        }
+        if (cell.borders.bottom != BorderWeight.NONE) {
+            add(Line(Point(rect.left - bottomHalf, rect.bottom), Point(rect.right + bottomHalf, rect.bottom), borderLineStyle(cell.borders.bottom)))
+        }
+        if (cell.borders.left != BorderWeight.NONE) {
+            add(Line(Point(rect.left, rect.top - leftHalf), Point(rect.left, rect.bottom + leftHalf), borderLineStyle(cell.borders.left)))
+        }
+    }
 
     val texts = if (text.isEmpty()) {
         emptyList()

@@ -261,6 +261,8 @@
 <line x1="20.0" y1="266.65" x2="20.0" y2="292.35" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
 <line x1="12.65" y1="292.0" x2="20.35" y2="292.0" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
 <line x1="13.0" y1="266.65" x2="13.0" y2="292.35" stroke="rgb(0, 0, 0)" stroke-width="0.71"/>
+<text x="111.59" y="295.76" font-size="3.4999999999999996" font-family="sans-serif">Копировал</text>
+<text x="174.05" y="295.76" font-size="3.4999999999999996" font-family="sans-serif">Формат</text>
 <text x="20.0" y="24.8" font-size="5.0" font-family="sans-serif">Сборочные единицы</text>
 <text x="32.0" y="29.4" font-size="2.5" font-family="sans-serif">1</text>
 <text x="40.0" y="29.4" font-size="2.5" font-family="sans-serif">AAA.01.000</text>

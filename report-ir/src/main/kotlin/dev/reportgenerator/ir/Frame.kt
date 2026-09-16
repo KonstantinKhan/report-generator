@@ -5,7 +5,7 @@ import dev.reportgenerator.geometry.Size
 
 enum class FrameField { DESIGNATION, NAME, SHEET_NUMBER, SHEETS_TOTAL }
 
-enum class BorderWeight { THIN, THICK }
+enum class BorderWeight { NONE, THIN, THICK }
 
 data class CellBorders(
     val top: BorderWeight = BorderWeight.THICK,

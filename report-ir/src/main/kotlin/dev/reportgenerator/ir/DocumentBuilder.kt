@@ -23,9 +23,14 @@ class DocumentBuilder {
         margins: Insets = currentPageSetup.margins,
         frame: FrameSpec? = currentPageSetup.frame,
         frameBindings: FrameBindings? = currentPageSetup.frameBindings,
-        leftMarginFrame: FrameSpec? = currentPageSetup.leftMarginFrame
+        leftMarginFrame: FrameSpec? = currentPageSetup.leftMarginFrame,
+        belowFrame: FrameSpec? = currentPageSetup.belowFrame
     ) {
-        currentPageSetup = PageSetup(format, margins, frame = frame, frameBindings = frameBindings, leftMarginFrame = leftMarginFrame)
+        currentPageSetup = PageSetup(
+            format, margins,
+            frame = frame, frameBindings = frameBindings,
+            leftMarginFrame = leftMarginFrame, belowFrame = belowFrame
+        )
     }
 
     fun title(text: String, style: TextStyle = Styles.heading) {

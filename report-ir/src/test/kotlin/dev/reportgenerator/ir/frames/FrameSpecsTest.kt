@@ -1,6 +1,7 @@
 package dev.reportgenerator.ir.frames
 
 import dev.reportgenerator.geometry.mm
+import dev.reportgenerator.ir.BorderWeight
 import dev.reportgenerator.ir.FrameCell
 import dev.reportgenerator.ir.FrameField
 import dev.reportgenerator.ir.TextOrientation
@@ -73,5 +74,28 @@ class FrameSpecsTest {
         val bottomMost = labeled.maxBy { it.rect.y }
         assertEquals("Инв. № подл.", bottomMost.text)
         assertEquals(25.mm, bottomMost.rect.height)
+    }
+
+    @Test
+    fun `below-frame notes are borderless and centered at the requested distance from the sheet edge`() {
+        val cells = FrameSpecs.belowFrameNotes.cells.filterIsInstance<FrameCell.Constant>()
+        assertEquals(2, cells.size)
+        cells.forEach {
+            assertEquals(BorderWeight.NONE, it.borders.top)
+            assertEquals(BorderWeight.NONE, it.borders.right)
+            assertEquals(BorderWeight.NONE, it.borders.bottom)
+            assertEquals(BorderWeight.NONE, it.borders.left)
+        }
+
+        // belowFrameOrigin anchors the block's right edge at the sheet's right edge, so a cell's
+        // distance from that edge is (spec.width - cell.rect.x - cell.rect.width/2).
+        val specWidth = FrameSpecs.belowFrameNotes.size.width
+        fun distanceFromSheetEdge(cell: FrameCell.Constant) =
+            specWidth - cell.rect.x - cell.rect.width / 2
+
+        val kopirovan = cells.single { it.text == "Копировал" }
+        val format = cells.single { it.text == "Формат" }
+        assertEquals(90.mm, distanceFromSheetEdge(kopirovan))
+        assertEquals(30.mm, distanceFromSheetEdge(format))
     }
 }

@@ -15,6 +15,7 @@ import dev.reportgenerator.ir.TextOrientation
 private fun rect(x: Int, y: Int, width: Int, height: Int): Rect = Rect(x.mm, y.mm, width.mm, height.mm)
 
 private val ROW_ENDS = CellBorders(top = BorderWeight.THIN, bottom = BorderWeight.THIN)
+private val NO_BORDERS = CellBorders(BorderWeight.NONE, BorderWeight.NONE, BorderWeight.NONE, BorderWeight.NONE)
 
 // The 185x40mm ESKD title block ("основная надпись"), first sheet only, anchored at the
 // bottom-right corner of the page frame. Two independent sub-grids stacked vertically: a 15mm
@@ -121,6 +122,20 @@ object FrameSpecs {
 
             FrameCell.Constant(rect(0, 110, 5, 25), "Инв. № подл.", align = TextAlign.CENTER, orientation = TextOrientation.VERTICAL_BOTTOM_TO_TOP),
             FrameCell.Constant(rect(5, 110, 7, 25), "")
+        )
+    )
+
+    // "Копировал"/"Формат" notes below the main frame, in the sheet's own bottom-right margin
+    // gutter (outside the frame, like leftMarginTable — no borders at all, plain captions). Block
+    // is anchored with its right edge at the sheet's right edge (belowFrameOrigin in
+    // LayoutEngine.kt), so local x here reads as "distance from the sheet's right edge, mirrored":
+    // local x=30 is 90mm from the right edge, local x=90 is 30mm from it — matching the two
+    // target centers given (~90mm and ~30mm from the sheet's right edge).
+    val belowFrameNotes: FrameSpec = FrameSpec(
+        size = Size(120.mm, 5.mm),
+        cells = listOf(
+            FrameCell.Constant(rect(10, 0, 40, 5), "Копировал", align = TextAlign.CENTER, borders = NO_BORDERS),
+            FrameCell.Constant(rect(75, 0, 30, 5), "Формат", align = TextAlign.CENTER, borders = NO_BORDERS)
         )
     )
 }

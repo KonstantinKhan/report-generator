@@ -25,7 +25,8 @@ fun specification(data: SpecificationData): IrDocument {
         pageSetup(
             frame = FrameSpecs.firstPageStamp,
             frameBindings = FrameBindings(designation = data.documentDesignation, name = data.documentName),
-            leftMarginFrame = FrameSpecs.leftMarginTable
+            leftMarginFrame = FrameSpecs.leftMarginTable,
+            belowFrame = FrameSpecs.belowFrameNotes
         )
 
         table {
