@@ -96,10 +96,10 @@ object FrameSpecs {
     // A 12x135mm strip meant for the main frame's bottom-left edge, rotated 90° (read bottom to
     // top, like the specification table's vertical header columns). Defined here in the block's
     // OWN top-left-origin local space, same convention as firstPageStamp — (0,0) is this strip's
-    // own top, not a page coordinate. Anchoring it at the frame's bottom-left corner, and
-    // reserving the content-area space it needs, isn't done yet (a single content rect currently
-    // assumes only a bottom-right reservation, see PageLayoutMetrics.frameHeight) — left as data
-    // for now, per plan.
+    // own top, not a page coordinate. Anchoring it at the frame's bottom-left corner is handled
+    // by resolveAnchor (leftMarginFrameOrigin, see LayoutEngine.kt). Content-area reservation is
+    // union-based in PageLayoutMetrics.contentBottom(), which correctly excludes this block since
+    // it sits outside the content column (x < margins.left).
     //
     // Along the strip (top to bottom in local space / bottom to top on the page): Подп. и дата /
     // Инв. № дубл. / Взам. инв. № / Подл. и дата / Инв. № подл. — the last one is nearest the

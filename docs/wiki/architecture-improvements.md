@@ -66,7 +66,41 @@
 - Anchor-рефактор (3 функции → 1) можно делать отдельно, низкий риск
 - Union-based `contentArea` — второй шаг, обязательно с тестом-инвариантом; делать одновременно с этим рефакторингом, а не откладывать
 
-**Статус:** Идея, обсуждена 2026-09-18, требует ADR перед реализацией
+**Статус:** ADR принят 2026-09-18, реализация в ветке `feature/static-block-anchoring`
+
+<details>
+<summary>ADR: единый anchor-механизм (2026-09-18)</summary>
+
+**Решение.** Заменить 3 хардкод-функции (`frameOrigin`, `leftMarginFrameOrigin`, `belowFrameOrigin`) одной:
+
+```kotlin
+enum class Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+
+fun resolveAnchor(
+    base: Rect,            // frame rect или page rect
+    baseCorner: Corner,    // угол base, к которому крепимся
+    blockCorner: Corner = baseCorner,  // угол блока, который совпадает с anchor-точкой
+    size: Size,
+    offset: Point = Point.ZERO
+): Point
+```
+
+Anchor-точка = угол `base` (`baseCorner`). Origin блока = anchor-точка минус смещение до `blockCorner` блока, плюс `offset`. Один блок-угол = блок «растёт» внутрь base; противоположный по оси — блок «растёт» наружу.
+
+**Проверка на всех 3 текущих случаях (формулы сошлись 1:1):**
+- `frameOrigin` = `resolveAnchor(frameRect, BOTTOM_RIGHT, BOTTOM_RIGHT, spec.size)` → внутрь рамки, у правого нижнего угла (штамп)
+- `leftMarginFrameOrigin` = `resolveAnchor(frameRect, BOTTOM_LEFT, BOTTOM_RIGHT, spec.size)` → наружу рамки влево, низ вровень с рамкой (leftMarginTable)
+- `belowFrameOrigin` = `resolveAnchor(pageRect, BOTTOM_RIGHT, BOTTOM_RIGHT, spec.size)` → в правый нижний угол листа, за рамкой (belowFrameNotes)
+
+Новый статический блок = запись `(spec, base, baseCorner, blockCorner, offset)`, не новая функция.
+
+**Union-based contentArea.** `contentBottom()` вместо хардкод-вычета одного `frameHeight` берёт минимум верхней границы среди всех resolved-block-rect'ов, которые горизонтально пересекают content-диапазон (`[margins.left, format.width - margins.right]`). Блоки, целиком лежащие в гутере (leftMarginTable, belowFrameNotes — их `base=FRAME`/`PAGE`, но `blockCorner` направлен НАРУЖУ рамки), в content-диапазон не попадают и на contentBottom не влияют — это подтверждено геометрией (x < margins.left), а не хардкодом. Реально резервирующий блок — только stamp/continuationStamp снизу. Добавляется тест-инвариант: сумма зарезервированных высот ⊂ высота страницы, для обоих типов страниц.
+
+**Не входит в этот рефакторинг:** `IrTable`/`IrColumn`/`IrCell` — геометрию считает layout engine, это не хардкод-координаты.
+
+**Риск:** `frameOrigin`/`leftMarginFrameOrigin`/`belowFrameOrigin` — приватные функции `LayoutEngine.kt`, вызываются только внутри него (4 call site на файл) → рефактор локализован, не трогает публичный контракт `PageSetup`/`FrameSpec`.
+
+</details>
 
 <details>
 <summary>Саммари обсуждения (2026-09-17 — 2026-09-18)</summary>

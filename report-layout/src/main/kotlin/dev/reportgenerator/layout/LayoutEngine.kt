@@ -49,15 +49,58 @@ data class PageLayoutMetrics(
     val format: PageFormat,
     val margins: Insets,
     val headerHeight: Length,
-    val frameHeight: Length,
-    val continuationFrameHeight: Length = Length.ZERO
+    // Resolved rects of every static block registered for this page type (stamp, leftMargin,
+    // belowFrame, ...) — see resolveAnchor()/Anchor.kt. Union-based reservation below replaces
+    // what used to be a single hardcoded frameHeight/continuationFrameHeight subtraction.
+    val firstPageBlocks: List<Rect> = emptyList(),
+    val continuationPageBlocks: List<Rect> = emptyList()
 ) {
     val contentTop: Length get() = margins.top + headerHeight
 
+    val frameRect: Rect get() = frameRectOf(format, margins)
+    val pageRect: Rect get() = pageRectOf(format)
+
+    // Bottom of the content column = nearest top edge among static blocks that horizontally
+    // overlap the content column [contentLeft, contentRight) — not a hardcoded single-block
+    // subtraction. A block living entirely in the margin gutter (e.g. leftMarginTable, whose
+    // resolved rect sits left of contentLeft) doesn't participate; that's a geometric fact of its
+    // resolved rect, not an assumption baked in here.
     fun contentBottom(isFirstPage: Boolean): Length {
-        val reserved = if (isFirstPage) frameHeight else continuationFrameHeight
-        return format.height - margins.bottom - reserved
+        val blocks = if (isFirstPage) firstPageBlocks else continuationPageBlocks
+        val contentLeft = margins.left
+        val contentRight = format.width - margins.right
+        val reservedTops = blocks
+            .filter { it.left < contentRight && it.right > contentLeft }
+            .map { it.top }
+        return (reservedTops + frameRect.bottom).min()
     }
+}
+
+private fun frameRectOf(format: PageFormat, margins: Insets): Rect = Rect(
+    x = margins.left,
+    y = margins.top,
+    width = format.width - margins.left - margins.right,
+    height = format.height - margins.top - margins.bottom
+)
+
+private fun pageRectOf(format: PageFormat): Rect = Rect(Length.ZERO, Length.ZERO, format.width, format.height)
+
+private fun staticBlockRect(spec: FrameSpec, base: Rect, baseCorner: Corner, blockCorner: Corner = baseCorner): Rect {
+    val origin = resolveAnchor(base, baseCorner, blockCorner, spec.size)
+    return Rect(origin.x, origin.y, spec.size.width, spec.size.height)
+}
+
+// One registration per static block = one line here; a new block needs no new origin function,
+// just a (spec, base, corner) entry — see Anchor.kt / docs/wiki/architecture-improvements.md.
+private fun firstPageBlockRects(setup: PageSetup, frameRect: Rect, pageRect: Rect): List<Rect> = buildList {
+    setup.frame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_RIGHT)) }
+    setup.leftMarginFrame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
+    setup.belowFrame?.let { add(staticBlockRect(it, pageRect, Corner.BOTTOM_RIGHT)) }
+}
+
+private fun continuationPageBlockRects(setup: PageSetup, frameRect: Rect): List<Rect> = buildList {
+    setup.continuationFrame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_RIGHT)) }
+    setup.leftMarginFrame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
 }
 
 fun layOut(
@@ -67,11 +110,13 @@ fun layOut(
 ): LaidOutDocument {
     val setup = document.pageSetup
     val table = document.elements.filterIsInstance<IrTable>().firstOrNull()
-    val frameHeight = setup.frame?.size?.height ?: Length.ZERO
+    val frameRect = frameRectOf(setup.format, setup.margins)
+    val pageRect = pageRectOf(setup.format)
+    val firstPageBlocks = firstPageBlockRects(setup, frameRect, pageRect)
+    val continuationPageBlocks = continuationPageBlockRects(setup, frameRect)
 
     if (table == null) {
-        val continuationFrameHeight = setup.continuationFrame?.size?.height ?: Length.ZERO
-        val metrics = PageLayoutMetrics(setup.format, setup.margins, Length.ZERO, frameHeight, continuationFrameHeight)
+        val metrics = PageLayoutMetrics(setup.format, setup.margins, Length.ZERO, firstPageBlocks, continuationPageBlocks)
         val elements = mutableListOf<PageElement>()
         elements += frameRectangle(metrics, setup.frameStyle)
         setup.frame?.let { spec ->
@@ -96,13 +141,12 @@ fun layOut(
     val blocks = buildBlocks(table, offsets, contentWidth, contentLeft, textMeasurer, "Document/Table")
     val units = groupIntoUnits(blocks)
 
-    val continuationFrameHeight = setup.continuationFrame?.size?.height ?: Length.ZERO
     val metrics = PageLayoutMetrics(
         format = setup.format,
         margins = setup.margins,
         headerHeight = headerLayout.height,
-        frameHeight = frameHeight,
-        continuationFrameHeight = continuationFrameHeight
+        firstPageBlocks = firstPageBlocks,
+        continuationPageBlocks = continuationPageBlocks
     )
 
     return renderPages(units, metrics, headerLayout.elements, setup, textMeasurer, fontResolver, table, offsets)
@@ -466,38 +510,27 @@ private fun ptToLength(pt: Double): Length = Length.ofMillimeters(pt * PT_TO_MM)
 
 private fun frameRectangle(metrics: PageLayoutMetrics, style: IrBorderStyle): Rectangle =
     Rectangle(
-        rect = Rect(
-            x = metrics.margins.left,
-            y = metrics.margins.top,
-            width = metrics.format.width - metrics.margins.left - metrics.margins.right,
-            height = metrics.format.height - metrics.margins.top - metrics.margins.bottom
-        ),
+        rect = metrics.frameRect,
         style = LayoutBorderStyle(width = ptToLength(style.widthPt))
     )
 
-private fun frameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point = Point(
-    x = metrics.format.width - metrics.margins.right - spec.size.width,
-    y = metrics.format.height - metrics.margins.bottom - spec.size.height
-)
+// The stamp nests inside the frame's own bottom-right corner.
+private fun frameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
+    resolveAnchor(metrics.frameRect, Corner.BOTTOM_RIGHT, size = spec.size)
 
-// Outside the main frame, in the left margin gutter — its right edge touches the frame's left
-// border from the outside, it doesn't eat into the content area. Bottom of the strip = bottom of
-// the main frame itself (5mm from the sheet edge, same as the frame's own bottom line) — safe to
-// go all the way down because, being outside the frame (x < margins.left), it sits in a different
-// x-range than the stamp entirely, so there's no overlap to worry about (unlike when it was
-// briefly placed inside the frame).
-private fun leftMarginFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point = Point(
-    x = metrics.margins.left - spec.size.width,
-    y = metrics.format.height - metrics.margins.bottom - spec.size.height
-)
+// Outside the main frame, in the left margin gutter: anchored to the frame's bottom-LEFT corner
+// with an opposite (BOTTOM_RIGHT) block corner — the strip's right edge touches the frame's left
+// border from the outside, its bottom lines up with the frame's own bottom. Being outside the
+// frame (x < margins.left), it doesn't eat into the content area — a geometric consequence of the
+// anchor choice, not a separate rule.
+private fun leftMarginFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
+    resolveAnchor(metrics.frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT, spec.size)
 
 // Below the frame's bottom line, in the sheet's own bottom-right margin gutter (between the
-// frame and the physical page edge) — "Копировал"/"Формат" notes sit outside the frame entirely,
-// not inside it like the stamp does.
-private fun belowFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point = Point(
-    x = metrics.format.width - spec.size.width,
-    y = metrics.format.height - spec.size.height
-)
+// frame and the physical page edge) — anchored to the PAGE's corner, not the frame's, since
+// "Копировал"/"Формат" notes sit outside the frame entirely.
+private fun belowFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
+    resolveAnchor(metrics.pageRect, Corner.BOTTOM_RIGHT, size = spec.size)
 
 private fun resolveBindings(bindings: FrameBindings?, pageNumber: Int, totalPages: Int): Map<FrameField, String> =
     buildMap {

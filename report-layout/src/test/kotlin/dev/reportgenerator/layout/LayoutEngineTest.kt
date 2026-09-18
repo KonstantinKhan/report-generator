@@ -410,4 +410,30 @@ class LayoutEngineTest {
         assertEquals(defaultMargins().left, firstColumnText.rect.x)
         assertEquals(defaultMargins().left + 30.mm, secondColumnText.rect.x)
     }
+
+    // Union-based contentBottom (docs/wiki/architecture-improvements.md, "Универсальный механизм
+    // привязки статических блоков"): a registered block only reserves content space when its
+    // resolved rect actually overlaps the content column horizontally — a block living entirely
+    // in the margin gutter (e.g. leftMarginTable) must not shrink it, regardless of how tall it is.
+    @Test
+    fun `contentBottom is reserved only by blocks overlapping the content column`() {
+        val format = PageFormat("test", width = 100.mm, height = 100.mm)
+        val margins = Insets(top = 5.mm, right = 5.mm, bottom = 5.mm, left = 20.mm)
+
+        val gutterBlock = Rect(x = 0.mm, y = 50.mm, width = 15.mm, height = 40.mm)
+        val onlyGutter = PageLayoutMetrics(format, margins, Length.ZERO, firstPageBlocks = listOf(gutterBlock))
+        assertEquals(
+            format.height - margins.bottom,
+            onlyGutter.contentBottom(isFirstPage = true),
+            "block entirely left of the content column (x < margins.left) must not reserve space"
+        )
+
+        val stampBlock = Rect(x = 60.mm, y = 70.mm, width = 30.mm, height = 25.mm)
+        val gutterPlusStamp = PageLayoutMetrics(format, margins, Length.ZERO, firstPageBlocks = listOf(gutterBlock, stampBlock))
+        assertEquals(
+            70.mm,
+            gutterPlusStamp.contentBottom(isFirstPage = true),
+            "block overlapping the content column must reserve up to its own top edge"
+        )
+    }
 }
