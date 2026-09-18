@@ -68,6 +68,71 @@
 
 **Статус:** ADR принят 2026-09-18, реализация в ветке `feature/static-block-anchoring`
 
+## Как вручную протестировать механизм создания блоков
+
+Публичного API для регистрации произвольного блока пока нет — 4 именованных слота `PageSetup` (`frame`/`continuationFrame`/`leftMarginFrame`/`belowFrame`) жёстко привязаны к своим углам внутри `LayoutEngine.kt` (`firstPageBlockRects`/`continuationPageBlockRects`). Добавление блока в НОВЫЙ угол — временная правка этого файла. Ниже — проверенный на практике рецепт (все шаги реально прогнаны при подготовке этого раздела, включая найденный по ходу баг, см. конец).
+
+### Вариант A — быстро, без сборки PDF (только математика)
+
+```
+./gradlew :report-layout:test --tests "dev.reportgenerator.layout.LayoutEngineTest.contentBottom*"
+```
+
+Гоняет тест-инварианты union-логики `contentBottom()` на синтетических `Rect`, без рендера.
+
+### Вариант B — визуально, через реальный PDF/SVG
+
+Цель: добавить тестовый блок «ТЕСТ» 40×10мм в угол `TOP_LEFT` листа — угол, которым сегодня не пользуется ни один прод-блок (все три реальных блока анкорены снизу).
+
+1. Открыть `report-layout/src/main/kotlin/dev/reportgenerator/layout/LayoutEngine.kt`.
+
+2. Добавить импорты (если их ещё нет):
+   ```kotlin
+   import dev.reportgenerator.geometry.Size
+   import dev.reportgenerator.geometry.mm
+   ```
+
+3. Перед `firstPageBlockRects()` добавить тестовый спек и зарегистрировать его в списке блоков (нужен и для отрисовки, и для резервирования места под контент):
+   ```kotlin
+   private val testSpec = FrameSpec(
+       size = Size(40.mm, 10.mm),
+       cells = listOf(FrameCell.Constant(Rect(0.mm, 0.mm, 40.mm, 10.mm), "ТЕСТ", align = TextAlign.CENTER))
+   )
+
+   private fun firstPageBlockRects(setup: PageSetup, frameRect: Rect, pageRect: Rect): List<Rect> = buildList {
+       setup.frame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_RIGHT)) }
+       setup.leftMarginFrame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
+       setup.belowFrame?.let { add(staticBlockRect(it, pageRect, Corner.BOTTOM_RIGHT)) }
+       add(staticBlockRect(testSpec, pageRect, Corner.TOP_LEFT))  // временная строка
+   }
+   ```
+
+4. В `renderPages()`, в ветке `if (pageNumber == 1) { ... }` (рядом с существующими `setup.frame?.let { ... }`), добавить отрисовку:
+   ```kotlin
+   chrome += drawFrame(testSpec, resolveAnchor(metrics.pageRect, Corner.TOP_LEFT, size = testSpec.size), emptyMap(), textMeasurer, fontResolver)
+   ```
+
+5. Собрать и сгенерировать отчёт:
+   ```
+   ./gradlew :report-cli:run
+   ```
+   Файлы появятся в `report-cli/output/`: `specification-page-1.svg`, `specification-page-2.svg`, `specification.pdf`.
+
+6. Открыть `specification-page-1.svg` (браузером) или `.pdf` — блок «ТЕСТ» появится в левом верхнем углу листа (координаты (0,0)-(40,10)мм — можно проверить через `grep "ТЕСТ" report-cli/output/specification-page-1.svg`, там будет `<text ...>ТЕСТ</text>` рядом с `x="0.0" y="-0.35"..."x=40.35"` линиями рамки блока).
+
+7. Откатить правки — это одноразовый эксперимент, не коммитить:
+   ```
+   git checkout -- report-layout/src/main/kotlin/dev/reportgenerator/layout/LayoutEngine.kt
+   ```
+
+### Что нашли, прогоняя этот рецепт (2026-09-18)
+
+До фикса количество страниц в примере молча менялось 2 → 3: `contentBottom()` фильтровал блоки только по пересечению с content-колонкой по X, не проверяя, что блок лежит НИЖЕ `contentTop`. Тестовый блок в TOP_LEFT (y=0..10мм) пересекался по X → его `top=0мм` попадал в `reservedTops` → `contentBottom` схлопывался почти в 0 → контент первой страницы почти весь уезжал на вторую.
+
+**Исправлено** (уже в коде, не нужно повторять при тесте): фильтр `contentBottom()` теперь дополнительно требует `it.top >= contentTop`. Регрессионный тест — `LayoutEngineTest.kt`: `a block anchored above contentTop does not corrupt contentBottom`.
+
+**Явное ограничение, которое это вскрыло:** union-механизм сегодня резервирует только НИЖНЮЮ границу контента (`contentBottom`). `contentTop` — по-прежнему хардкод `margins.top + headerHeight`, блоки НЕ могут отодвинуть верх контента вниз. Если понадобится настоящий блок сверху (например, шапка над таблицей) — нужен симметричный `contentTop()`-union; это не сделано, отдельная задача.
+
 <details>
 <summary>ADR: единый anchor-механизм (2026-09-18)</summary>
 

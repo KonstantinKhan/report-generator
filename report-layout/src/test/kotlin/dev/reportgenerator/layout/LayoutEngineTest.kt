@@ -436,4 +436,24 @@ class LayoutEngineTest {
             "block overlapping the content column must reserve up to its own top edge"
         )
     }
+
+    // Regression: a block anchored ABOVE contentTop (e.g. a future TOP_LEFT/TOP_RIGHT block) still
+    // horizontally overlaps the content column, but must not be treated as a bottom-reservation
+    // candidate — its own top edge (near y=0) would otherwise collapse contentBottom to near-zero.
+    // Caught by manually wiring a TOP_LEFT test block through the CLI while writing the wiki guide:
+    // page count silently went 2 -> 3 before this filter existed.
+    @Test
+    fun `a block anchored above contentTop does not corrupt contentBottom`() {
+        val format = PageFormat("test", width = 100.mm, height = 100.mm)
+        val margins = Insets(top = 5.mm, right = 5.mm, bottom = 5.mm, left = 20.mm)
+
+        val aboveContentTop = Rect(x = 0.mm, y = 0.mm, width = 40.mm, height = 10.mm)
+        val metrics = PageLayoutMetrics(format, margins, Length.ZERO, firstPageBlocks = listOf(aboveContentTop))
+
+        assertEquals(
+            format.height - margins.bottom,
+            metrics.contentBottom(isFirstPage = true),
+            "a block above contentTop must not reserve content-bottom space"
+        )
+    }
 }

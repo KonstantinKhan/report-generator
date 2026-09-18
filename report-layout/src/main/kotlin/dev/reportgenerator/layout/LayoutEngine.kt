@@ -60,17 +60,22 @@ data class PageLayoutMetrics(
     val frameRect: Rect get() = frameRectOf(format, margins)
     val pageRect: Rect get() = pageRectOf(format)
 
-    // Bottom of the content column = nearest top edge among static blocks that horizontally
-    // overlap the content column [contentLeft, contentRight) — not a hardcoded single-block
-    // subtraction. A block living entirely in the margin gutter (e.g. leftMarginTable, whose
-    // resolved rect sits left of contentLeft) doesn't participate; that's a geometric fact of its
-    // resolved rect, not an assumption baked in here.
+    // Bottom of the content column = nearest top edge among static blocks that (a) horizontally
+    // overlap the content column [contentLeft, contentRight) AND (b) sit at or below contentTop.
+    // A block living entirely in the margin gutter (e.g. leftMarginTable, whose resolved rect sits
+    // left of contentLeft) doesn't participate — a geometric fact of its resolved rect, not an
+    // assumption baked in here. Condition (b) matters once a block is anchored ABOVE contentTop
+    // (e.g. a future TOP_LEFT/TOP_RIGHT block): without it, such a block's top edge (near y=0)
+    // would still count as a candidate and collapse contentBottom to near-zero, even though the
+    // block never actually occupies the content column's vertical range. This mechanism only
+    // reserves the BOTTOM of the content column; a symmetric contentTop() union would be needed
+    // before a real top-anchored block could reserve space of its own (not done — see wiki).
     fun contentBottom(isFirstPage: Boolean): Length {
         val blocks = if (isFirstPage) firstPageBlocks else continuationPageBlocks
         val contentLeft = margins.left
         val contentRight = format.width - margins.right
         val reservedTops = blocks
-            .filter { it.left < contentRight && it.right > contentLeft }
+            .filter { it.left < contentRight && it.right > contentLeft && it.top >= contentTop }
             .map { it.top }
         return (reservedTops + frameRect.bottom).min()
     }
