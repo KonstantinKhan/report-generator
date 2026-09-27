@@ -17,7 +17,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-private const val ASSEMBLY_COMPOSITION_LINK_NAME = "Состоит из"
+private const val ASSEMBLY_COMPOSITION_LINK_NAME = "Состоит из ..."
 private const val ATTR_DESIGNATION = "Обозначение"
 private const val ATTR_NAME = "Наименование"
 private const val ATTR_QUANTITY = "Количество"
@@ -85,7 +85,6 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         if (cachedAssemblyLinkTypeId != null && cachedTypeNameById != null) return
 
         val linkTypes = getJson<List<LinkListEntry>>(get("/api/v4/MetaData/get-link-list"))
-        println("DEBUG: Available link types: ${linkTypes.map { it.name }.joinToString(", ")}")
         cachedAssemblyLinkTypeId = linkTypes.firstOrNull { it.name?.trim() == ASSEMBLY_COMPOSITION_LINK_NAME }?.id
             ?: throw LoodsmanApiException("Link type '$ASSEMBLY_COMPOSITION_LINK_NAME' not found in Loodsman metadata")
 
