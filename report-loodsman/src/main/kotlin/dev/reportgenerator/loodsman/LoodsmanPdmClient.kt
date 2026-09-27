@@ -147,12 +147,15 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
     // securitySchemes.Bearer is declared as an OpenAPI apiKey header named Authorization (not an
     // "http bearer" scheme) — confirmed by a 401 on every non-login call when a "Bearer " prefix
     // was sent. The raw sessionId is the header value, no prefix.
-    private fun authorizedRequest(uri: URI): HttpRequest.Builder =
-        HttpRequest.newBuilder()
+    private fun authorizedRequest(uri: URI): HttpRequest.Builder {
+        val sessionId = session()
+        println("DEBUG: Authorizing request with sessionId=${sessionId.take(10)}... dbName=${config.dbName}")
+        return HttpRequest.newBuilder()
             .uri(uri)
-            .header("Authorization", session())
+            .header("Authorization", sessionId)
             .header("Accept", "application/json")
             .header("x-loodsman-db-name", config.dbName)
+    }
 
     private fun get(path: String): RequestSpec = RequestSpec(path)
 
