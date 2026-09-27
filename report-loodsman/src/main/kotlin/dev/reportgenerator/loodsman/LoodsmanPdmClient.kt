@@ -110,18 +110,29 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         )
 
     @Synchronized
-    private fun session(): String = cachedSessionId ?: login().also { cachedSessionId = it }
+    private fun session(): String {
+        if (cachedSessionId != null) return cachedSessionId!!
+        println("DEBUG: Logging in to Loodsman at $baseUrl")
+        return login().also {
+            println("DEBUG: Login successful, sessionId=${it.take(10)}...")
+            cachedSessionId = it
+        }
+    }
 
     private fun login(): String {
+        val loginUrl = "$baseUrl/api/v4/Auth/login"
+        println("DEBUG: Attempting login at $loginUrl with dbName=${config.dbName}, username=${config.username}")
         val request = HttpRequest.newBuilder()
-            .uri(URI.create("$baseUrl/api/v4/Auth/login"))
+            .uri(URI.create(loginUrl))
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .header("x-loodsman-db-name", config.dbName)
             .POST(BodyPublishers.ofString(json.encodeToString(LoginRequest(config.dbName, config.username, config.password))))
             .build()
         val response = http.send(request, BodyHandlers.ofString())
+        println("DEBUG: Login response status=${response.statusCode()}")
         if (response.statusCode() !in 200..299) {
+            println("DEBUG: Login failed body=${response.body()}")
             throw LoodsmanApiException("Loodsman login failed with status ${response.statusCode()}: ${response.body()}")
         }
         val session = try {
