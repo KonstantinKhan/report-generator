@@ -43,9 +43,11 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         val typeNameById = cachedTypeNameById!!
 
         // Get document attributes (name, designation)
-        val docAttrMap = getJson<List<ObjectAttributeDto>>(
+        val docAttrs = getJson<List<ObjectAttributeDto>>(
             get("/api/v4/ObjectInfo/get-info-about-version-mode-3").withQuery("idVersion" to versionId.toString())
-        ).associateBy { it.name }
+        )
+        println("DEBUG: Document attributes for versionId=$versionId: $docAttrs")
+        val docAttrMap = docAttrs.associateBy { it.name }
 
         val documentDesignation = docAttrMap[ATTR_DESIGNATION]?.value?.trim()
             ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_DESIGNATION' for versionId=$versionId")
