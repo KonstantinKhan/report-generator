@@ -46,7 +46,6 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         val propObjects = getJson<List<PropObjectDto>>(
             get("/api/v4/ObjectInfo/get-prop-objects").withQuery("objectList" to versionId.toString())
         )
-        println("DEBUG: Prop objects for versionId=$versionId: $propObjects")
         val prop = propObjects.firstOrNull()
             ?: throw LoodsmanApiException("Document not found in Loodsman: versionId=$versionId")
 
@@ -54,13 +53,10 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         val docAttrs = getJson<List<ObjectAttributeDto>>(
             get("/api/v4/ObjectInfo/get-info-about-version-mode-3").withQuery("idVersion" to versionId.toString())
         )
-        println("DEBUG: Document attributes for versionId=$versionId: $docAttrs")
         val docAttrMap = docAttrs.associateBy { it.name }
 
-        // Use product+version as designation if available, otherwise use attribute
-        val documentDesignation = (prop.product?.let { it + " " } ?: "") + (prop.version ?: "")
-            .takeIf { it.isNotBlank() } ?: docAttrMap[ATTR_DESIGNATION]?.value?.trim()
-            ?: throw LoodsmanApiException("Document not found in Loodsman: no designation for versionId=$versionId")
+        val documentDesignation = prop.product?.trim()
+            ?: throw LoodsmanApiException("Document not found in Loodsman: no product (designation) for versionId=$versionId")
         val documentName = docAttrMap[ATTR_NAME]?.value?.trim()
             ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$versionId")
 
