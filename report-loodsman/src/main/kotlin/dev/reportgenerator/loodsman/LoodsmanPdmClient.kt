@@ -30,6 +30,10 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         .cookieHandler(CookieManager(null, CookiePolicy.ACCEPT_ALL))
         .build()
     private val json = Json { ignoreUnknownKeys = true }
+    // Dumps raw request/response JSON to stderr — flip on with LOODSMAN_DEBUG=1 to see exactly
+    // what this Loodsman instance actually sends (its API surface can differ from the swagger
+    // doc — see memory: older instances omit newer fields entirely rather than nulling them).
+    private val debug = System.getenv("LOODSMAN_DEBUG") == "1"
 
     private var cachedSessionId: String? = null
     private var cachedAssemblyLinkTypeId: Int? = null
@@ -206,6 +210,11 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
 
     private fun send(request: HttpRequest, retried: Boolean = false): java.net.http.HttpResponse<String> {
         val response = http.send(request, BodyHandlers.ofString())
+
+        if (debug) {
+            System.err.println("[loodsman] ${request.method()} ${request.uri()} -> ${response.statusCode()}")
+            System.err.println(response.body())
+        }
 
         if (response.statusCode() == 404) {
             throw LoodsmanApiException("Loodsman resource not found (404): ${request.uri()}")
