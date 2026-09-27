@@ -11,6 +11,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpRequest.BodyPublishers
 import java.net.http.HttpResponse.BodyHandlers
 import java.nio.charset.StandardCharsets.UTF_8
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
@@ -249,8 +250,11 @@ private data class PropObjectDto(
 
 @Serializable
 private data class LinkedObjectDto(
+    @SerialName("idLink")
     val linkId: Int = 0,
+    @SerialName("idChild")
     val versionId: Int = 0,
+    @SerialName("idType")
     val linkTypeId: Int = 0,
     val minQuantity: Double? = null,
     val maxQuantity: Double? = null
