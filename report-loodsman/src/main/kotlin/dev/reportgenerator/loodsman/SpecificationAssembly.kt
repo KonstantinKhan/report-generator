@@ -22,8 +22,7 @@ internal fun buildItems(
     val kind = mapItemKind(typeNameById[child.idType]) ?: return@mapNotNull null
     val designation = designationByObjectId[child.idChild]
         ?: throw LoodsmanApiException("Attribute 'Обозначение' is missing for object ${child.idChild}")
-    val name = nameByObjectId[child.idChild]
-        ?: throw LoodsmanApiException("Attribute 'Наименование' is missing for object ${child.idChild}")
+    val name = nameByObjectId[child.idChild] ?: designation
     val quantity = quantityByLinkId[child.idLink]
         ?: throw LoodsmanApiException("Attribute 'Количество' is missing for link ${child.idLink}")
     ItemDto(designation = designation, name = name, kind = kind, quantity = quantity)
