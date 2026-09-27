@@ -48,11 +48,7 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         val designationByObjectId = HashMap<Int, String>()
         val nameByObjectId = HashMap<Int, String>()
         if (objectIds.isNotEmpty()) {
-            println("DEBUG: Fetching attributes for objectIds=$objectIds")
-            val attrResults = fetchObjectAttributes(objectIds, listOf(ATTR_DESIGNATION, ATTR_NAME))
-            println("DEBUG: Attribute results count=${attrResults.size}")
-            attrResults.forEach { result ->
-                println("DEBUG: objectId=${result.objectId}, isSuccess=${result.isSuccess}, attr=${result.attributeInfo?.name}, value=${result.attributeInfo?.textPlainValue}")
+            fetchObjectAttributes(objectIds, listOf(ATTR_DESIGNATION, ATTR_NAME)).forEach { result ->
                 val value = result.attributeInfo?.textPlainValue
                 if (result.isSuccess && value != null) {
                     when (result.attributeInfo.name) {
@@ -75,15 +71,9 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         }
 
         val documentDesignation = designationByObjectId[objectId]
-            ?: run {
-                println("DEBUG: Available designations: ${designationByObjectId}")
-                throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_DESIGNATION' for versionId=$objectId")
-            }
+            ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_DESIGNATION' for versionId=$objectId")
         val documentName = nameByObjectId[objectId]
-            ?: run {
-                println("DEBUG: Available names: ${nameByObjectId}")
-                throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$objectId")
-            }
+            ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$objectId")
 
         val items = buildItems(children, typeNameById, designationByObjectId, nameByObjectId, quantityByLinkId)
 
@@ -147,13 +137,11 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             ?: throw LoodsmanApiException("Loodsman login response did not contain a sessionId")
     }
 
-    // Cookies are managed automatically by HttpClient's CookieHandler. The sessionId header
-    // is still sent for compatibility, but the Set-Cookie from /api/v4/Auth/login is what
-    // actually authenticates subsequent requests.
+    // Use web-loodsman-session header for authentication, not Authorization
     private fun authorizedRequest(uri: URI): HttpRequest.Builder =
         HttpRequest.newBuilder()
             .uri(uri)
-            .header("Authorization", session())
+            .header("web-loodsman-session", session())
             .header("Accept", "application/json")
             .header("x-loodsman-db-name", config.dbName)
 
