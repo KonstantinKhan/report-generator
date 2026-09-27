@@ -106,7 +106,7 @@ private fun GroupBuilder.row(item: SpecificationItem, position: Int) {
             IrCell("", align = TextAlign.CENTER),
             IrCell("", align = TextAlign.CENTER),
             IrCell(position.toString(), align = TextAlign.CENTER),
-            IrCell(item.designation),
+            IrCell(item.designation ?: ""),
             IrCell(item.name),
             IrCell(item.quantity.toString(), align = TextAlign.CENTER),
             IrCell("", align = TextAlign.CENTER)

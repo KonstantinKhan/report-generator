@@ -3,7 +3,7 @@ package dev.reportgenerator.data
 enum class ItemKind { ASSEMBLY, PART, STANDARD, OTHER, MATERIAL }
 
 data class SpecificationItem(
-    val designation: String,
+    val designation: String?,
     val name: String,
     val kind: ItemKind,
     val quantity: Int

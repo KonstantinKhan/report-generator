@@ -1,7 +1,7 @@
 package dev.reportgenerator.api
 
 data class ItemDto(
-    val designation: String,
+    val designation: String?,
     val name: String,
     val kind: String,
     val quantity: Int

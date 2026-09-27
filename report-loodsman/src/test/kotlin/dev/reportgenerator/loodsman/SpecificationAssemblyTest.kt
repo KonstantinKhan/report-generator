@@ -47,7 +47,8 @@ class SpecificationAssemblyTest {
         assertEquals("Болт", items[0].name)
         assertEquals("PART", items[0].kind)
         assertEquals(4, items[0].quantity)
-        assertEquals("Клей", items[1].designation)
+        // Material: "Обозначение" column stays empty, only "Наименование" is filled.
+        assertNull(items[1].designation)
         assertEquals("Клей", items[1].name)
         assertEquals("MATERIAL", items[1].kind)
         assertEquals(1, items[1].quantity)
@@ -74,14 +75,14 @@ class SpecificationAssemblyTest {
     }
 
     @Test
-    fun `falls back to designation when name is missing for a non-assembly child`() {
+    fun `non-assembly child leaves designation empty and uses product value as name`() {
         val children = listOf(ChildLink(idLink = 10, idChild = 100, idType = 1))
         val typeNameByObjectId = mapOf(100 to "Материал по КД")
         val designationByObjectId = mapOf(100 to "A.1")
 
         val items = buildItems(children, typeNameByObjectId, designationByObjectId, emptyMap(), mapOf(10 to 1))
 
-        assertEquals("A.1", items[0].designation)
+        assertNull(items[0].designation)
         assertEquals("A.1", items[0].name)
     }
 

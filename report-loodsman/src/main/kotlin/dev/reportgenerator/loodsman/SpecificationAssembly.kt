@@ -37,16 +37,19 @@ internal fun buildItems(
 
     // For Деталь/СЕ the key attribute (product) is Обозначение.
     // For Стандартное/Прочее/Материал the key attribute (product) IS Наименование —
-    // there is no separate Обозначение for these types.
-    val designation = designationByObjectId[child.idChild]
+    // there is no separate Обозначение for these types, so the "Обозначение" column
+    // stays empty and only "Наименование" is filled.
+    val productValue = designationByObjectId[child.idChild]
         ?: throw LoodsmanApiException(
             "Attribute '${if (isDetailOrAssembly) "Обозначение" else "Наименование"}' is missing for object ${child.idChild}"
         )
 
+    val designation = if (isDetailOrAssembly) productValue else null
+
     val name = if (isDetailOrAssembly) {
-        nameByObjectId[child.idChild] ?: designation
+        nameByObjectId[child.idChild] ?: productValue
     } else {
-        designation
+        productValue
     }
 
     val quantity = quantityByLinkId[child.idLink]

@@ -29,7 +29,7 @@ class SpecificationEndToEndTest {
                 ItemDto("AAA.01.000", "Корпус", "ASSEMBLY", 1),
                 ItemDto("AAA.02.001", "Вал", "PART", 2),
                 ItemDto("AAA.02.002", "Втулка", "PART", 4),
-                ItemDto("ГОСТ 7798-70", "Болт М6", "STANDARD", 8)
+                ItemDto(null, "Болт М6 ГОСТ 7798-70", "STANDARD", 8)
             )
         )
     )
