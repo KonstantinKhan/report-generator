@@ -177,16 +177,27 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         return decode(send(request))
     }
 
-    private fun send(request: HttpRequest) = http.send(request, BodyHandlers.ofString()).also { response ->
+    private fun send(request: HttpRequest, retried: Boolean = false): java.net.http.HttpResponse<String> {
+        val response = http.send(request, BodyHandlers.ofString())
+
         if (response.statusCode() == 404) {
             throw LoodsmanApiException("Loodsman resource not found (404): ${request.uri()}")
         }
+
+        if ((response.statusCode() == 401 || response.statusCode() == 419) && !retried) {
+            cachedSessionId = null
+            return send(request, retried = true)
+        }
+
         if (response.statusCode() == 401 || response.statusCode() == 419) {
             throw LoodsmanApiException("Loodsman session expired or unauthorized (${response.statusCode()}): ${request.uri()}")
         }
+
         if (response.statusCode() !in 200..299) {
             throw LoodsmanApiException("Loodsman API error ${response.statusCode()} for ${request.uri()}: ${response.body()}")
         }
+
+        return response
     }
 
     private inline fun <reified T> decode(response: java.net.http.HttpResponse<String>): T =
