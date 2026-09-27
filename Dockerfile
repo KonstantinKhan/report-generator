@@ -6,7 +6,7 @@ WORKDIR /workspace
 
 COPY . .
 RUN chmod +x ./gradlew
-RUN ./gradlew :report-server:buildFatJar -q --no-daemon
+RUN ./gradlew :report-server:shadowJar -q --no-daemon
 
 # --- Runtime stage -------------------------------------------------------
 FROM eclipse-temurin:21-jre AS runtime
@@ -14,7 +14,7 @@ WORKDIR /app
 
 RUN mkdir -p /data/reports
 
-COPY --from=build /workspace/report-server/build/libs/*-all.jar /app/report-server.jar
+COPY --from=build /workspace/report-server/build/libs/report-server-all.jar /app/report-server.jar
 
 ENV REPORT_OUTPUT_DIR=/data/reports
 ENV SERVER_PORT=8080
