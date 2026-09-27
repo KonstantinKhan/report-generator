@@ -71,9 +71,15 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         }
 
         val documentDesignation = designationByObjectId[objectId]
-            ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_DESIGNATION' for versionId=$objectId")
+            ?: run {
+                println("DEBUG: Available designations: ${designationByObjectId}")
+                throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_DESIGNATION' for versionId=$objectId")
+            }
         val documentName = nameByObjectId[objectId]
-            ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$objectId")
+            ?: run {
+                println("DEBUG: Available names: ${nameByObjectId}")
+                throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$objectId")
+            }
 
         val items = buildItems(children, typeNameById, designationByObjectId, nameByObjectId, quantityByLinkId)
 
