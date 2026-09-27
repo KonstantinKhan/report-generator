@@ -33,7 +33,6 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
 
     private var cachedSessionId: String? = null
     private var cachedAssemblyLinkTypeId: Int? = null
-    private var cachedTypeNameById: Map<Int, String>? = null
 
     override fun fetchSpecification(documentId: String): SpecificationDto {
         val versionId = documentId.toIntOrNull()
@@ -41,7 +40,6 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
 
         ensureMetaLoaded()
         val linkTypeId = cachedAssemblyLinkTypeId!!
-        val typeNameById = cachedTypeNameById!!
 
         // Get prop objects (type, product, version, state)
         val propObjects = getJson<List<PropObjectDto>>(
@@ -62,14 +60,12 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$versionId")
 
         // Get linked objects
-        val linkedObjects = getLinkedObjects(versionId, linkTypeId)
-        println("DEBUG: getLinkedObjects returned: $linkedObjects")
-        val children = linkedObjects.map {
-            println("DEBUG: Mapping linkedObject: linkId=${it.linkId}, versionId=${it.versionId}, linkTypeId=${it.linkTypeId}")
+        val children = getLinkedObjects(versionId, linkTypeId).map {
             ChildLink(it.idLink, it.idChild, it.idType, it.minQuantity, it.maxQuantity)
         }
 
-        // Get designation and name for all child objects
+        // Get type, designation and name for all child objects
+        val typeNameByObjectId = HashMap<Int, String>()
         val designationByObjectId = HashMap<Int, String>()
         val nameByObjectId = HashMap<Int, String>()
 
@@ -78,6 +74,10 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
                 get("/api/v4/ObjectInfo/get-prop-objects").withQuery("objectList" to child.idChild.toString())
             ).firstOrNull()
                 ?: throw LoodsmanApiException("Child object ${child.idChild} not found")
+
+            childProps.type?.trim()?.let {
+                typeNameByObjectId[child.idChild] = it
+            }
 
             designationByObjectId[child.idChild] = childProps.product?.trim()
                 ?: throw LoodsmanApiException("Child object ${child.idChild} missing product (designation)")
@@ -102,21 +102,18 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             quantityByLinkId[child.idLink] = quantity
         }
 
-        val items = buildItems(children, typeNameById, designationByObjectId, nameByObjectId, quantityByLinkId)
+        val items = buildItems(children, typeNameByObjectId, designationByObjectId, nameByObjectId, quantityByLinkId)
 
         return SpecificationDto(documentDesignation, documentName, items)
     }
 
     @Synchronized
     private fun ensureMetaLoaded() {
-        if (cachedAssemblyLinkTypeId != null && cachedTypeNameById != null) return
+        if (cachedAssemblyLinkTypeId != null) return
 
         val linkTypes = getJson<List<LinkListEntry>>(get("/api/v4/MetaData/get-link-list"))
         cachedAssemblyLinkTypeId = linkTypes.firstOrNull { it.name?.trim() == ASSEMBLY_COMPOSITION_LINK_NAME }?.id
             ?: throw LoodsmanApiException("Link type '$ASSEMBLY_COMPOSITION_LINK_NAME' not found in Loodsman metadata")
-
-        val types = getJson<List<TypeListEntry>>(get("/api/v4/MetaData/get-type-list").withQuery("setAlphaChannel" to "false"))
-        cachedTypeNameById = types.filter { it.typeName != null }.associate { it.id to it.typeName!! }
     }
 
     private fun getLinkedObjects(objectId: Int, linkTypeId: Int): List<LinkedObjectDto> =
@@ -263,9 +260,6 @@ private data class LinkedObjectDto(
     val idChild: Int get() = versionId
     val idType: Int get() = linkTypeId
 }
-
-@Serializable
-private data class TypeListEntry(val id: Int, val typeName: String? = null)
 
 @Serializable
 private data class LinkListEntry(val id: Int, val name: String? = null)

@@ -20,12 +20,12 @@ internal fun mapItemKind(typeName: String?): String? = when (typeName?.trim()?.l
 
 internal fun buildItems(
     children: List<ChildLink>,
-    typeNameById: Map<Int, String>,
+    typeNameByObjectId: Map<Int, String>,
     designationByObjectId: Map<Int, String>,
     nameByObjectId: Map<Int, String>,
     quantityByLinkId: Map<Int, Int>,
 ): List<ItemDto> = children.mapNotNull { child ->
-    val typeName = typeNameById[child.idType] ?: return@mapNotNull null
+    val typeName = typeNameByObjectId[child.idChild] ?: return@mapNotNull null
     val kind = mapItemKind(typeName) ?: return@mapNotNull null
 
     val isDetailOrAssembly = typeName.trim().lowercase() in setOf("деталь", "сборочная единица")

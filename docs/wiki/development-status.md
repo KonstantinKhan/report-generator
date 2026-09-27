@@ -27,11 +27,24 @@
 | — | Подписи "Копировал"/"Формат" под рамкой, `BorderWeight.NONE` | `report-ir`, `report-layout`, `reports/specification` | `da88960` |
 | 7 | Форматирование таблицы спецификации: фиксированная высота 8мм, 4 блока (СЕ/Детали/Стандарты/Материалы), заголовки блоков курсивные+подчёркнутые 3.5мм, тонкие границы на каждой ячейке, синтетический italic (shear в PDF / font-style в SVG), word-wrap в физические строки, дозаполнение страницы пустыми строками | все модули, особенно `report-layout`, рендереры | `adee345` |
 
+## Loodsman API интеграция (WIP)
+
+**Статус:** В разработке (feature/service). Server partially working.
+
+- `report-loodsman`: клиент Loodsman API v4, преобразование спецификации в DTO
+- `report-server`: REST server (Ktor) обслуживает `/specifications/{versionId}`
+- **Проблемы/особенности Loodsman API:**
+  - Старые versions используют поля `idLink`/`idChild`/`idType` (не camelCase)
+  - Требует cookie jar + `web-loodsman-session` header (не Authorization)
+  - Batch attribute endpoints не работают — использовать single-object endpoints
+  - Количество из `minQuantity`/`maxQuantity`, не из text attributes
+
+Подробная документация — [../memory/loodsman-integration.md](../../.claude/memory/loodsman-integration.md).
+
 ## Что сознательно НЕ начато
 
-Фаза 7 (XLSX) — отложена по явному решению пользователя. Реальная
-интеграция с PDM — ждёт появления реального API. Подробности —
-[known-gaps.md](known-gaps.md).
+Фаза 7 (XLSX) — отложена по явному решению пользователя.
+Подробности — [known-gaps.md](known-gaps.md).
 
 ## Как проверялась каждая фаза
 
