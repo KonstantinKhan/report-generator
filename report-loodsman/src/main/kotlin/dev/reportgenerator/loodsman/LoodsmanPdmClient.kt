@@ -35,45 +35,48 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
     private var cachedTypeNameById: Map<Int, String>? = null
 
     override fun fetchSpecification(documentId: String): SpecificationDto {
-        val objectId = documentId.toIntOrNull()
+        val versionId = documentId.toIntOrNull()
             ?: throw LoodsmanApiException("documentId must be a numeric Loodsman versionId, got '$documentId'")
 
         ensureMetaLoaded()
         val linkTypeId = cachedAssemblyLinkTypeId!!
         val typeNameById = cachedTypeNameById!!
 
-        val children = getLinkedObjects(objectId, linkTypeId).map { ChildLink(it.idLink, it.idChild, it.idType) }
+        // Get document attributes (name, designation)
+        val docAttrMap = getJson<List<ObjectAttributeDto>>(
+            get("/api/v4/ObjectInfo/get-info-about-version-mode-3").withQuery("idVersion" to versionId.toString())
+        ).associateBy { it.name }
 
-        val objectIds = (children.map { it.idChild } + objectId).distinct()
+        val documentDesignation = docAttrMap[ATTR_DESIGNATION]?.value?.trim()
+            ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_DESIGNATION' for versionId=$versionId")
+        val documentName = docAttrMap[ATTR_NAME]?.value?.trim()
+            ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$versionId")
+
+        // Get linked objects
+        val children = getLinkedObjects(versionId, linkTypeId).map { ChildLink(it.idLink, it.idChild, it.idType) }
+
+        // Get attributes for all child objects
+        val objectIds = (children.map { it.idChild } + versionId).distinct()
         val designationByObjectId = HashMap<Int, String>()
         val nameByObjectId = HashMap<Int, String>()
-        if (objectIds.isNotEmpty()) {
-            fetchObjectAttributes(objectIds, listOf(ATTR_DESIGNATION, ATTR_NAME)).forEach { result ->
-                val value = result.attributeInfo?.textPlainValue
-                if (result.isSuccess && value != null) {
-                    when (result.attributeInfo.name) {
-                        ATTR_DESIGNATION -> designationByObjectId[result.objectId] = value
-                        ATTR_NAME -> nameByObjectId[result.objectId] = value
-                    }
-                }
-            }
+        objectIds.forEach { objId ->
+            val attrMap = getJson<List<ObjectAttributeDto>>(
+                get("/api/v4/ObjectInfo/get-info-about-version-mode-3").withQuery("idVersion" to objId.toString())
+            ).associateBy { it.name }
+            attrMap[ATTR_DESIGNATION]?.value?.trim()?.let { designationByObjectId[objId] = it }
+            attrMap[ATTR_NAME]?.value?.trim()?.let { nameByObjectId[objId] = it }
         }
 
-        val linkIds = children.map { it.idLink }.distinct()
+        // Get quantity for each link
         val quantityByLinkId = HashMap<Int, Int>()
-        if (linkIds.isNotEmpty()) {
-            fetchLinkAttributes(linkIds, listOf(ATTR_QUANTITY)).forEach { result ->
-                val value = result.attributeInfo?.textPlainValue
-                if (result.isSuccess && value != null && result.attributeInfo.name == ATTR_QUANTITY) {
-                    quantityByLinkId[result.linkId] = parseQuantity(value, result.linkId)
-                }
+        children.forEach { child ->
+            val linkAttrs = getJson<List<LinkAttributeDto>>(
+                get("/api/v4/ObjectInfo/get-link-attributes").withQuery("linkId" to child.idLink.toString())
+            ).associateBy { it.name }
+            linkAttrs[ATTR_QUANTITY]?.value?.trim()?.let {
+                quantityByLinkId[child.idLink] = parseQuantity(it, child.idLink)
             }
         }
-
-        val documentDesignation = designationByObjectId[objectId]
-            ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_DESIGNATION' for versionId=$objectId")
-        val documentName = nameByObjectId[objectId]
-            ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$objectId")
 
         val items = buildItems(children, typeNameById, designationByObjectId, nameByObjectId, quantityByLinkId)
 
@@ -101,17 +104,6 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             )
         )
 
-    private fun fetchObjectAttributes(objectIds: List<Int>, attributeNames: List<String>): List<ObjectAttributeResult> =
-        postJson(
-            post("/api/v4/ObjectInfo/objects/by-ids/attributes/by-names/text-plain-values"),
-            objectIds.map { ObjectAttributeRequest(it, attributeNames) },
-        )
-
-    private fun fetchLinkAttributes(linkIds: List<Int>, attributeNames: List<String>): List<LinkAttributeResult> =
-        postJson(
-            post("/api/v4/ObjectInfo/links/by-ids/attributes/by-names/text-plain-values"),
-            linkIds.map { LinkAttributeRequest(it, attributeNames) },
-        )
 
     @Synchronized
     private fun session(): String = cachedSessionId ?: login().also { cachedSessionId = it }
@@ -233,24 +225,7 @@ private data class TypeListEntry(val id: Int, val typeName: String? = null)
 private data class LinkListEntry(val id: Int, val name: String? = null)
 
 @Serializable
-private data class AttributeTextPlainValue(val name: String? = null, val textPlainValue: String? = null)
+private data class ObjectAttributeDto(val name: String? = null, val value: String? = null)
 
 @Serializable
-private data class ObjectAttributeResult(
-    val objectId: Int,
-    val isSuccess: Boolean = true,
-    val attributeInfo: AttributeTextPlainValue? = null,
-)
-
-@Serializable
-private data class LinkAttributeResult(
-    val linkId: Int,
-    val isSuccess: Boolean = true,
-    val attributeInfo: AttributeTextPlainValue? = null,
-)
-
-@Serializable
-private data class ObjectAttributeRequest(val objectId: Int, val attributesNames: List<String>)
-
-@Serializable
-private data class LinkAttributeRequest(val linkId: Int, val attributesNames: List<String>)
+private data class LinkAttributeDto(val name: String? = null, val value: String? = null)
