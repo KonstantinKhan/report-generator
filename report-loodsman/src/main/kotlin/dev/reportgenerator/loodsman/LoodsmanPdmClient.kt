@@ -133,14 +133,13 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             ?: throw LoodsmanApiException("Loodsman login response did not contain a sessionId")
     }
 
-    // Swagger describes "Bearer" as an apiKey header named Authorization (not an OpenAPI "http bearer"
-    // scheme), which normally means the raw value is sent as-is. But the description asks for a JWT
-    // and this is the standard Swashbuckle pattern for ASP.NET Core APIs where callers are still
-    // expected to prefix the value with "Bearer " themselves, so we follow that convention.
+    // securitySchemes.Bearer is declared as an OpenAPI apiKey header named Authorization (not an
+    // "http bearer" scheme) — confirmed by a 401 on every non-login call when a "Bearer " prefix
+    // was sent. The raw sessionId is the header value, no prefix.
     private fun authorizedRequest(uri: URI): HttpRequest.Builder =
         HttpRequest.newBuilder()
             .uri(uri)
-            .header("Authorization", "Bearer ${session()}")
+            .header("Authorization", session())
             .header("Accept", "application/json")
             .header("x-loodsman-db-name", config.dbName)
 
