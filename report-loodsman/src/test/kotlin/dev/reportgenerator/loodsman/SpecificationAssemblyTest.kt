@@ -35,8 +35,9 @@ class SpecificationAssemblyTest {
             ChildLink(idLink = 12, idChild = 102, idType = 1),
         )
         val typeNameByObjectId = mapOf(100 to "Деталь", 101 to "Материал по КД", 102 to "Сборочная единица")
-        val designationByObjectId = mapOf(100 to "A.1", 101 to "A.2", 102 to "A.3")
-        val nameByObjectId = mapOf(100 to "Болт", 101 to "Клей", 102 to "Подсборка")
+        // 101 is a Material: product field IS the Наименование, no separate name attribute is fetched for it.
+        val designationByObjectId = mapOf(100 to "A.1", 101 to "Клей", 102 to "A.3")
+        val nameByObjectId = mapOf(100 to "Болт", 102 to "Подсборка")
         val quantityByLinkId = mapOf(10 to 4, 11 to 1, 12 to 1)
 
         val items = buildItems(children, typeNameByObjectId, designationByObjectId, nameByObjectId, quantityByLinkId)
@@ -47,6 +48,7 @@ class SpecificationAssemblyTest {
         assertEquals("PART", items[0].kind)
         assertEquals(4, items[0].quantity)
         assertEquals("Клей", items[1].designation)
+        assertEquals("Клей", items[1].name)
         assertEquals("MATERIAL", items[1].kind)
         assertEquals(1, items[1].quantity)
     }
@@ -68,6 +70,28 @@ class SpecificationAssemblyTest {
 
         assertFailsWith<LoodsmanApiException> {
             buildItems(children, typeNameByObjectId, mapOf(100 to "A.1"), mapOf(100 to "Болт"), emptyMap())
+        }
+    }
+
+    @Test
+    fun `falls back to designation when name is missing for a non-assembly child`() {
+        val children = listOf(ChildLink(idLink = 10, idChild = 100, idType = 1))
+        val typeNameByObjectId = mapOf(100 to "Материал по КД")
+        val designationByObjectId = mapOf(100 to "A.1")
+
+        val items = buildItems(children, typeNameByObjectId, designationByObjectId, emptyMap(), mapOf(10 to 1))
+
+        assertEquals("A.1", items[0].designation)
+        assertEquals("A.1", items[0].name)
+    }
+
+    @Test
+    fun `throws when both name and designation are missing for a non-assembly child`() {
+        val children = listOf(ChildLink(idLink = 10, idChild = 100, idType = 1))
+        val typeNameByObjectId = mapOf(100 to "Материал по КД")
+
+        assertFailsWith<LoodsmanApiException> {
+            buildItems(children, typeNameByObjectId, emptyMap(), emptyMap(), mapOf(10 to 1))
         }
     }
 }

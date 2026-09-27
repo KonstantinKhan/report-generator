@@ -56,8 +56,12 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
 
         val documentDesignation = prop.product?.trim()
             ?: throw LoodsmanApiException("Document not found in Loodsman: no product (designation) for versionId=$versionId")
-        val documentName = docAttrMap[ATTR_NAME]?.value?.trim()
-            ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$versionId")
+        // Key attribute (product) is Обозначение for Деталь/СЕ, Наименование for everything else.
+        val documentName = if (isDetailOrAssembly(prop.type)) {
+            docAttrMap[ATTR_NAME]?.value?.trim() ?: documentDesignation
+        } else {
+            documentDesignation
+        }
 
         // Get linked objects
         val children = getLinkedObjects(versionId, linkTypeId).map {
@@ -82,11 +86,15 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             designationByObjectId[child.idChild] = childProps.product?.trim()
                 ?: throw LoodsmanApiException("Child object ${child.idChild} missing product (designation)")
 
-            val childAttrs = getJson<List<ObjectAttributeDto>>(
-                get("/api/v4/ObjectInfo/get-info-about-version-mode-3").withQuery("idVersion" to child.idChild.toString())
-            )
-            childAttrs.find { it.name == ATTR_NAME }?.value?.trim()?.let {
-                nameByObjectId[child.idChild] = it
+            // Наименование is a separate attribute only for Деталь/СЕ; for other types
+            // it's already the product field fetched above, no attribute lookup needed.
+            if (isDetailOrAssembly(childProps.type)) {
+                val childAttrs = getJson<List<ObjectAttributeDto>>(
+                    get("/api/v4/ObjectInfo/get-info-about-version-mode-3").withQuery("idVersion" to child.idChild.toString())
+                )
+                childAttrs.find { it.name == ATTR_NAME }?.value?.trim()?.let {
+                    nameByObjectId[child.idChild] = it
+                }
             }
         }
 
