@@ -2,6 +2,8 @@ package dev.reportgenerator.loodsman
 
 import dev.reportgenerator.api.PdmClient
 import dev.reportgenerator.api.SpecificationDto
+import java.net.CookieManager
+import java.net.CookiePolicy
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -23,7 +25,9 @@ private const val ATTR_QUANTITY = "Количество"
 class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
 
     private val baseUrl = config.baseUrl.trimEnd('/')
-    private val http = HttpClient.newHttpClient()
+    private val http = HttpClient.newBuilder()
+        .cookieHandler(CookieManager(null, CookiePolicy.ACCEPT_ALL))
+        .build()
     private val json = Json { ignoreUnknownKeys = true }
 
     private var cachedSessionId: String? = null
@@ -110,29 +114,18 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         )
 
     @Synchronized
-    private fun session(): String {
-        if (cachedSessionId != null) return cachedSessionId!!
-        println("DEBUG: Logging in to Loodsman at $baseUrl")
-        return login().also {
-            println("DEBUG: Login successful, sessionId=${it.take(10)}...")
-            cachedSessionId = it
-        }
-    }
+    private fun session(): String = cachedSessionId ?: login().also { cachedSessionId = it }
 
     private fun login(): String {
-        val loginUrl = "$baseUrl/api/v4/Auth/login"
-        println("DEBUG: Attempting login at $loginUrl with dbName=${config.dbName}, username=${config.username}")
         val request = HttpRequest.newBuilder()
-            .uri(URI.create(loginUrl))
+            .uri(URI.create("$baseUrl/api/v4/Auth/login"))
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .header("x-loodsman-db-name", config.dbName)
             .POST(BodyPublishers.ofString(json.encodeToString(LoginRequest(config.dbName, config.username, config.password))))
             .build()
         val response = http.send(request, BodyHandlers.ofString())
-        println("DEBUG: Login response status=${response.statusCode()}")
         if (response.statusCode() !in 200..299) {
-            println("DEBUG: Login failed body=${response.body()}")
             throw LoodsmanApiException("Loodsman login failed with status ${response.statusCode()}: ${response.body()}")
         }
         val session = try {
@@ -144,18 +137,15 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             ?: throw LoodsmanApiException("Loodsman login response did not contain a sessionId")
     }
 
-    // securitySchemes.Bearer is declared as an OpenAPI apiKey header named Authorization (not an
-    // "http bearer" scheme) — confirmed by a 401 on every non-login call when a "Bearer " prefix
-    // was sent. The raw sessionId is the header value, no prefix.
-    private fun authorizedRequest(uri: URI): HttpRequest.Builder {
-        val sessionId = session()
-        println("DEBUG: Authorizing request with sessionId=${sessionId.take(10)}... dbName=${config.dbName}")
-        return HttpRequest.newBuilder()
+    // Cookies are managed automatically by HttpClient's CookieHandler. The sessionId header
+    // is still sent for compatibility, but the Set-Cookie from /api/v4/Auth/login is what
+    // actually authenticates subsequent requests.
+    private fun authorizedRequest(uri: URI): HttpRequest.Builder =
+        HttpRequest.newBuilder()
             .uri(uri)
-            .header("Authorization", sessionId)
+            .header("Authorization", session())
             .header("Accept", "application/json")
             .header("x-loodsman-db-name", config.dbName)
-    }
 
     private fun get(path: String): RequestSpec = RequestSpec(path)
 
@@ -192,22 +182,18 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
     }
 
     private fun send(request: HttpRequest, retried: Boolean = false): java.net.http.HttpResponse<String> {
-        println("DEBUG: Sending ${request.method()} ${request.uri()} ${if(retried) "[RETRY]" else ""}")
         val response = http.send(request, BodyHandlers.ofString())
-        println("DEBUG: Response status=${response.statusCode()}")
 
         if (response.statusCode() == 404) {
             throw LoodsmanApiException("Loodsman resource not found (404): ${request.uri()}")
         }
 
         if ((response.statusCode() == 401 || response.statusCode() == 419) && !retried) {
-            println("DEBUG: Got ${response.statusCode()}, clearing cache and retrying...")
             cachedSessionId = null
             return send(request, retried = true)
         }
 
         if (response.statusCode() == 401 || response.statusCode() == 419) {
-            println("DEBUG: Got ${response.statusCode()} on retry, giving up. Response body=${response.body().take(200)}")
             throw LoodsmanApiException("Loodsman session expired or unauthorized (${response.statusCode()}): ${request.uri()}")
         }
 
