@@ -252,7 +252,6 @@ private data class LinkedObjectDto(
     val minQuantity: Double? = null,
     val maxQuantity: Double? = null
 ) {
-    // Legacy names for compatibility
     val idLink: Int get() = linkId
     val idChild: Int get() = versionId
     val idType: Int get() = linkTypeId
