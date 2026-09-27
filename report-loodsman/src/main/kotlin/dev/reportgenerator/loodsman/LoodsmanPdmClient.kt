@@ -61,7 +61,10 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$versionId")
 
         // Get linked objects
-        val children = getLinkedObjects(versionId, linkTypeId).map {
+        val linkedObjects = getLinkedObjects(versionId, linkTypeId)
+        println("DEBUG: getLinkedObjects returned: $linkedObjects")
+        val children = linkedObjects.map {
+            println("DEBUG: Mapping linkedObject: linkId=${it.linkId}, versionId=${it.versionId}, linkTypeId=${it.linkTypeId}")
             ChildLink(it.idLink, it.idChild, it.idType, it.minQuantity, it.maxQuantity)
         }
 
