@@ -42,6 +42,14 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         val linkTypeId = cachedAssemblyLinkTypeId!!
         val typeNameById = cachedTypeNameById!!
 
+        // Get prop objects (type, product, version, state)
+        val propObjects = getJson<List<PropObjectDto>>(
+            get("/api/v4/ObjectInfo/get-prop-objects").withQuery("objectList" to versionId.toString())
+        )
+        println("DEBUG: Prop objects for versionId=$versionId: $propObjects")
+        val prop = propObjects.firstOrNull()
+            ?: throw LoodsmanApiException("Document not found in Loodsman: versionId=$versionId")
+
         // Get document attributes (name, designation)
         val docAttrs = getJson<List<ObjectAttributeDto>>(
             get("/api/v4/ObjectInfo/get-info-about-version-mode-3").withQuery("idVersion" to versionId.toString())
@@ -49,8 +57,10 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         println("DEBUG: Document attributes for versionId=$versionId: $docAttrs")
         val docAttrMap = docAttrs.associateBy { it.name }
 
-        val documentDesignation = docAttrMap[ATTR_DESIGNATION]?.value?.trim()
-            ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_DESIGNATION' for versionId=$versionId")
+        // Use product+version as designation if available, otherwise use attribute
+        val documentDesignation = (prop.product?.let { it + " " } ?: "") + (prop.version ?: "")
+            .takeIf { it.isNotBlank() } ?: docAttrMap[ATTR_DESIGNATION]?.value?.trim()
+            ?: throw LoodsmanApiException("Document not found in Loodsman: no designation for versionId=$versionId")
         val documentName = docAttrMap[ATTR_NAME]?.value?.trim()
             ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$versionId")
 
@@ -216,6 +226,15 @@ private data class LoginRequest(val dbName: String, val username: String, val pa
 
 @Serializable
 private data class SessionResponse(val sessionId: String? = null)
+
+@Serializable
+private data class PropObjectDto(
+    val idVersion: Int = 0,
+    val type: String? = null,
+    val product: String? = null,
+    val version: String? = null,
+    val state: String? = null
+)
 
 @Serializable
 private data class LinkedObjectDto(val idLink: Int, val idChild: Int, val idType: Int)
