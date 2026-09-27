@@ -61,7 +61,9 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             ?: throw LoodsmanApiException("Document not found in Loodsman: no '$ATTR_NAME' for versionId=$versionId")
 
         // Get linked objects
-        val children = getLinkedObjects(versionId, linkTypeId).map { ChildLink(it.idLink, it.idChild, it.idType) }
+        val children = getLinkedObjects(versionId, linkTypeId).map {
+            ChildLink(it.idLink, it.idChild, it.idType, it.minQuantity, it.maxQuantity)
+        }
 
         // Get designation and name for all child objects
         val designationByObjectId = HashMap<Int, String>()
@@ -84,15 +86,16 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             }
         }
 
-        // Get quantity for each link
+        // Get quantity from minQuantity/maxQuantity
         val quantityByLinkId = HashMap<Int, Int>()
         children.forEach { child ->
-            val linkAttrs = getJson<List<LinkAttributeDto>>(
-                get("/api/v4/ObjectInfo/get-link-attributes").withQuery("linkId" to child.idLink.toString())
-            ).associateBy { it.name }
-            linkAttrs[ATTR_QUANTITY]?.value?.trim()?.let {
-                quantityByLinkId[child.idLink] = parseQuantity(it, child.idLink)
+            val quantity = if (child.minQuantity != null && child.minQuantity == child.maxQuantity) {
+                child.minQuantity.toInt()
+            } else {
+                child.minQuantity?.toInt() ?: child.maxQuantity?.toInt()
+                    ?: throw LoodsmanApiException("Attribute 'Количество' is missing for link ${child.idLink}")
             }
+            quantityByLinkId[child.idLink] = quantity
         }
 
         val items = buildItems(children, typeNameById, designationByObjectId, nameByObjectId, quantityByLinkId)
@@ -242,7 +245,18 @@ private data class PropObjectDto(
 )
 
 @Serializable
-private data class LinkedObjectDto(val idLink: Int, val idChild: Int, val idType: Int)
+private data class LinkedObjectDto(
+    val linkId: Int = 0,
+    val versionId: Int = 0,
+    val linkTypeId: Int = 0,
+    val minQuantity: Double? = null,
+    val maxQuantity: Double? = null
+) {
+    // Legacy names for compatibility
+    val idLink: Int get() = linkId
+    val idChild: Int get() = versionId
+    val idType: Int get() = linkTypeId
+}
 
 @Serializable
 private data class TypeListEntry(val id: Int, val typeName: String? = null)
