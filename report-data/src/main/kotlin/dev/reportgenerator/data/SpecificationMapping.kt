@@ -11,7 +11,8 @@ fun mapToSpecificationData(dto: SpecificationDto): SpecificationData =
                 designation = item.designation,
                 name = item.name,
                 kind = mapKind(item.kind),
-                quantity = item.quantity
+                quantity = item.quantity,
+                unit = item.unit
             )
         }
     )

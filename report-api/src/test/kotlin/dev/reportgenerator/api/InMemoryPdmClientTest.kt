@@ -10,7 +10,7 @@ class InMemoryPdmClientTest {
         val dto = SpecificationDto(
             documentDesignation = "A.0",
             documentName = "Изделие",
-            items = listOf(ItemDto("A.1", "Деталь", "PART", 3))
+            items = listOf(ItemDto("A.1", "Деталь", "PART", 3.0))
         )
         val client = InMemoryPdmClient(dto)
 

@@ -38,20 +38,23 @@ class SpecificationAssemblyTest {
         // 101 is a Material: product field IS the Наименование, no separate name attribute is fetched for it.
         val designationByObjectId = mapOf(100 to "A.1", 101 to "Клей", 102 to "A.3")
         val nameByObjectId = mapOf(100 to "Болт", 102 to "Подсборка")
-        val quantityByLinkId = mapOf(10 to 4, 11 to 1, 12 to 1)
+        val quantityByLinkId = mapOf(10 to 4.0, 11 to 1.5, 12 to 1.0)
+        val unitByLinkId = mapOf(11 to "кг")
 
-        val items = buildItems(children, typeNameByObjectId, designationByObjectId, nameByObjectId, quantityByLinkId)
+        val items = buildItems(children, typeNameByObjectId, designationByObjectId, nameByObjectId, quantityByLinkId, unitByLinkId)
 
         assertEquals(2, items.size)
         assertEquals("A.1", items[0].designation)
         assertEquals("Болт", items[0].name)
         assertEquals("PART", items[0].kind)
-        assertEquals(4, items[0].quantity)
+        assertEquals(4.0, items[0].quantity)
+        assertNull(items[0].unit)
         // Material: "Обозначение" column stays empty, only "Наименование" is filled.
         assertNull(items[1].designation)
         assertEquals("Клей", items[1].name)
         assertEquals("MATERIAL", items[1].kind)
-        assertEquals(1, items[1].quantity)
+        assertEquals(1.5, items[1].quantity)
+        assertEquals("кг", items[1].unit)
     }
 
     @Test
@@ -60,7 +63,7 @@ class SpecificationAssemblyTest {
         val typeNameByObjectId = mapOf(100 to "Деталь")
 
         assertFailsWith<LoodsmanApiException> {
-            buildItems(children, typeNameByObjectId, emptyMap(), mapOf(100 to "Болт"), mapOf(10 to 1))
+            buildItems(children, typeNameByObjectId, emptyMap(), mapOf(100 to "Болт"), mapOf(10 to 1.0))
         }
     }
 
@@ -80,7 +83,7 @@ class SpecificationAssemblyTest {
         val typeNameByObjectId = mapOf(100 to "Материал по КД")
         val designationByObjectId = mapOf(100 to "A.1")
 
-        val items = buildItems(children, typeNameByObjectId, designationByObjectId, emptyMap(), mapOf(10 to 1))
+        val items = buildItems(children, typeNameByObjectId, designationByObjectId, emptyMap(), mapOf(10 to 1.0))
 
         assertNull(items[0].designation)
         assertEquals("A.1", items[0].name)
@@ -92,7 +95,7 @@ class SpecificationAssemblyTest {
         val typeNameByObjectId = mapOf(100 to "Материал по КД")
 
         assertFailsWith<LoodsmanApiException> {
-            buildItems(children, typeNameByObjectId, emptyMap(), emptyMap(), mapOf(10 to 1))
+            buildItems(children, typeNameByObjectId, emptyMap(), emptyMap(), mapOf(10 to 1.0))
         }
     }
 }

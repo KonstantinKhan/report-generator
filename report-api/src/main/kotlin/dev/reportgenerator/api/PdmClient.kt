@@ -4,7 +4,8 @@ data class ItemDto(
     val designation: String?,
     val name: String,
     val kind: String,
-    val quantity: Int
+    val quantity: Double,
+    val unit: String? = null
 )
 
 data class SpecificationDto(

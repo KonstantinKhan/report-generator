@@ -65,7 +65,7 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
 
         // Get linked objects
         val children = getLinkedObjects(versionId, linkTypeId).map {
-            ChildLink(it.idLink, it.idChild, it.idType, it.minQuantity, it.maxQuantity)
+            ChildLink(it.idLink, it.idChild, it.idType, it.minQuantity, it.maxQuantity, it.unit)
         }
 
         // Get type, designation and name for all child objects
@@ -98,19 +98,23 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             }
         }
 
-        // Get quantity from minQuantity/maxQuantity
-        val quantityByLinkId = HashMap<Int, Int>()
+        // Get quantity from minQuantity/maxQuantity. Kept as Double: MATERIAL items can carry
+        // fractional amounts (e.g. 1.5 м materials by their unit); other kinds are always whole
+        // counts in Loodsman and get rounded at display time (see SpecificationData.formattedQuantity).
+        val quantityByLinkId = HashMap<Int, Double>()
+        val unitByLinkId = HashMap<Int, String?>()
         children.forEach { child ->
             val quantity = if (child.minQuantity != null && child.minQuantity == child.maxQuantity) {
-                child.minQuantity.toInt()
+                child.minQuantity
             } else {
-                child.minQuantity?.toInt() ?: child.maxQuantity?.toInt()
+                child.minQuantity ?: child.maxQuantity
                     ?: throw LoodsmanApiException("Attribute 'Количество' is missing for link ${child.idLink}")
             }
             quantityByLinkId[child.idLink] = quantity
+            unitByLinkId[child.idLink] = child.unit
         }
 
-        val items = buildItems(children, typeNameByObjectId, designationByObjectId, nameByObjectId, quantityByLinkId)
+        val items = buildItems(children, typeNameByObjectId, designationByObjectId, nameByObjectId, quantityByLinkId, unitByLinkId)
 
         return SpecificationDto(documentDesignation, documentName, items)
     }
@@ -229,13 +233,6 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         } catch (e: SerializationException) {
             throw LoodsmanApiException("Malformed JSON response from Loodsman: ${e.message}")
         }
-
-    private fun parseQuantity(raw: String, linkId: Int): Int {
-        val normalized = raw.trim().replace(',', '.')
-        val value = normalized.toDoubleOrNull()
-            ?: throw LoodsmanApiException("Cannot parse '$ATTR_QUANTITY' value '$raw' for link $linkId")
-        return Math.round(value).toInt()
-    }
 }
 
 @Serializable
@@ -262,7 +259,8 @@ private data class LinkedObjectDto(
     @SerialName("idType")
     val linkTypeId: Int = 0,
     val minQuantity: Double? = null,
-    val maxQuantity: Double? = null
+    val maxQuantity: Double? = null,
+    val unit: String? = null
 ) {
     val idLink: Int get() = linkId
     val idChild: Int get() = versionId

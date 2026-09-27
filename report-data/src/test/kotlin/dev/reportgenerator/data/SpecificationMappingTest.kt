@@ -13,11 +13,11 @@ class SpecificationMappingTest {
             documentDesignation = "A.0",
             documentName = "Изделие",
             items = listOf(
-                ItemDto("A.1", "Корпус", "ASSEMBLY", 1),
-                ItemDto("A.2", "Вал", "PART", 2),
-                ItemDto("ГОСТ 123", "Болт", "STANDARD", 5),
-                ItemDto("A.4", "Прокладка", "OTHER", 6),
-                ItemDto("A.3", "Шайба", "unknown-kind", 10)
+                ItemDto("A.1", "Корпус", "ASSEMBLY", 1.0),
+                ItemDto("A.2", "Вал", "PART", 2.0),
+                ItemDto("ГОСТ 123", "Болт", "STANDARD", 5.0),
+                ItemDto("A.4", "Прокладка", "OTHER", 6.0),
+                ItemDto("A.3", "Шайба", "unknown-kind", 10.0)
             )
         )
 
@@ -37,5 +37,19 @@ class SpecificationMappingTest {
 
         assertEquals("X.001", data.documentDesignation)
         assertEquals("Тест", data.documentName)
+    }
+
+    @Test
+    fun `carries fractional quantity and unit through unchanged`() {
+        val dto = SpecificationDto(
+            documentDesignation = "A.0",
+            documentName = "Изделие",
+            items = listOf(ItemDto("A.5", "Клей", "MATERIAL", 1.5, "кг"))
+        )
+
+        val data = mapToSpecificationData(dto)
+
+        assertEquals(1.5, data.items[0].quantity)
+        assertEquals("кг", data.items[0].unit)
     }
 }

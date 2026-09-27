@@ -7,7 +7,8 @@ internal data class ChildLink(
     val idChild: Int,
     val idType: Int,
     val minQuantity: Double? = null,
-    val maxQuantity: Double? = null
+    val maxQuantity: Double? = null,
+    val unit: String? = null
 )
 
 internal fun mapItemKind(typeName: String?): String? = when (typeName?.trim()?.lowercase()) {
@@ -28,7 +29,8 @@ internal fun buildItems(
     typeNameByObjectId: Map<Int, String>,
     designationByObjectId: Map<Int, String>,
     nameByObjectId: Map<Int, String>,
-    quantityByLinkId: Map<Int, Int>,
+    quantityByLinkId: Map<Int, Double>,
+    unitByLinkId: Map<Int, String?> = emptyMap(),
 ): List<ItemDto> = children.mapNotNull { child ->
     val typeName = typeNameByObjectId[child.idChild] ?: return@mapNotNull null
     val kind = mapItemKind(typeName) ?: return@mapNotNull null
@@ -54,6 +56,7 @@ internal fun buildItems(
 
     val quantity = quantityByLinkId[child.idLink]
         ?: throw LoodsmanApiException("Attribute 'Количество' is missing for link ${child.idLink}")
+    val unit = unitByLinkId[child.idLink]
 
-    ItemDto(designation = designation, name = name, kind = kind, quantity = quantity)
+    ItemDto(designation = designation, name = name, kind = kind, quantity = quantity, unit = unit)
 }
