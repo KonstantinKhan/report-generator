@@ -26,10 +26,10 @@ class SpecificationEndToEndTest {
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
             items = listOf(
-                ItemDto("AAA.01.000", "Корпус", "ASSEMBLY", 1),
-                ItemDto("AAA.02.001", "Вал", "PART", 2),
-                ItemDto("AAA.02.002", "Втулка", "PART", 4),
-                ItemDto(null, "Болт М6 ГОСТ 7798-70", "STANDARD", 8)
+                ItemDto("AAA.01.000", "Корпус", "ASSEMBLY", 1.0),
+                ItemDto("AAA.02.001", "Вал", "PART", 2.0),
+                ItemDto("AAA.02.002", "Втулка", "PART", 4.0),
+                ItemDto(null, "Болт М6 ГОСТ 7798-70", "STANDARD", 8.0)
             )
         )
     )

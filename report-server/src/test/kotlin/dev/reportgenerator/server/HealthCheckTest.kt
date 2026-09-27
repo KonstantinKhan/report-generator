@@ -19,7 +19,7 @@ private class StubPdmClient : PdmClient {
         SpecificationDto(
             documentDesignation = "AAA.00.000",
             documentName = "Test",
-            items = listOf(ItemDto("AAA.01.000", "Part", "PART", 1)),
+            items = listOf(ItemDto("AAA.01.000", "Part", "PART", 1.0)),
         )
 }
 

@@ -19,10 +19,10 @@ class SpecificationBuilderTest {
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
             items = listOf(
-                SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1),
-                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 2),
-                SpecificationItem("AAA.02.002", "Втулка", ItemKind.PART, 4),
-                SpecificationItem("ГОСТ 7798-70", "Болт М6", ItemKind.STANDARD, 8)
+                SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0),
+                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 2.0),
+                SpecificationItem("AAA.02.002", "Втулка", ItemKind.PART, 4.0),
+                SpecificationItem("ГОСТ 7798-70", "Болт М6", ItemKind.STANDARD, 8.0)
             )
         )
 
@@ -45,11 +45,11 @@ class SpecificationBuilderTest {
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
             items = listOf(
-                SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1),
-                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 2),
-                SpecificationItem("ГОСТ 7798-70", "Болт М6", ItemKind.STANDARD, 8),
-                SpecificationItem("AAA.03.000", "Пломба", ItemKind.OTHER, 1),
-                SpecificationItem("", "Сталь 45", ItemKind.MATERIAL, 1)
+                SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0),
+                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 2.0),
+                SpecificationItem("ГОСТ 7798-70", "Болт М6", ItemKind.STANDARD, 8.0),
+                SpecificationItem("AAA.03.000", "Пломба", ItemKind.OTHER, 1.0),
+                SpecificationItem("", "Сталь 45", ItemKind.MATERIAL, 1.0)
             )
         )
 
@@ -71,7 +71,7 @@ class SpecificationBuilderTest {
         val data = SpecificationData(
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
-            items = listOf(SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1))
+            items = listOf(SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0))
         )
 
         val doc = specification(data)
@@ -86,7 +86,7 @@ class SpecificationBuilderTest {
         val data = SpecificationData(
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
-            items = listOf(SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1))
+            items = listOf(SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0))
         )
 
         val doc = specification(data)
@@ -100,6 +100,24 @@ class SpecificationBuilderTest {
             TextAlign.CENTER, TextAlign.CENTER
         )
         assertEquals(expectedAligns, row.cells.map { it.align })
+    }
+
+    @Test
+    fun `quantity cell shows whole numbers without decimals and materials with comma decimals and unit`() {
+        val data = SpecificationData(
+            documentDesignation = "AAA.00.000",
+            documentName = "Тестовое изделие",
+            items = listOf(
+                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 1.0),
+                SpecificationItem("", "Сталь 45", ItemKind.MATERIAL, 0.35, "кг")
+            )
+        )
+
+        val doc = specification(data)
+        val table = doc.elements.filterIsInstance<IrTable>().single()
+        val quantities = table.content.filterIsInstance<IrGroup>().flatMap { it.rows }.map { it.cells[5].text }
+
+        assertEquals(listOf("1", "0,35 кг"), quantities)
     }
 
     @Test

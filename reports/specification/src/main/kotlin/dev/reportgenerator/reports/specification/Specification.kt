@@ -3,6 +3,7 @@ package dev.reportgenerator.reports.specification
 import dev.reportgenerator.data.ItemKind
 import dev.reportgenerator.data.SpecificationData
 import dev.reportgenerator.data.SpecificationItem
+import dev.reportgenerator.data.formattedQuantity
 import dev.reportgenerator.geometry.Length
 import dev.reportgenerator.geometry.mm
 import dev.reportgenerator.ir.ColumnsBuilder
@@ -98,6 +99,10 @@ private fun ColumnsBuilder.nameColumn(width: Length) = column("name", width, hea
 private fun ColumnsBuilder.quantityColumn(width: Length) = column("quantity", width, header = "Кол.", stickToLastRow = true)
 private fun ColumnsBuilder.noteColumn(width: Length) = column("note", width, header = "Примечание", stickToLastRow = true)
 
+// MATERIAL quantities carry a unit (e.g. "кг", "м"); every other kind has none.
+private fun SpecificationItem.quantityText(): String =
+    unit?.let { "${formattedQuantity()} $it" } ?: formattedQuantity()
+
 // Формат/Зона/Примечание aren't modeled in SpecificationItem yet — left blank per row, matching
 // column order (7 columns must line up between header and every data row).
 private fun GroupBuilder.row(item: SpecificationItem, position: Int) {
@@ -108,7 +113,7 @@ private fun GroupBuilder.row(item: SpecificationItem, position: Int) {
             IrCell(position.toString(), align = TextAlign.CENTER),
             IrCell(item.designation ?: ""),
             IrCell(item.name),
-            IrCell(item.quantity.toString(), align = TextAlign.CENTER),
+            IrCell(item.quantityText(), align = TextAlign.CENTER),
             IrCell("", align = TextAlign.CENTER)
         )
     )
