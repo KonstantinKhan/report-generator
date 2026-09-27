@@ -27,19 +27,18 @@
 | — | Подписи "Копировал"/"Формат" под рамкой, `BorderWeight.NONE` | `report-ir`, `report-layout`, `reports/specification` | `da88960` |
 | 7 | Форматирование таблицы спецификации: фиксированная высота 8мм, 4 блока (СЕ/Детали/Стандарты/Материалы), заголовки блоков курсивные+подчёркнутые 3.5мм, тонкие границы на каждой ячейке, синтетический italic (shear в PDF / font-style в SVG), word-wrap в физические строки, дозаполнение страницы пустыми строками | все модули, особенно `report-layout`, рендереры | `adee345` |
 
-## Loodsman API интеграция (WIP)
+## Loodsman API интеграция
 
-**Статус:** В разработке (feature/service). Server partially working.
+**Статус:** Работает (feature/service). Клиент + сервер end-to-end проверены на
+реальном Loodsman, известные баги с классификацией типов объектов исправлены.
 
 - `report-loodsman`: клиент Loodsman API v4, преобразование спецификации в DTO
-- `report-server`: REST server (Ktor) обслуживает `/specifications/{versionId}`
-- **Проблемы/особенности Loodsman API:**
-  - Старые versions используют поля `idLink`/`idChild`/`idType` (не camelCase)
-  - Требует cookie jar + `web-loodsman-session` header (не Authorization)
-  - Batch attribute endpoints не работают — использовать single-object endpoints
-  - Количество из `minQuantity`/`maxQuantity`, не из text attributes
+- `report-server`: REST server (Ktor) обслуживает `POST /specifications/{versionId}`
 
-Подробная документация — [../memory/loodsman-integration.md](../../.claude/memory/loodsman-integration.md).
+Все особенности и грабли API (авторизация, разделение свойств/атрибутов, правило
+ключевого атрибута по типу объекта, путаница `idType` связи vs типа объекта,
+нерабочие batch-эндпоинты) — **[loodsman-integration.md](loodsman-integration.md)**.
+Читать перед любыми правками `report-loodsman`.
 
 ## Что сознательно НЕ начато
 

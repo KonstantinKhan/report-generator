@@ -1,6 +1,6 @@
 # Модули
 
-10 Gradle-модулей, `settings.gradle.kts` — источник истины по списку. См.
+12 Gradle-модулей, `settings.gradle.kts` — источник истины по списку. См.
 [architecture.md](architecture.md) для графа зависимостей целиком.
 
 | Модуль | Пакет | Назначение | Зависит от (main) |
@@ -15,6 +15,8 @@
 | `report-data` | `dev.reportgenerator.data` | `ItemKind`, `SpecificationItem`, `SpecificationData`, `mapToSpecificationData()` | `report-api` |
 | `reports/specification` | `dev.reportgenerator.reports.specification` | Первый реальный Report Builder: `specification()` — Report Data → Semantic IR | `report-data`, `report-ir`, `report-geometry` |
 | `report-cli` | `dev.reportgenerator.cli` | Раннер: `./gradlew :report-cli:run` — гоняет весь pipeline, пишет `.svg`/`.pdf` на диск | всё вышеперечисленное + Kotlin `application` plugin |
+| `report-loodsman` | `dev.reportgenerator.loodsman` | Реализация `PdmClient` поверх реального Loodsman API v4 (HTTP, авторизация по сессии). См. [loodsman-integration.md](loodsman-integration.md) | `report-api` |
+| `report-server` | `dev.reportgenerator.server` | Ktor REST-сервер: `POST /specifications/{versionId}` — тянет данные из Loodsman, рендерит PDF | `report-api`, `report-loodsman`, `report-data`, `reports/specification`, `report-layout`, `report-render-pdf` |
 
 ## Тестовые (не main) зависимости стоит знать
 
