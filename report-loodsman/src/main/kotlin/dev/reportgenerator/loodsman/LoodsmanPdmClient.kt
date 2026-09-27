@@ -63,16 +63,25 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         // Get linked objects
         val children = getLinkedObjects(versionId, linkTypeId).map { ChildLink(it.idLink, it.idChild, it.idType) }
 
-        // Get attributes for all child objects
-        val objectIds = (children.map { it.idChild } + versionId).distinct()
+        // Get designation and name for all child objects
         val designationByObjectId = HashMap<Int, String>()
         val nameByObjectId = HashMap<Int, String>()
-        objectIds.forEach { objId ->
-            val attrMap = getJson<List<ObjectAttributeDto>>(
-                get("/api/v4/ObjectInfo/get-info-about-version-mode-3").withQuery("idVersion" to objId.toString())
-            ).associateBy { it.name }
-            attrMap[ATTR_DESIGNATION]?.value?.trim()?.let { designationByObjectId[objId] = it }
-            attrMap[ATTR_NAME]?.value?.trim()?.let { nameByObjectId[objId] = it }
+
+        children.forEach { child ->
+            val childProps = getJson<List<PropObjectDto>>(
+                get("/api/v4/ObjectInfo/get-prop-objects").withQuery("objectList" to child.idChild.toString())
+            ).firstOrNull()
+                ?: throw LoodsmanApiException("Child object ${child.idChild} not found")
+
+            designationByObjectId[child.idChild] = childProps.product?.trim()
+                ?: throw LoodsmanApiException("Child object ${child.idChild} missing product (designation)")
+
+            val childAttrs = getJson<List<ObjectAttributeDto>>(
+                get("/api/v4/ObjectInfo/get-info-about-version-mode-3").withQuery("idVersion" to child.idChild.toString())
+            )
+            childAttrs.find { it.name == ATTR_NAME }?.value?.trim()?.let {
+                nameByObjectId[child.idChild] = it
+            }
         }
 
         // Get quantity for each link
