@@ -23,7 +23,6 @@ internal fun buildItems(
     val designation = designationByObjectId[child.idChild]
         ?: throw LoodsmanApiException("Attribute 'Обозначение' is missing for object ${child.idChild}")
     val name = nameByObjectId[child.idChild] ?: designation
-    val quantity = quantityByLinkId[child.idLink]
-        ?: throw LoodsmanApiException("Attribute 'Количество' is missing for link ${child.idLink}")
+    val quantity = quantityByLinkId[child.idLink] ?: 1
     ItemDto(designation = designation, name = name, kind = kind, quantity = quantity)
 }
