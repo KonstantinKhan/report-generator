@@ -17,4 +17,6 @@ include(
     "report-data",
     "reports:specification",
     "report-cli",
+    "report-loodsman",
+    "report-server",
 )

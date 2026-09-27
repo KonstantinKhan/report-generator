@@ -40,7 +40,7 @@ class SpecificationBuilderTest {
     }
 
     @Test
-    fun `four blocks appear in fixed ESKD order with continuous numbering including materials`() {
+    fun `five blocks appear in fixed ESKD order with continuous numbering including materials`() {
         val data = SpecificationData(
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
@@ -48,6 +48,7 @@ class SpecificationBuilderTest {
                 SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1),
                 SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 2),
                 SpecificationItem("ГОСТ 7798-70", "Болт М6", ItemKind.STANDARD, 8),
+                SpecificationItem("AAA.03.000", "Пломба", ItemKind.OTHER, 1),
                 SpecificationItem("", "Сталь 45", ItemKind.MATERIAL, 1)
             )
         )
@@ -57,12 +58,12 @@ class SpecificationBuilderTest {
         val groups = table.content.filterIsInstance<IrGroup>()
 
         assertEquals(
-            listOf("Сборочные единицы", "Детали", "Стандартные изделия", "Материалы"),
+            listOf("Сборочные единицы", "Детали", "Стандартные изделия", "Прочие изделия", "Материалы"),
             groups.map { it.title }
         )
 
         val positions = groups.flatMap { it.rows }.map { it.cells[2].text }
-        assertEquals(listOf("1", "2", "3", "4"), positions)
+        assertEquals(listOf("1", "2", "3", "4", "5"), positions)
     }
 
     @Test

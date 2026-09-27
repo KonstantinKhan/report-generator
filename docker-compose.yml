@@ -1,0 +1,14 @@
+services:
+  report-server:
+    build: .
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      LOODSMAN_BASE_URL: ${LOODSMAN_BASE_URL:?LOODSMAN_BASE_URL is required, set it in .env}
+      LOODSMAN_DB_NAME: ${LOODSMAN_DB_NAME:?LOODSMAN_DB_NAME is required, set it in .env}
+      LOODSMAN_USERNAME: ${LOODSMAN_USERNAME:?LOODSMAN_USERNAME is required, set it in .env}
+      LOODSMAN_PASSWORD: ${LOODSMAN_PASSWORD:?LOODSMAN_PASSWORD is required, set it in .env}
+      REPORT_OUTPUT_DIR: /data/reports
+      SERVER_PORT: 8080
+    volumes:
+      - ./reports:/data/reports

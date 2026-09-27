@@ -2,14 +2,10 @@ package dev.reportgenerator.data
 
 import dev.reportgenerator.api.SpecificationDto
 
-fun mapToSpecificationData(
-    dto: SpecificationDto,
-    documentDesignation: String,
-    documentName: String
-): SpecificationData =
+fun mapToSpecificationData(dto: SpecificationDto): SpecificationData =
     SpecificationData(
-        documentDesignation = documentDesignation,
-        documentName = documentName,
+        documentDesignation = dto.documentDesignation,
+        documentName = dto.documentName,
         items = dto.items.map { item ->
             SpecificationItem(
                 designation = item.designation,
@@ -23,6 +19,7 @@ fun mapToSpecificationData(
 private fun mapKind(raw: String): ItemKind = when (raw.uppercase()) {
     "ASSEMBLY" -> ItemKind.ASSEMBLY
     "STANDARD" -> ItemKind.STANDARD
+    "OTHER" -> ItemKind.OTHER
     "MATERIAL" -> ItemKind.MATERIAL
     else -> ItemKind.PART
 }

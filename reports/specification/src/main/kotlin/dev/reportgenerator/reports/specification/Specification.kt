@@ -68,6 +68,11 @@ fun specification(data: SpecificationData): IrDocument {
                 row(item, nextPosition)
             }
 
+            groupIfNotEmpty("Прочие изделия", data.items.filter { it.kind == ItemKind.OTHER }) { item ->
+                nextPosition += 1
+                row(item, nextPosition)
+            }
+
             groupIfNotEmpty("Материалы", data.items.filter { it.kind == ItemKind.MATERIAL }) { item ->
                 nextPosition += 1
                 row(item, nextPosition)

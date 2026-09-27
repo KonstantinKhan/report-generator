@@ -8,6 +8,8 @@ data class ItemDto(
 )
 
 data class SpecificationDto(
+    val documentDesignation: String,
+    val documentName: String,
     val items: List<ItemDto>
 )
 

@@ -9,3 +9,5 @@ docs/.claude/
 report-cli/output/
 /output/
 .DS_Store
+.env
+/reports/
