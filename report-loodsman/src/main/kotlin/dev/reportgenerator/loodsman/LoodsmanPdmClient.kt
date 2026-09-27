@@ -85,6 +85,7 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         if (cachedAssemblyLinkTypeId != null && cachedTypeNameById != null) return
 
         val linkTypes = getJson<List<LinkListEntry>>(get("/api/v4/MetaData/get-link-list"))
+        println("DEBUG: Available link types: ${linkTypes.map { it.name }.joinToString(", ")}")
         cachedAssemblyLinkTypeId = linkTypes.firstOrNull { it.name?.trim() == ASSEMBLY_COMPOSITION_LINK_NAME }?.id
             ?: throw LoodsmanApiException("Link type '$ASSEMBLY_COMPOSITION_LINK_NAME' not found in Loodsman metadata")
 
