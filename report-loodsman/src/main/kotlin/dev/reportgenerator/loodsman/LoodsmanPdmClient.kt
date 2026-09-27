@@ -48,7 +48,11 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         val designationByObjectId = HashMap<Int, String>()
         val nameByObjectId = HashMap<Int, String>()
         if (objectIds.isNotEmpty()) {
-            fetchObjectAttributes(objectIds, listOf(ATTR_DESIGNATION, ATTR_NAME)).forEach { result ->
+            println("DEBUG: Fetching attributes for objectIds=$objectIds")
+            val attrResults = fetchObjectAttributes(objectIds, listOf(ATTR_DESIGNATION, ATTR_NAME))
+            println("DEBUG: Attribute results count=${attrResults.size}")
+            attrResults.forEach { result ->
+                println("DEBUG: objectId=${result.objectId}, isSuccess=${result.isSuccess}, attr=${result.attributeInfo?.name}, value=${result.attributeInfo?.textPlainValue}")
                 val value = result.attributeInfo?.textPlainValue
                 if (result.isSuccess && value != null) {
                     when (result.attributeInfo.name) {
