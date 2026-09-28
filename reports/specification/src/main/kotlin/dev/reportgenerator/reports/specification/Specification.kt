@@ -106,6 +106,9 @@ private fun SpecificationItem.quantityText(): String =
 // Формат/Зона/Примечание aren't modeled in SpecificationItem yet — left blank per row, matching
 // column order (7 columns must line up between header and every data row).
 private fun GroupBuilder.row(item: SpecificationItem, position: Int) {
+    if (item.kind == ItemKind.MATERIAL && System.getenv("LOODSMAN_DEBUG") == "1") {
+        System.err.println("[loodsman] row: name=${item.name} quantity=${item.quantity} unit=${item.unit} quantityText=${item.quantityText()}")
+    }
     row(
         listOf(
             IrCell("", align = TextAlign.CENTER),
