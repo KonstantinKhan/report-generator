@@ -1,6 +1,6 @@
 services:
   report-server:
-    build: .
+    image: report-server
     ports:
       - "${SERVER_PORT:-8080}:8080"
     environment:
