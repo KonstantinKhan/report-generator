@@ -103,7 +103,7 @@ class SpecificationBuilderTest {
     }
 
     @Test
-    fun `quantity cell shows whole numbers without decimals and materials with comma decimals and unit`() {
+    fun `quantity cell shows whole numbers without decimals, materials with comma decimals`() {
         val data = SpecificationData(
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
@@ -115,9 +115,27 @@ class SpecificationBuilderTest {
 
         val doc = specification(data)
         val table = doc.elements.filterIsInstance<IrTable>().single()
-        val quantities = table.content.filterIsInstance<IrGroup>().flatMap { it.rows }.map { it.cells[5].text }
+        val rows = table.content.filterIsInstance<IrGroup>().flatMap { it.rows }
 
-        assertEquals(listOf("1", "0,35 кг"), quantities)
+        assertEquals(listOf("1", "0,35"), rows.map { it.cells[5].text })
+    }
+
+    @Test
+    fun `material unit goes into the note column, blank for non-material kinds`() {
+        val data = SpecificationData(
+            documentDesignation = "AAA.00.000",
+            documentName = "Тестовое изделие",
+            items = listOf(
+                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 1.0),
+                SpecificationItem("", "Сталь 45", ItemKind.MATERIAL, 0.35, "кг")
+            )
+        )
+
+        val doc = specification(data)
+        val table = doc.elements.filterIsInstance<IrTable>().single()
+        val rows = table.content.filterIsInstance<IrGroup>().flatMap { it.rows }
+
+        assertEquals(listOf("", "кг"), rows.map { it.cells[6].text })
     }
 
     @Test

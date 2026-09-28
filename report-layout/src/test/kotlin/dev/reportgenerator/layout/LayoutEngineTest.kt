@@ -272,6 +272,19 @@ class LayoutEngineTest {
     }
 
     @Test
+    fun `stickToLastRow column whose own text overflows wraps instead of dropping the overflow`() {
+        val wide = column("name", 60.mm)
+        val narrowQuantity = IrColumn("quantity", 10.mm, stickToLastRow = true)
+        val row = IrRow(listOf(cell("Вал"), cell("0,35 кг")))
+
+        val physical = splitRowIntoPhysicalRows(row, listOf(wide, narrowQuantity), textMeasurer)
+
+        val quantityText = physical.joinToString(separator = " ") { it[1].text }.trim()
+        assertTrue(quantityText.contains("0,35"), "first line of the overflowing value must not be dropped")
+        assertTrue(quantityText.contains("кг"), "overflow line ('кг') must not be silently dropped")
+    }
+
+    @Test
     fun `fixed rowHeight table borders every column of every physical row`() {
         val columns = listOf(column("name", 60.mm))
         val table = IrTable(

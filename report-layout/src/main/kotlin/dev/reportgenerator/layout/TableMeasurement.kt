@@ -133,18 +133,22 @@ fun splitRowIntoPhysicalRows(row: IrRow, columns: List<IrColumn>, textMeasurer: 
 
     return (0 until physicalCount).map { lineIndex ->
         row.cells.mapIndexed { index, cell ->
+            val ownLines = linesPerColumn[index]
             val text = when {
-                columns[index].stickToFirstRow -> {
-                    // Show only on first physical row, using the first (and typically only) line
-                    if (lineIndex == 0) linesPerColumn[index].firstOrNull() ?: "" else ""
+                // stickToFirstRow/stickToLastRow assume a single-line value anchored to one edge
+                // of a row stretched by some OTHER column wrapping (e.g. a long "Наименование").
+                // If this column's OWN text needs more than one line (e.g. a material's "0,35 кг"
+                // overflowing the narrow "Кол." column), that assumption doesn't hold — fall back
+                // to normal per-line rendering so no line is silently dropped.
+                columns[index].stickToFirstRow && ownLines.size <= 1 -> {
+                    if (lineIndex == 0) ownLines.firstOrNull() ?: "" else ""
                 }
-                columns[index].stickToLastRow -> {
-                    // Show only on last physical row, using the first (and typically only) line
-                    if (lineIndex == physicalCount - 1) linesPerColumn[index].firstOrNull() ?: "" else ""
+                columns[index].stickToLastRow && ownLines.size <= 1 -> {
+                    if (lineIndex == physicalCount - 1) ownLines.firstOrNull() ?: "" else ""
                 }
                 else -> {
                     // Normal: show text for this line, empty if doesn't exist
-                    linesPerColumn[index].getOrNull(lineIndex) ?: ""
+                    ownLines.getOrNull(lineIndex) ?: ""
                 }
             }
             cell.copy(text = text)

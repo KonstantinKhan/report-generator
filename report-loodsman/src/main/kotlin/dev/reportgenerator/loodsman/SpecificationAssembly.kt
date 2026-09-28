@@ -58,9 +58,5 @@ internal fun buildItems(
         ?: throw LoodsmanApiException("Attribute 'Количество' is missing for link ${child.idLink}")
     val unit = unitByLinkId[child.idLink]
 
-    if (System.getenv("LOODSMAN_DEBUG") == "1") {
-        System.err.println("[loodsman] buildItems: idLink=${child.idLink} kind=$kind quantity=$quantity unit=$unit")
-    }
-
     ItemDto(designation = designation, name = name, kind = kind, quantity = quantity, unit = unit)
 }

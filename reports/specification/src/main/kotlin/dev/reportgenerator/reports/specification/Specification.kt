@@ -99,16 +99,11 @@ private fun ColumnsBuilder.nameColumn(width: Length) = column("name", width, hea
 private fun ColumnsBuilder.quantityColumn(width: Length) = column("quantity", width, header = "Кол.", stickToLastRow = true)
 private fun ColumnsBuilder.noteColumn(width: Length) = column("note", width, header = "Примечание", stickToLastRow = true)
 
-// MATERIAL quantities carry a unit (e.g. "кг", "м"); every other kind has none.
-private fun SpecificationItem.quantityText(): String =
-    unit?.let { "${formattedQuantity()} $it" } ?: formattedQuantity()
-
-// Формат/Зона/Примечание aren't modeled in SpecificationItem yet — left blank per row, matching
-// column order (7 columns must line up between header and every data row).
+// Формат/Зона aren't modeled in SpecificationItem yet — left blank per row, matching column
+// order (7 columns must line up between header and every data row). Примечание carries the
+// MATERIAL unit (e.g. "кг", "м") — "Кол." itself is too narrow (10mm) to fit value + unit
+// without wrapping (see TableMeasurement.splitRowIntoPhysicalRows history).
 private fun GroupBuilder.row(item: SpecificationItem, position: Int) {
-    if (item.kind == ItemKind.MATERIAL && System.getenv("LOODSMAN_DEBUG") == "1") {
-        System.err.println("[loodsman] row: name=${item.name} quantity=${item.quantity} unit=${item.unit} quantityText=${item.quantityText()}")
-    }
     row(
         listOf(
             IrCell("", align = TextAlign.CENTER),
@@ -116,8 +111,8 @@ private fun GroupBuilder.row(item: SpecificationItem, position: Int) {
             IrCell(position.toString(), align = TextAlign.CENTER),
             IrCell(item.designation ?: ""),
             IrCell(item.name),
-            IrCell(item.quantityText(), align = TextAlign.CENTER),
-            IrCell("", align = TextAlign.CENTER)
+            IrCell(item.formattedQuantity(), align = TextAlign.CENTER),
+            IrCell(item.unit ?: "", align = TextAlign.CENTER)
         )
     )
 }
