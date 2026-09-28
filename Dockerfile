@@ -6,7 +6,7 @@ WORKDIR /workspace
 
 COPY . .
 RUN chmod +x ./gradlew
-RUN ./gradlew :report-server:shadowJar -q --no-daemon
+RUN --mount=type=cache,target=/root/.gradle ./gradlew :report-server:shadowJar -q --no-daemon
 
 # --- Runtime stage -------------------------------------------------------
 FROM eclipse-temurin:21-jre AS runtime
