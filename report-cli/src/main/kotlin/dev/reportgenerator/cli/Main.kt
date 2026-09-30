@@ -48,20 +48,39 @@ fun main(args: Array<String>) {
     val fonts = DefaultFontRegistry.load()
     val textMeasurer = PdfBoxTextMeasurer(fonts.registry, fonts::resolve)
 
-    val document = specification(data)
-    val laidOut = layOut(document, textMeasurer, fonts::resolve)
+    // С ПЗ (с перечнем замен)
+    println("DEBUG: Creating specification WITH change log...")
+    val documentWithPZ = specification(data, withChangeLog = true)
+    val laidOutWithPZ = layOut(documentWithPZ, textMeasurer, fonts::resolve)
 
-    val svgRendered = render(laidOut)
-    svgRendered.forEachIndexed { index, svgContent ->
+    val svgRenderedWithPZ = render(laidOutWithPZ)
+    svgRenderedWithPZ.forEachIndexed { index, svgContent ->
         val pageNum = index + 1
-        val svgFile = File(outputDir, "specification-page-$pageNum.svg")
+        val svgFile = File(outputDir, "specification-with-pz-page-$pageNum.svg")
         svgFile.writeText(svgContent)
         println("wrote ${svgFile.absolutePath}")
     }
 
-    val pdfFile = File(outputDir, "specification.pdf")
-    pdfFile.writeBytes(renderToPdf(laidOut, fonts.registry))
+    val pdfFileWithPZ = File(outputDir, "specification-with-pz.pdf")
+    pdfFileWithPZ.writeBytes(renderToPdf(laidOutWithPZ, fonts.registry))
+    println("pages: ${laidOutWithPZ.pages.size}")
+    println("wrote ${pdfFileWithPZ.absolutePath}")
 
-    println("pages: ${laidOut.pages.size}")
-    println("wrote ${pdfFile.absolutePath}")
+    // Без ПЗ (без перечня замен)
+    println("DEBUG: Creating specification WITHOUT change log...")
+    val documentWithoutPZ = specification(data, withChangeLog = false)
+    val laidOutWithoutPZ = layOut(documentWithoutPZ, textMeasurer, fonts::resolve)
+
+    val svgRenderedWithoutPZ = render(laidOutWithoutPZ)
+    svgRenderedWithoutPZ.forEachIndexed { index, svgContent ->
+        val pageNum = index + 1
+        val svgFile = File(outputDir, "specification-without-pz-page-$pageNum.svg")
+        svgFile.writeText(svgContent)
+        println("wrote ${svgFile.absolutePath}")
+    }
+
+    val pdfFileWithoutPZ = File(outputDir, "specification-without-pz.pdf")
+    pdfFileWithoutPZ.writeBytes(renderToPdf(laidOutWithoutPZ, fonts.registry))
+    println("pages: ${laidOutWithoutPZ.pages.size}")
+    println("wrote ${pdfFileWithoutPZ.absolutePath}")
 }
