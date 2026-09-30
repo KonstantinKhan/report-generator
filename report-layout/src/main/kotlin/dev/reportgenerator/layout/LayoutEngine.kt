@@ -95,13 +95,18 @@ private fun staticBlockRect(spec: FrameSpec, base: Rect, baseCorner: Corner, blo
     return Rect(origin.x, origin.y, spec.size.width, spec.size.height)
 }
 
+private fun staticBlockRect(spec: FrameSpec, base: Rect, baseCorner: Corner, blockCorner: Corner, offset: Point): Rect {
+    val origin = resolveAnchor(base, baseCorner, blockCorner, spec.size, offset)
+    return Rect(origin.x, origin.y, spec.size.width, spec.size.height)
+}
+
 // One registration per static block = one line here; a new block needs no new origin function,
 // just a (spec, base, corner) entry — see Anchor.kt / docs/wiki/architecture-improvements.md.
 private fun firstPageBlockRects(setup: PageSetup, frameRect: Rect, pageRect: Rect): List<Rect> = buildList {
     setup.frame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_RIGHT)) }
     setup.leftMarginFrame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
     setup.specLeftTable?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
-    setup.mainTitleRightTable?.let { add(staticBlockRect(it, frameRect, Corner.TOP_RIGHT, Corner.TOP_LEFT)) }
+    setup.mainTitleRightTable?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_RIGHT, Corner.BOTTOM_RIGHT, Point(Length.ZERO, Length.ofMillimeters(40.0)))) }
     setup.belowFrame?.let { add(staticBlockRect(it, pageRect, Corner.BOTTOM_RIGHT)) }
 }
 
