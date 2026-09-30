@@ -154,6 +154,21 @@ object FrameSpecs {
         )
     )
 
+    // Main title right table: 120x22mm block anchored to frame's top-right corner.
+    // Three columns in first row (14+53+53=120mm, 14mm height), one column in second row (120mm, 8mm height).
+    val mainTitleRightTable: FrameSpec = FrameSpec(
+        size = Size(120.mm, 22.mm),
+        cells = listOf(
+            // First row: three cells 14mm, 53mm, 53mm wide, 14mm high
+            FrameCell.Constant(rect(0, 0, 14, 14), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
+            FrameCell.Constant(rect(14, 0, 53, 14), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
+            FrameCell.Constant(rect(67, 0, 53, 14), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
+
+            // Second row: one cell 120mm wide, 8mm high
+            FrameCell.Constant(rect(0, 14, 120, 8), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK))
+        )
+    )
+
     // Continuation page stamp (§34.3 ЕСКД): 185x15mm stamp for pages 2+.
     // Only first 3 rows of header strip (two blank + row with Изм/Лист/№ докум./Подп./Дата).
     // No signature block rows below, unlike firstPageStamp.

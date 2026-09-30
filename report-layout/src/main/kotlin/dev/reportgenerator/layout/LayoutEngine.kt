@@ -101,6 +101,7 @@ private fun firstPageBlockRects(setup: PageSetup, frameRect: Rect, pageRect: Rec
     setup.frame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_RIGHT)) }
     setup.leftMarginFrame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
     setup.specLeftTable?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
+    setup.mainTitleRightTable?.let { add(staticBlockRect(it, frameRect, Corner.TOP_RIGHT, Corner.TOP_LEFT)) }
     setup.belowFrame?.let { add(staticBlockRect(it, pageRect, Corner.BOTTOM_RIGHT)) }
 }
 
@@ -292,6 +293,9 @@ private fun renderPages(
             }
             setup.specLeftTable?.let { spec ->
                 chrome += drawFrame(spec, specLeftTableOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
+            }
+            setup.mainTitleRightTable?.let { spec ->
+                chrome += drawFrame(spec, mainTitleRightTableOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
             }
             setup.belowFrame?.let { spec ->
                 chrome += drawFrame(spec, belowFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
@@ -545,6 +549,11 @@ private fun belowFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point
 // Top edge at 292mm from page bottom (= 5mm from top on A4), right edge at frame's left margin.
 private fun specLeftTableOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
     resolveAnchor(metrics.frameRect, Corner.TOP_LEFT, Corner.TOP_RIGHT, spec.size)
+
+// Main title right table: anchored to the frame's TOP-RIGHT corner with TOP-LEFT block corner.
+// Right edge at frame's right margin.
+private fun mainTitleRightTableOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
+    resolveAnchor(metrics.frameRect, Corner.TOP_RIGHT, Corner.TOP_LEFT, spec.size)
 
 private fun resolveBindings(bindings: FrameBindings?, pageNumber: Int, totalPages: Int): Map<FrameField, String> =
     buildMap {

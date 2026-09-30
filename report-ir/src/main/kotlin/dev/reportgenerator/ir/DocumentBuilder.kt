@@ -26,14 +26,15 @@ class DocumentBuilder {
         continuationFrame: FrameSpec? = currentPageSetup.continuationFrame,
         leftMarginFrame: FrameSpec? = currentPageSetup.leftMarginFrame,
         belowFrame: FrameSpec? = currentPageSetup.belowFrame,
-        specLeftTable: FrameSpec? = currentPageSetup.specLeftTable
+        specLeftTable: FrameSpec? = currentPageSetup.specLeftTable,
+        mainTitleRightTable: FrameSpec? = currentPageSetup.mainTitleRightTable
     ) {
         currentPageSetup = PageSetup(
             format, margins,
             frame = frame, frameBindings = frameBindings,
             continuationFrame = continuationFrame,
             leftMarginFrame = leftMarginFrame, belowFrame = belowFrame,
-            specLeftTable = specLeftTable
+            specLeftTable = specLeftTable, mainTitleRightTable = mainTitleRightTable
         )
     }
 

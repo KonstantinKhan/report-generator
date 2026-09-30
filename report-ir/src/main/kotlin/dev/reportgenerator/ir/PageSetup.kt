@@ -12,5 +12,6 @@ data class PageSetup(
     val continuationFrame: FrameSpec? = null,
     val leftMarginFrame: FrameSpec? = null,
     val belowFrame: FrameSpec? = null,
-    val specLeftTable: FrameSpec? = null
+    val specLeftTable: FrameSpec? = null,
+    val mainTitleRightTable: FrameSpec? = null
 )

@@ -31,6 +31,7 @@ fun specification(data: SpecificationData): IrDocument {
             continuationFrame = FrameSpecs.continuationPageStamp,
             leftMarginFrame = FrameSpecs.leftMarginTable,
             specLeftTable = FrameSpecs.specLeftTable,
+            mainTitleRightTable = FrameSpecs.mainTitleRightTable,
             belowFrame = FrameSpecs.belowFrameNotes
         )
 
