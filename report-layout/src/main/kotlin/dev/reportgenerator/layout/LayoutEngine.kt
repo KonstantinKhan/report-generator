@@ -553,8 +553,8 @@ private fun specLeftTableOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Po
 // Main title right table: anchored to the frame's BOTTOM-RIGHT corner with BOTTOM-LEFT block corner.
 // Positioned above firstPageStamp (offset up by its height + 40mm of stamp).
 private fun mainTitleRightTableOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
-    resolveAnchor(metrics.frameRect, Corner.BOTTOM_RIGHT, Corner.BOTTOM_LEFT, spec.size,
-                  Point(Length.ZERO, Length.ofMillimeters(62.0)))
+    resolveAnchor(metrics.frameRect, Corner.BOTTOM_RIGHT, Corner.BOTTOM_RIGHT, spec.size,
+                  Point(Length.ZERO, Length.ofMillimeters(40.0)))
 
 private fun resolveBindings(bindings: FrameBindings?, pageNumber: Int, totalPages: Int): Map<FrameField, String> =
     buildMap {
