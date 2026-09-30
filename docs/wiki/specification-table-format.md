@@ -290,10 +290,10 @@ data class IrColumn(
 // С представителем заказчика (default)
 specification(data)
 // или явно
-specification(data, withChangeLog = true)
+specification(data, customerRepresentative = true)
 
 // Без представителя заказчика
-specification(data, withChangeLog = false)
+specification(data, customerRepresentative = false)
 ```
 
 ## Что НЕ входит (известные ограничения)
