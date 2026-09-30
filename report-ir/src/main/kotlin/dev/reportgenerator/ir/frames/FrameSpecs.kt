@@ -140,16 +140,17 @@ object FrameSpecs {
     )
 
     // Specification left table: 12x120mm block rotated 90° (like leftMarginTable).
-    // Two columns (5mm labeled, 7mm blank) spanning vertically. First "row" (y=0..60) has "Справ. №"
-    // and "Перв. примен."; second "row" (y=60..120) is blank.
+    // Two columns (5mm labeled, 7mm blank) spanning two rows vertically.
+    // First row (y=0..60): "Справ. №" and blank; second row (y=60..120): "Перв. примен." and blank.
+    // All borders thick.
     val specLeftTable: FrameSpec = FrameSpec(
         size = Size(12.mm, 120.mm),
         cells = listOf(
-            FrameCell.Constant(rect(0, 0, 5, 60), "Справ. №", align = TextAlign.CENTER, orientation = TextOrientation.VERTICAL_BOTTOM_TO_TOP),
-            FrameCell.Constant(rect(5, 0, 7, 60), "Перв. примен.", align = TextAlign.CENTER, orientation = TextOrientation.VERTICAL_BOTTOM_TO_TOP),
+            FrameCell.Constant(rect(0, 0, 5, 60), "Справ. №", align = TextAlign.CENTER, orientation = TextOrientation.VERTICAL_BOTTOM_TO_TOP, borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
+            FrameCell.Constant(rect(5, 0, 7, 60), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
 
-            FrameCell.Constant(rect(0, 60, 5, 60), "", borders = CellBorders(BorderWeight.THIN, BorderWeight.THIN, BorderWeight.THIN, BorderWeight.THIN)),
-            FrameCell.Constant(rect(5, 60, 7, 60), "", borders = CellBorders(BorderWeight.THIN, BorderWeight.THIN, BorderWeight.THIN, BorderWeight.THIN))
+            FrameCell.Constant(rect(0, 60, 5, 60), "Перв. примен.", align = TextAlign.CENTER, orientation = TextOrientation.VERTICAL_BOTTOM_TO_TOP, borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
+            FrameCell.Constant(rect(5, 60, 7, 60), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK))
         )
     )
 
