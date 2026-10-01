@@ -19,7 +19,7 @@ import dev.reportgenerator.ir.frames.FrameSpecs
 
 // Column widths (6+6+8+70+63+10+22=185mm) fill A4's content width exactly (210 - 20 left margin
 // - 5 right margin), matching the ГОСТ 2.106 specification form header this table represents.
-fun specification(data: SpecificationData): IrDocument {
+fun specification(data: SpecificationData, customerRepresentative: Boolean = true): IrDocument {
     var nextPosition = 0
 
     return document {
@@ -30,6 +30,8 @@ fun specification(data: SpecificationData): IrDocument {
             frameBindings = FrameBindings(designation = data.documentDesignation, name = data.documentName),
             continuationFrame = FrameSpecs.continuationPageStamp,
             leftMarginFrame = FrameSpecs.leftMarginTable,
+            specLeftTable = FrameSpecs.specLeftTable,
+            mainTitleRightTable = if (customerRepresentative) FrameSpecs.mainTitleRightTable else null,
             belowFrame = FrameSpecs.belowFrameNotes
         )
 

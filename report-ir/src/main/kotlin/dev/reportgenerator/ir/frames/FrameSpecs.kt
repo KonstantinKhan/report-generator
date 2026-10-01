@@ -139,6 +139,36 @@ object FrameSpecs {
         )
     )
 
+    // Specification left table: 12x120mm block rotated 90° (like leftMarginTable).
+    // Two columns (5mm labeled, 7mm blank) spanning two rows vertically.
+    // First row (y=0..60): "Справ. №" and blank; second row (y=60..120): "Перв. примен." and blank.
+    // All borders thick.
+    val specLeftTable: FrameSpec = FrameSpec(
+        size = Size(12.mm, 120.mm),
+        cells = listOf(
+            FrameCell.Constant(rect(0, 0, 5, 60), "Справ. №", align = TextAlign.CENTER, orientation = TextOrientation.VERTICAL_BOTTOM_TO_TOP, borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
+            FrameCell.Constant(rect(5, 0, 7, 60), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
+
+            FrameCell.Constant(rect(0, 60, 5, 60), "Перв. примен.", align = TextAlign.CENTER, orientation = TextOrientation.VERTICAL_BOTTOM_TO_TOP, borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
+            FrameCell.Constant(rect(5, 60, 7, 60), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK))
+        )
+    )
+
+    // Main title right table: 120x22mm block anchored to frame's top-right corner.
+    // Three columns in first row (14+53+53=120mm, 14mm height), one column in second row (120mm, 8mm height).
+    val mainTitleRightTable: FrameSpec = FrameSpec(
+        size = Size(120.mm, 22.mm),
+        cells = listOf(
+            // First row: three cells 14mm, 53mm, 53mm wide, 14mm high
+            FrameCell.Constant(rect(0, 0, 14, 14), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
+            FrameCell.Constant(rect(14, 0, 53, 14), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
+            FrameCell.Constant(rect(67, 0, 53, 14), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK)),
+
+            // Second row: one cell 120mm wide, 8mm high
+            FrameCell.Constant(rect(0, 14, 120, 8), "", borders = CellBorders(BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK, BorderWeight.THICK))
+        )
+    )
+
     // Continuation page stamp (§34.3 ЕСКД): 185x15mm stamp for pages 2+.
     // Only first 3 rows of header strip (two blank + row with Изм/Лист/№ докум./Подп./Дата).
     // No signature block rows below, unlike firstPageStamp.

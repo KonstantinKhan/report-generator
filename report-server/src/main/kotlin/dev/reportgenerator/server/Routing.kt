@@ -75,12 +75,14 @@ fun Application.reportServerModule(
                 return@post
             }
 
+            val customerRepresentative = call.parameters["customerRepresentative"]?.toBooleanStrictOrNull() ?: true
+
             val id = UUID.randomUUID().toString()
             val file = withContext(Dispatchers.IO) {
                 val dto = pdmClient.fetchSpecification(versionId.toString())
 
                 val data = mapToSpecificationData(dto)
-                val document = specification(data)
+                val document = specification(data, withChangeLog = customerRepresentative)
                 val laidOut = layOut(document, textMeasurer, fonts::resolve)
                 val pdfBytes = renderToPdf(laidOut, fonts.registry)
 

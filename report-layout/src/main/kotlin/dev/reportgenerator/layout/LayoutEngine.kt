@@ -95,11 +95,18 @@ private fun staticBlockRect(spec: FrameSpec, base: Rect, baseCorner: Corner, blo
     return Rect(origin.x, origin.y, spec.size.width, spec.size.height)
 }
 
+private fun staticBlockRect(spec: FrameSpec, base: Rect, baseCorner: Corner, blockCorner: Corner, offset: Point): Rect {
+    val origin = resolveAnchor(base, baseCorner, blockCorner, spec.size, offset)
+    return Rect(origin.x, origin.y, spec.size.width, spec.size.height)
+}
+
 // One registration per static block = one line here; a new block needs no new origin function,
 // just a (spec, base, corner) entry — see Anchor.kt / docs/wiki/architecture-improvements.md.
 private fun firstPageBlockRects(setup: PageSetup, frameRect: Rect, pageRect: Rect): List<Rect> = buildList {
     setup.frame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_RIGHT)) }
     setup.leftMarginFrame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
+    setup.specLeftTable?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
+    setup.mainTitleRightTable?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_RIGHT, Corner.BOTTOM_RIGHT, Point(Length.ZERO, Length.ofMillimeters(40.0)))) }
     setup.belowFrame?.let { add(staticBlockRect(it, pageRect, Corner.BOTTOM_RIGHT)) }
 }
 
@@ -288,6 +295,12 @@ private fun renderPages(
             }
             setup.leftMarginFrame?.let { spec ->
                 chrome += drawFrame(spec, leftMarginFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
+            }
+            setup.specLeftTable?.let { spec ->
+                chrome += drawFrame(spec, specLeftTableOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
+            }
+            setup.mainTitleRightTable?.let { spec ->
+                chrome += drawFrame(spec, mainTitleRightTableOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
             }
             setup.belowFrame?.let { spec ->
                 chrome += drawFrame(spec, belowFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
@@ -536,6 +549,17 @@ private fun leftMarginFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): 
 // "Копировал"/"Формат" notes sit outside the frame entirely.
 private fun belowFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
     resolveAnchor(metrics.pageRect, Corner.BOTTOM_RIGHT, size = spec.size)
+
+// Specification left table: anchored to the frame's TOP-LEFT corner with TOP-RIGHT block corner.
+// Top edge at 292mm from page bottom (= 5mm from top on A4), right edge at frame's left margin.
+private fun specLeftTableOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
+    resolveAnchor(metrics.frameRect, Corner.TOP_LEFT, Corner.TOP_RIGHT, spec.size)
+
+// Main title right table: anchored to the frame's BOTTOM-RIGHT corner with BOTTOM-LEFT block corner.
+// Positioned above firstPageStamp (offset up by its height + 40mm of stamp).
+private fun mainTitleRightTableOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
+    resolveAnchor(metrics.frameRect, Corner.BOTTOM_RIGHT, Corner.BOTTOM_RIGHT, spec.size,
+                  Point(Length.ZERO, Length.ofMillimeters(40.0)))
 
 private fun resolveBindings(bindings: FrameBindings?, pageNumber: Int, totalPages: Int): Map<FrameField, String> =
     buildMap {
