@@ -165,16 +165,30 @@ data class FlowColumn(val id: String, val width: Double, val stick: FlowStick = 
 
 // `text` is the logical text, `lines` an optional manual line break of it (no auto-wrap then), `rotate` 0|90.
 // `style`: a key of `FlowTableSpec.styles` or a style name the consumer knows (null = consumer default).
+// `span` (columns) / `rowSpan` (rows) only in the `rows` form of the header (1 in the single-row form).
 data class FlowHeaderCell(
     val text: String,
     val lines: List<String>? = null,
     val rotate: Int = 0,
     val align: TextAlign = TextAlign.CENTER,
-    val style: String? = null
+    val style: String? = null,
+    val span: Int = 1,
+    val rowSpan: Int = 1
 )
 
-// `cells` are keyed by column id and must cover every column. `repeat`: header on every page, not only the first.
-data class FlowHeader(val height: Double, val repeat: Boolean = true, val cells: Map<String, FlowHeaderCell>)
+// One row of the multi-level header: `cells` in grid column order (placed over the table columns, not by id),
+// only the columns not taken by a rowSpan from above.
+data class FlowHeaderRow(val height: Double, val cells: List<FlowHeaderCell>)
+
+// Single-row form: `cells` keyed by column id, must cover every column, `height` is the row height.
+// Multi-level form: `rows` (not empty, `cells` empty), `height` = the sum of the row heights.
+// `repeat`: header on every page, not only the first.
+data class FlowHeader(
+    val height: Double,
+    val repeat: Boolean = true,
+    val cells: Map<String, FlowHeaderCell>,
+    val rows: List<FlowHeaderRow> = emptyList()
+)
 
 // The group title row has the same per-column cells as a row; the title text goes into `column`.
 // `spacerBefore` / `spacerAfter` = blank bordered rows around the title.

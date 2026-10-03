@@ -39,3 +39,16 @@ internal fun layoutGrid(rows: List<FixedRow>, columns: Int): Grid {
 }
 
 internal fun TableBlock.grid(): Grid = layoutGrid(expandedRows(), columns.size)
+
+// The `rows` form of a flow table header as table-block rows (heights are irrelevant to the placement), so the
+// header is placed and checked by the same grid code.
+internal fun FlowHeader.headerGridRows(): List<FixedRow> =
+    rows.map { r -> FixedRow(Num.Lit(r.height), r.cells.map { CellSpec(span = it.span, rowSpan = it.rowSpan) }) }
+
+// A `rows`-form header cell placed on the grid: `row` / `col` = its origin (0-based), `index` = its position in
+// the row's `cells` (for error paths), the cell carries span / rowSpan.
+// Valid headers only (TemplateValidator checked the coverage); an invalid one yields the cells that could be placed.
+data class FlowHeaderPlacement(val row: Int, val col: Int, val index: Int, val cell: FlowHeaderCell)
+
+fun FlowHeader.placeCells(columns: Int): List<FlowHeaderPlacement> =
+    layoutGrid(headerGridRows(), columns).cells.map { FlowHeaderPlacement(it.row, it.col, it.cellIndex, rows[it.rowIndex].cells[it.cellIndex]) }

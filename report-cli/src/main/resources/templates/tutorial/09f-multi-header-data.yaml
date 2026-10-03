@@ -1,0 +1,6 @@
+# Данные для 09f-multi-header.yaml.
+doc: {designation: "ТЕСТ.01.000"}
+item:
+  - {name: "Вал", productCode: "ТЕСТ.301.001", docDesignation: "ТЕСТ.01.001", qty: 2}
+  - {name: "Втулка", productCode: "ТЕСТ.301.002", docDesignation: "ТЕСТ.01.002", qty: 10}
+  - {name: "Болт М6x20", qty: 24}

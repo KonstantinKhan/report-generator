@@ -367,16 +367,33 @@ object TemplateValidator {
             if (missing.isNotEmpty()) errors += TemplateError(path, "missing cell for column ${missing.joinToString { "'$it'" }}")
         }
 
+        fun headerCell(c: FlowHeaderCell, cp: String) {
+            if (c.rotate !in setOf(0, 90)) errors += TemplateError("$cp.rotate", "expected 0|90, got ${c.rotate}")
+            if (c.lines != null && c.lines.isEmpty()) errors += TemplateError("$cp.lines", "must not be empty")
+            if (c.lines != null && c.rotate != 0) errors += TemplateError("$cp.lines", "'lines' (manual break) is for horizontal text, not with rotate")
+            style(c.style, "$cp.style")
+        }
+
         t.header?.let { h ->
             val hp = "$p.header"
-            if (h.height <= 0.0) errors += TemplateError("$hp.height", "must be > 0, got ${h.height}")
-            coverage(h.cells.keys, "$hp.cells")
-            h.cells.forEach { (id, c) ->
-                val cp = "$hp.cells.$id"
-                if (c.rotate !in setOf(0, 90)) errors += TemplateError("$cp.rotate", "expected 0|90, got ${c.rotate}")
-                if (c.lines != null && c.lines.isEmpty()) errors += TemplateError("$cp.lines", "must not be empty")
-                if (c.lines != null && c.rotate != 0) errors += TemplateError("$cp.lines", "'lines' (manual break) is for horizontal text, not with rotate")
-                style(c.style, "$cp.style")
+            if (h.rows.isNotEmpty()) {
+                if (h.cells.isNotEmpty()) errors += TemplateError(hp, "'rows' excludes 'height' + 'cells' (use 'rows' or 'height' + 'cells')")
+                h.rows.forEachIndexed { r, row ->
+                    val rp = "$hp.rows[$r]"
+                    if (row.height <= 0.0) errors += TemplateError("$rp.height", "must be > 0, got ${row.height}")
+                    row.cells.forEachIndexed { i, c ->
+                        val cp = "$rp.cells[$i]"
+                        if (c.span < 1) errors += TemplateError("$cp.span", "must be >= 1")
+                        if (c.rowSpan < 1) errors += TemplateError("$cp.rowSpan", "must be >= 1")
+                        headerCell(c, cp)
+                    }
+                }
+                // same placement and messages as the rows of a `table` block
+                if (h.rows.all { r -> r.cells.all { it.span >= 1 && it.rowSpan >= 1 } }) layoutGrid(h.headerGridRows(), t.columns.size).errors.forEach { errors += TemplateError("$hp.rows[${it.rowIndex}].cells", it.message) }
+            } else {
+                if (h.height <= 0.0) errors += TemplateError("$hp.height", "must be > 0, got ${h.height}")
+                coverage(h.cells.keys, "$hp.cells")
+                h.cells.forEach { (id, c) -> headerCell(c, "$hp.cells.$id") }
             }
         }
 

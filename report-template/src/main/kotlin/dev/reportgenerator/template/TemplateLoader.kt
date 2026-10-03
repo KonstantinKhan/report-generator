@@ -448,11 +448,29 @@ private class Reader {
 
     private fun flowHeader(node: YamlNode, path: String): FlowHeader {
         val m = node.asMap(path)
-        m.allow(path, "height", "repeat", "cells")
+        m.allow(path, "height", "repeat", "cells", "rows")
+        val repeat = m.optional("repeat")?.let { bool(it, "$path.repeat") } ?: true
+        val rowsNode = m.optional("rows")
+        if (rowsNode != null) {
+            val single = listOf("height", "cells").filter { m.optional(it) != null }
+            if (single.isNotEmpty()) fail(path, node, "'rows' excludes ${single.joinToString { "'$it'" }} (use 'rows' or 'height' + 'cells')")
+            val rows = rowsNode.asList("$path.rows").items.mapIndexed { i, n -> flowHeaderRow(n, "$path.rows[$i]") }
+            return FlowHeader(height = rows.sumOf { it.height }, repeat = repeat, cells = emptyMap(), rows = rows)
+        }
+        if (m.optional("height") == null && m.optional("cells") == null) fail(path, node, "expected 'rows' or 'height' + 'cells'")
         return FlowHeader(
             height = plainNumber(m.required("height", path), "$path.height"),
-            repeat = m.optional("repeat")?.let { bool(it, "$path.repeat") } ?: true,
-            cells = cellMap(m.required("cells", path), "$path.cells", ::flowHeaderCell)
+            repeat = repeat,
+            cells = cellMap(m.required("cells", path), "$path.cells") { n, p -> flowHeaderCell(n, p) }
+        )
+    }
+
+    private fun flowHeaderRow(node: YamlNode, path: String): FlowHeaderRow {
+        val m = node.asMap(path)
+        m.allow(path, "height", "cells")
+        return FlowHeaderRow(
+            height = plainNumber(m.required("height", path), "$path.height"),
+            cells = m.required("cells", path).asList("$path.cells").items.mapIndexed { i, n -> flowHeaderGridCell(n, "$path.cells[$i]") }
         )
     }
 
@@ -472,12 +490,21 @@ private class Reader {
     private fun <T> cellMap(node: YamlNode, path: String, cell: (YamlNode, String) -> T): Map<String, T> =
         node.asMap(path).entries.entries.associate { (k, v) -> k.content to cell(v, "$path.${k.content}") }
 
-    private fun flowHeaderCell(node: YamlNode, path: String): FlowHeaderCell {
+    // Cell of the `rows` form: always an object (no scalar / `~` shorthand), may carry `span` / `rowSpan`.
+    private fun flowHeaderGridCell(node: YamlNode, path: String): FlowHeaderCell {
+        node.asMap(path)
+        return flowHeaderCell(node, path, grid = true)
+    }
+
+    private fun flowHeaderCell(node: YamlNode, path: String, grid: Boolean = false): FlowHeaderCell {
         if (node is YamlNull) return FlowHeaderCell("")
         if (node is YamlScalar) return FlowHeaderCell(node.content)
         val m = node.asMap(path)
-        m.allow(path, "text", "lines", "rotate", "align", "style")
+        if (grid) m.allow(path, "text", "lines", "rotate", "align", "style", "span", "rowSpan")
+        else m.allow(path, "text", "lines", "rotate", "align", "style")
         return FlowHeaderCell(
+            span = m.optional("span")?.let { integer(it, "$path.span") } ?: 1,
+            rowSpan = m.optional("rowSpan")?.let { integer(it, "$path.rowSpan") } ?: 1,
             text = m.string("text", path) ?: fail(path, node, "missing required field 'text'"),
             lines = m.optional("lines")?.asList("$path.lines")?.items?.mapIndexed { i, n -> n.scalar("$path.lines[$i]") },
             rotate = m.optional("rotate")?.let { rotate(it, "$path.rotate") } ?: 0,

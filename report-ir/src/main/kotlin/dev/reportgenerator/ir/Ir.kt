@@ -55,12 +55,27 @@ data class IrColumn(
     val stickToLastRow: Boolean = false
 )
 
+// A header cell on the header grid: origin `row` / `col` (0-based, columns of IrTable.columns), `span` columns and
+// `rowSpan` rows; it is drawn as one rectangle over that area.
+data class IrHeaderCell(val cell: IrCell, val row: Int, val col: Int, val span: Int = 1, val rowSpan: Int = 1)
+
+// Multi-level header: row heights top to bottom + the cells with their grid areas (every column covered once per row).
+data class IrHeaderGrid(val rowHeights: List<Length>, val cells: List<IrHeaderCell>)
+
 // repeat: drawn on every page (false: first page only, later pages start at the top margin).
+// Single-row header: `cells` (one per column, in column order) + `height`. Multi-level header: `grid`; `cells` is
+// then empty and `height` is the total of the row heights.
 data class IrTableHeader(
     val cells: List<IrCell>,
     val height: Length? = null,
-    val repeat: Boolean = true
-)
+    val repeat: Boolean = true,
+    val grid: IrHeaderGrid? = null
+) {
+    // The grid of a fixed-height header; a single-row header is the one-row grid of its cells. Null: auto height.
+    fun asGrid(): IrHeaderGrid? = grid ?: height?.let { h ->
+        IrHeaderGrid(listOf(h), cells.mapIndexed { i, c -> IrHeaderCell(c, 0, i) })
+    }
+}
 
 // Group title row of a fixed-rowHeight table. `column` (IrColumn.id) carries the title text, so the row has
 // the same per-column cells as a data row; null = one full-width cell. spacerBefore / spacerAfter = blank

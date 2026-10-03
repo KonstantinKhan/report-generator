@@ -702,6 +702,46 @@ RUN $T/09b-groups.yaml output --data $T/09b-groups-data.yaml
   рисуется одной строкой и при нехватке высоты обрезается до первого куска. Неповёрнутую шапку без `lines` кегль переносит по ширине колонки на несколько строк, и высоту `header.height` нужно увеличить.
 - Стили и переносы проверены тестами (`FlowTableTest`, `FlowTablesTest`, `TableMeasurementTest`, `StylesAndBreaksGoldenTest`, `TemplateMainTest`).
 
+### 9е. Многоуровневая шапка: `header.rows`, `span`, `rowSpan`
+
+Файлы `tutorial/09f-multi-header.yaml` + `tutorial/09f-multi-header-data.yaml`. Лист А3 альбомный, колонки 7+60+45+70+55+70+16+16+16+16+24 = 395 мм (ширина области контента 420 - 20 - 5).
+
+Вместо `height` + `cells` по id шапка задаётся списком рядов; ячейки каждого ряда идут по порядку колонок, как в блоке `table`:
+
+```yaml
+      header:
+        repeat: true
+        rows:
+          - height: 9
+            cells:
+              - {text: "№ строки", rowSpan: 2, rotate: 90, style: headSmall}
+              - {text: "Наименование", rowSpan: 2, style: head}
+              ...                                                   # 6 ячеек с rowSpan: 2
+              - {text: "Количество", span: 4, style: head}          # объединяет 4 колонки
+              - {text: "Примечание", rowSpan: 2, style: head}
+          - height: 18
+            cells:                                                  # только колонки, не занятые rowSpan сверху: 4 штуки
+              - {text: "на изделие", lines: ["на из-", "делие"], style: headSmall}
+              ...
+```
+
+Запуск: `RUN $T/09f-multi-header.yaml output --data $T/09f-multi-header-data.yaml`.
+
+**Что увидеть** (из SVG, `grep '<rect'`; шапка 9 + 18 = 27 мм, от 5 до 32 мм, строки данных с 32 мм):
+
+| Ячейка | `<rect x y width height>` |
+|---|---|
+| «№ строки» (`rowSpan: 2`) | `20 5 7 27` |
+| «Наименование» | `27 5 60 27` |
+| «Количество» (`span: 4`) | `327 5 64 9` |
+| «на изделие» / «на комплект» / «на регулировку» / «всего» (ряд 2) | `327 14 16 18`, `343 14 16 18`, `359 14 16 18`, `375 14 16 18` |
+| «Примечание» | `391 5 24 27` |
+
+- Ячейки ставятся по порядку на колонки, а не по id; id колонок нужны строкам данных. Каждый ряд покрывает все колонки ровно один раз (свои `span` плюс колонки, занятые `rowSpan` сверху), `rowSpan` не выходит за последний ряд: правило и тексты ошибок те же, что у блока `table`.
+- Высота шапки это сумма высот рядов; она же сдвигает вниз содержимое, на каждой странице при `repeat: true`.
+- Текст по центру объединённого прямоугольника; повёрнутый («№ строки», 7 x 27 мм) тоже, но рисуется только первая строка переноса: текст должен помещаться в высоту объединённой ячейки.
+- `rows` и `height` / `cells` взаимоисключающие. Однорядная шапка (шаги 9а, 9д) не меняется.
+
 ## Шаг 10. Сквозной пример
 
 **Цель:** собрать с нуля законченный документ «Ведомость покупных изделий»: лист, штамп первой и следующих страниц, боковая надпись, поток с группами и итогами.
@@ -802,6 +842,9 @@ RUN $T/10-complete.yaml output --data $T/10-complete-data.yaml
 | неизвестный `base` стиля | `23-flow-style-base` | `blocks[1].table.styles.head.base: unknown style 'tableHeadr' (designation, frameText, frameTextLarge, groupHeader, heading, mainText, tableHeader, tableText, totalText)` |
 | опечатка в ключе стиля | `24-flow-style-key` | `blocks[1].table.styles.head.sise: unknown field 'sise' (allowed: base, bold, italic, size, underline) (line 25)` |
 | псевдоним = имя встроенного стиля | `25-flow-style-shadow` | `blocks[1].table.styles.tableText: alias 'tableText' shadows a built-in style` |
+| шапка: ряд не покрывает колонки | `26-flow-header-gap` | `blocks[1].table.header.rows[0].cells: cell spans add up to 10, table has 11 columns` |
+| шапка: `rowSpan` за последний ряд | `27-flow-header-rowspan` | `blocks[1].table.header.rows[1].cells: cell 3 rowSpan 2 exceeds the table's 2 rows` |
+| шапка: две формы сразу | `28-flow-header-both` | `blocks[1].table.header: 'rows' excludes 'height' (use 'rows' or 'height' + 'cells') (line 41)` |
 | неизвестное поле item | `15-flow-bind` | `blocks[0].table.row.cells.name.bind: unknown field 'item.nme' (item has: kind, name, qty, unit, status, note, pos), did you mean 'item.name'?` |
 | поворот шапки 270 | `16-flow-rotate270` | `blocks[0].table.header.cells.pos.rotate: expected 0\|90, got 270` |
 | `where` читает computed | `17-flow-where-computed` | `blocks[0].table.where.field: computed field 'pos' is not available here (where / groupBy read the record's own fields, ...)` |
@@ -811,7 +854,7 @@ RUN $T/10-complete.yaml output --data $T/10-complete-data.yaml
 | в поле строк разные типы | `20-mixed-types-data` (данные к `09-flow.yaml`) | `item[2].qty: mixed types in one field: String here, Integer in item[0].qty (row 3 and row 1); use one type or tag the values (!str, !int, ...)` |
 | файла `--data` нет | (scratch) | `error: data file not found: /путь/nofile.yaml` |
 
-Запуск любого из них: `RUN $T/errors/12-flow-width.yaml output --data $T/09b-groups-data.yaml` (для плоских файлов `--data` не нужен). Файлы `22`-`25` запускаются с `--data $T/09e-styles-and-breaks-data.yaml`. Файлы `19`, `20` это данные: `RUN $T/09-flow.yaml output --data $T/errors/19-row-missing-data.yaml`.
+Запуск любого из них: `RUN $T/errors/12-flow-width.yaml output --data $T/09b-groups-data.yaml` (для плоских файлов `--data` не нужен). Файлы `22`-`25` запускаются с `--data $T/09e-styles-and-breaks-data.yaml`, файлы `26`-`28` с `--data $T/09f-multi-header-data.yaml`. Файлы `19`, `20` это данные: `RUN $T/09-flow.yaml output --data $T/errors/19-row-missing-data.yaml`.
 
 **Куда смотреть при ошибке**
 

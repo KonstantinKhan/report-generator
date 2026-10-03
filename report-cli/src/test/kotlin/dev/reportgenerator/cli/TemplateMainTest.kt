@@ -234,4 +234,24 @@ class TemplateMainTest {
         assertEquals((1..5).map(Int::toString), lineNumberTexts(svg, 30).filter { it.length == 1 }.take(5))
         dir.deleteRecursively()
     }
+
+    // tutorial/09f: multi-level header, A3 landscape: 7 cells over both rows (27 mm), "Количество" over 4 columns (64 x 9 mm),
+    // 4 cells under it (16 x 18 mm); the data rows start at 5 + 27 = 32 mm.
+    @Test
+    fun `tutorial 09f draws the merged header cells through the real engine`() {
+        val dir = Files.createTempDirectory("template-main").toFile()
+        val template = TemplateLoader.load(resource("tutorial/09f-multi-header.yaml"), Styles.named.keys)
+        val data = DataYaml.parseFile(resource("tutorial/09f-multi-header-data.yaml"))
+
+        val svg = renderTemplate(template, data.context, 1, dir, data.items).filter { it.extension == "svg" }.single().readText()
+
+        val rects = Regex("""<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="none"""").findAll(svg)
+            .map { listOf(it.groupValues[1], it.groupValues[2], it.groupValues[3], it.groupValues[4]).map(String::toDouble) }.toList()
+        val header = rects.filter { it[1] < 32.0 && it[3] < 100.0 }
+        assertEquals(12, header.size)
+        assertTrue(listOf(327.0, 5.0, 64.0, 9.0) in header)
+        assertEquals(4, header.count { it[1] == 14.0 && it[2] == 16.0 && it[3] == 18.0 })
+        assertEquals(7, header.count { it[1] == 5.0 && it[3] == 27.0 })
+        dir.deleteRecursively()
+    }
 }

@@ -396,8 +396,9 @@ blocks:
 |---|---|
 | `rowHeight` | высота строки, мм (> 0), обязательно |
 | `columns` | список `{id, width, stick, align}`; `width` мм; `stick`: `first` / `last` / `none` (по умолчанию) = `stickToFirstRow` / `stickToLastRow` (одностроковое значение садится на первую / последнюю физическую строку строки, растянутой другой колонкой); `align`: `left` (по умолчанию) / `center`, умолчание для ячейки строки |
-| `header` | `{height, repeat, cells}`: `height` мм; `repeat: true` (по умолчанию) шапка на каждой странице, `false` только на первой (остальные страницы начинаются у верхнего поля); `cells` по id колонки, покрывают все колонки, `~` пустая |
-| `header.cells.<id>` | `{text, lines, rotate, align, style}` или скаляр (= `text`). `text` обязателен; `lines` ручной перенос (без авто-переноса, не вместе с `rotate`); `rotate`: 0 / 90 (270 ошибка); `align`: `center` по умолчанию |
+| `header` | одна из двух форм. Однорядная: `{height, repeat, cells}`: `height` мм; `cells` по id колонки, покрывают все колонки, `~` пустая. Многоуровневая: `{repeat, rows}`, см. «Многоуровневая шапка». `repeat: true` (по умолчанию) шапка на каждой странице, `false` только на первой (остальные страницы начинаются у верхнего поля). `rows` и `height` / `cells` взаимоисключающие, нужна одна из форм |
+| `header.cells.<id>` | `{text, lines, rotate, align, style}` или скаляр (= `text`). `text` обязателен; `lines` ручной перенос (без авто-переноса, не вместе с `rotate`); `rotate`: 0 / 90 (270 ошибка); `align`: `center` по умолчанию. `span` / `rowSpan` здесь недопустимы (ошибка неизвестного поля): они только в форме `rows` |
+| `header.rows[]` | `{height, cells}`: `height` мм (> 0), `cells` список ячеек в порядке колонок, см. «Многоуровневая шапка» |
 | `groupTitle` | `{column, style, align, spacerBefore, spacerAfter}` (только вместе с `groupBy`): заголовок группы кладётся в колонку `column` (остальные ячейки строки пустые); `spacerBefore` / `spacerAfter` пустые строки с границами до и после (по умолчанию 0, в спецификации 2 и 1); `align` `center` по умолчанию. Без секции заголовок идёт одной ячейкой на всю ширину без спейсеров |
 | `row` | `{cells}`: ячейки по id колонки, покрывают все колонки |
 | `row.cells.<id>` | `{text, bind, format, optional, align, style, cases}`, скаляр (= `text`) или `~` (пустая). `bind` только вида `${item.поле}` или `${line.number}` (номер физической строки, у ячейки без `cases` и `format`); `align` по умолчанию из колонки; `cases` условные варианты содержимого. `\n` в тексте (литерал `"a\nb"` или значение из данных) принудительный перенос строки, см. «Принудительный перенос `\n`» |
@@ -466,6 +467,36 @@ styles:
 Контракт проверяет по схеме (пути `blocks[5].table...`): bind-ы ячеек и вариантов, поля и литералы в `where` / `sortBy` /
 `groupBy` / `cases[].where`, `format` под тип, пересечение имён `computed` с полями. Неизвестное поле это ошибка
 загрузки (с подсказкой ближайшего имени), а не пустой столбец.
+
+### Многоуровневая шапка: `header.rows`, `span`, `rowSpan`
+
+Шапка в несколько рядов с объединением колонок (`span`) и рядов (`rowSpan`). Однорядная форма (`height` + `cells` по id) работает как раньше, байт в байт.
+
+```yaml
+header:
+  repeat: true
+  rows:                        # вместо height + cells
+    - height: 9
+      cells:                   # список по порядку колонок (как в блоке table), каждая ячейка объект
+        - {text: "№ строки", rowSpan: 2, rotate: 90, style: headSmall}
+        - {text: "Наименование", rowSpan: 2, style: head}
+        - {text: "Количество", span: 4, style: head}
+        - {text: "Примечание", rowSpan: 2, style: head}
+    - height: 18
+      cells:                   # только колонки, не занятые rowSpan сверху
+        - {text: "на изделие", lines: ["на из-", "делие"], style: headSmall}
+        - ...
+```
+
+- Ячейка: `text` (обязателен), `lines`, `rotate` (0 / 90), `align` (по умолчанию `center`), `style`, `span` (колонок, по умолчанию 1), `rowSpan` (рядов, по умолчанию 1). Скаляра и `~` вместо ячейки нет: ячейка всегда объект.
+- Ячейки ставятся по порядку на колонки таблицы (`columns`), а не по id. Ряд перечисляет только ячейки, которые в нём начинаются; колонки, занятые `rowSpan` сверху, пропускаются. id колонок остаются для строк данных.
+- Высота шапки = сумма `height` рядов (по ней считается верх содержимого на каждой странице, где шапка рисуется). `height` ряда > 0.
+- `rows` и `height` / `cells` вместе: ошибка (`blocks[1].table.header: 'rows' excludes 'height' (use 'rows' or 'height' + 'cells')`); ни одной из форм: `expected 'rows' or 'height' + 'cells'`.
+- Покрытие то же, что в блоке `table` (один и тот же код `layoutGrid` и те же тексты): каждый ряд покрывает все колонки ровно один раз (свои `span` плюс колонки, занятые сверху), `rowSpan` не выходит за последний ряд шапки. Ошибки с путями вида `...header.rows[1].cells: cell spans add up to 10, table has 11 columns`, `cell 3 rowSpan 2 exceeds the table's 2 rows`, `cell 0 overlaps a cell spanning down from a row above`. `span` / `rowSpan` < 1 ошибка по пути ячейки (`...rows[0].cells[2].span: must be >= 1`).
+- Рисование: каждая ячейка один прямоугольник над своей областью сетки (ширины объединённых колонок, высоты объединённых рядов), граница толстая, как у ячеек однорядной шапки. Текст по центру прямоугольника (по `align`), перенос по ширине объединённой ячейки, `\n` и `lines` работают как раньше. Повёрнутый текст в ячейке с `rowSpan` центрируется в объединённом прямоугольнике и измеряется по его высоте.
+- Ограничения: у повёрнутой ячейки рисуется только ПЕРВАЯ строка переноса (как и в однорядной шапке), текст должен помещаться в высоту объединённой ячейки; `lines` не вместе с `rotate`; тексты шапки литералы (без bind, формата, `cases`); заголовок шапки не участвует в нумерации строк и не двигает счёт; `repeat: false` действует на все ряды шапки.
+
+Пример для листа А3 альбомного: [tutorial/09f-multi-header.yaml](../../report-cli/src/main/resources/templates/tutorial/09f-multi-header.yaml), разбор в [template-guide.md](template-guide.md) (шаг 9е).
 
 ### Данные таблицы: where, sortBy, groupBy, computed, cases, format
 
@@ -695,7 +726,9 @@ table:
 **Соответствие IR** (`report-ir` `FlowTables.build`): `columns[]` в `IrColumn` (`stick: first` в
 `stickToFirstRow`, `last` в `stickToLastRow`), `rowHeight` в `IrTable.rowHeight`, `header` в `IrTableHeader`
 (`height`, `repeat`; ячейка: `rotate: 90` в `VERTICAL_BOTTOM_TO_TOP`, `lines` в `manualLines`; текст шапки только
-здесь), `groupTitle` и `keep.titleChain` в `IrGroupTitle` (`column`, `style`, `align`, `spacerBefore`,
+здесь; форма `rows` в `IrTableHeader.grid` = `IrHeaderGrid(rowHeights, cells)`, ячейка `IrHeaderCell(cell, row, col, span, rowSpan)`,
+`cells` пуст, `height` сумма рядов; однорядная форма остаётся `cells` + `height` без `grid`, `IrTableHeader.asGrid()` даёт её как сетку из одного ряда,
+раскладка рисует шапку только через `asGrid()`), `groupTitle` и `keep.titleChain` в `IrGroupTitle` (`column`, `style`, `align`, `spacerBefore`,
 `spacerAfter`, `keepWithRows`), `fill: blank` в `IrTable.fillBlank`, ячейки строки в `IrCell` по bind-ам записи
 `item`, `totals` в `IrTotalRow` (`scope: group` в `IrGroup.footer`, `table` в `IrTable.footer`), `lines` и ячейка
 `${line.number}` в `IrTable.lineNumbers`. Движок строит из
@@ -827,6 +860,7 @@ enum без тегов, его домен задаёт сам шаблон (`ord
 
 ## Известные ограничения
 
+- Многоуровневая шапка: повёрнутый текст рисуется одной (первой) строкой; тексты шапки литералы; `span` / `rowSpan` только в форме `header.rows`.
 - Поворот текста только 0 и 90 (в Layout IR нет других ориентаций): `text` с `rotate: 270` и ячейки таблицы с итоговым поворотом (блок + ячейка)
   не 0 и не 90 дают ошибку валидации с YAML-путём, а не падение в раскладке.
 - `flow` без `table:` в `TemplateMain` ничего не рисует; с `table:` рисует через движок (строки из `item:` в `--data`).
@@ -863,6 +897,9 @@ first.flowRegion    // область контента минус блоки с 
 | `FlowArithmetic.kt` | арифметические `computed` (типы, зависимости, цикл, точный расчёт) |
 | `FlowTotals.kt` | агрегаты `totals` |
 | `FlowLines`, `FlowTableSpec.lineNumberColumn()` (`Model.kt`) | раздел `lines` и колонка с `${line.number}` |
+| `FlowHeader`, `FlowHeaderRow`, `FlowHeaderCell` (`Model.kt`) | шапка: однорядная (`cells` по id) или `rows` (ячейки по порядку, `span`, `rowSpan`) |
+| `layoutGrid`, `FlowHeader.placeCells()` (`TableGrid.kt`) | расстановка и проверка покрытия: общий код блока `table` и шапки `rows` |
+| `IrTableHeader.grid` / `asGrid()`, `IrHeaderGrid`, `IrHeaderCell` (`report-ir`) | шапка как сетка; раскладка `drawRichHeader` рисует по ней один прямоугольник на ячейку |
 | `FlowContract` (`FlowContract.kt`) | проверка bind-ов, предикатов, `sortBy`, `groupBy`, `cases`, `format` по корню `item` схемы |
 | `FlowTables.build(spec, schema, rows)` (`report-ir`) | собирает `IrTable`; итоги группы в `IrGroup.footer`, итоги таблицы в `IrTable.footer`; раскладка держит подвал вместе с последней строкой данных |
 
@@ -884,6 +921,10 @@ first.flowRegion    // область контента минус блоки с 
   `FlowTotalsTest` (арифметика `computed`: типы, цикл, деление на ноль, точность; `totals`: sum / count / min / max / avg,
   `where`, `skipEmpty`, контракт и валидация с путями).
 - `report-ir`: `FlowTablesTest` (YAML-описание в `IrTable`: стили, шапка, optional; объектные псевдонимы: наследование и переопределение в шапке, строке, заголовке группы, итоге).
+- `report-template`: `MultiHeaderTest` (шапка `rows`: загрузка, взаимоисключение форм, расстановка, покрытие, `rowSpan` за последний ряд, пути ошибок).
+- `report-ir`: `MultiHeaderIrTest` (форма `rows` в `IrHeaderGrid`, однорядная шапка без изменений, `asGrid()`).
+- `report-layout`: `MultiHeaderLayoutTest` (прямоугольники объединённых ячеек, центровка текста, суммарная высота, повтор шапки, `repeat: false`, однорядная шапка = её сетка).
+- `reports/specification`: `MultiHeaderGoldenTest` (золотые файлы `header-multi-a3`, `header-rotated-rowspan`, `header-multi-pages`, координаты проверены вручную).
 - `report-ir`: `FlowTotalsIrTest` (`totals` в `IrGroup.footer` / `IrTable.footer`, стили, колонки).
 - `report-template`: `LineNumbersTemplateTest` (корень `line`, `lines` и ошибки с путями, `${line.number}` вне ячейки строки, файл данных).
 - `report-layout`: `LineNumberLayoutTest` (номера физических строк, заголовок / спейсеры / итоги без номера, перенос цепочки и подвала,

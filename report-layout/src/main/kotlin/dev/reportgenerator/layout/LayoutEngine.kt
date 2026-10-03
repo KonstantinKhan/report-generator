@@ -138,7 +138,7 @@ private fun buildHeaderLayout(
 
     val fixedHeight = header.height
     return if (fixedHeight != null) {
-        HeaderLayout(drawRichHeader(header, columns, offsets, top, fixedHeight, textMeasurer, fontResolver), fixedHeight)
+        HeaderLayout(drawRichHeader(header, columns, offsets, top, textMeasurer, fontResolver), fixedHeight)
     } else {
         val row = measureRow(IrRow(header.cells), columns, offsets, textMeasurer)
         HeaderLayout(drawRow(row, top, fontResolver), row.height)
@@ -388,33 +388,41 @@ private fun underlineElements(
     }
 }
 
+// Every header cell is one thick-bordered rectangle over its grid area: the widths of the spanned columns, the
+// heights of the spanned rows. A single-row header is the one-row grid of its cells (IrTableHeader.asGrid).
 private fun drawRichHeader(
     header: IrTableHeader,
     columns: List<IrColumn>,
     offsets: List<Length>,
     top: Length,
-    height: Length,
     textMeasurer: TextMeasurer,
     fontResolver: (TextStyle) -> FontRef
-): List<PageElement> =
-    header.cells.mapIndexed { index, cell ->
-        val columnWidth = columns[index].width
-        val x = offsets[index]
+): List<PageElement> {
+    val grid = requireNotNull(header.asGrid())
+    val rowTops = grid.rowHeights.runningFold(top) { y, h -> y + h }
+    return grid.cells.flatMap { placed ->
+        val cell = placed.cell
+        val x = offsets[placed.col]
+        val width = columns.subList(placed.col, placed.col + placed.span).map { it.width }.reduce { a, b -> a + b }
+        val y = rowTops[placed.row]
+        val endRow = minOf(placed.row + placed.rowSpan, grid.rowHeights.size)
+        val height = rowTops[endRow] - y
 
         val border = Rectangle(
-            rect = Rect(x, top, columnWidth, height),
+            rect = Rect(x, y, width, height),
             style = LayoutBorderStyle(width = ptToLength(Styles.tableBorder.widthPt))
         )
 
         val text = when (cell.orientation) {
             IrTextOrientation.HORIZONTAL ->
-                drawHorizontalHeaderCell(cell, x, top, columnWidth, height, textMeasurer, fontResolver)
+                drawHorizontalHeaderCell(cell, x, y, width, height, textMeasurer, fontResolver)
             IrTextOrientation.VERTICAL_BOTTOM_TO_TOP ->
-                drawVerticalHeaderCell(cell, x, top, columnWidth, height, textMeasurer, fontResolver)
+                drawVerticalHeaderCell(cell, x, y, width, height, textMeasurer, fontResolver)
         }
 
         listOf<PageElement>(border) + text
-    }.flatten()
+    }
+}
 
 // Fixed row height (unlike data rows): text is vertically centered within it rather than
 // driving the height, since the header's own IrTableHeader.height is the source of truth.

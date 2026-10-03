@@ -5,6 +5,8 @@ import dev.reportgenerator.template.DataSchema
 import dev.reportgenerator.template.DataValue
 import dev.reportgenerator.template.FlowCellRenderer
 import dev.reportgenerator.template.FlowFill
+import dev.reportgenerator.template.FlowHeaderCell
+import dev.reportgenerator.template.placeCells
 import dev.reportgenerator.template.FlowShaper
 import dev.reportgenerator.template.FlowStick
 import dev.reportgenerator.template.FlowTableSpec
@@ -41,17 +43,33 @@ object FlowTables {
             IrColumn(it.id, it.width.mm, stickToFirstRow = it.stick == FlowStick.FIRST, stickToLastRow = it.stick == FlowStick.LAST)
         }
 
+        fun headerCell(cell: FlowHeaderCell, stylePath: String) = IrCell(
+            text = cell.text,
+            style = styles.resolve(cell.style ?: DEFAULT_HEADER_STYLE, stylePath),
+            orientation = if (cell.rotate == 90) TextOrientation.VERTICAL_BOTTOM_TO_TOP else TextOrientation.HORIZONTAL,
+            align = cell.align.toIr(),
+            manualLines = cell.lines
+        )
         val header = spec.header?.let { h ->
-            IrTableHeader(
-                cells = spec.columns.map { column ->
-                    val cell = h.cells.getValue(column.id)
-                    IrCell(
-                        text = cell.text,
-                        style = styles.resolve(cell.style ?: DEFAULT_HEADER_STYLE, "$path.header.cells.${column.id}.style"),
-                        orientation = if (cell.rotate == 90) TextOrientation.VERTICAL_BOTTOM_TO_TOP else TextOrientation.HORIZONTAL,
-                        align = cell.align.toIr(),
-                        manualLines = cell.lines
+            if (h.rows.isNotEmpty()) {
+                val rowHeights = h.rows.map { it.height.mm }
+                IrTableHeader(
+                    cells = emptyList(),
+                    height = rowHeights.reduce { a, b -> a + b },
+                    repeat = h.repeat,
+                    grid = IrHeaderGrid(
+                        rowHeights = rowHeights,
+                        cells = h.placeCells(spec.columns.size).map {
+                            IrHeaderCell(
+                                headerCell(it.cell, "$path.header.rows[${it.row}].cells[${it.index}].style"),
+                                it.row, it.col, it.cell.span, it.cell.rowSpan
+                            )
+                        }
                     )
+                )
+            } else IrTableHeader(
+                cells = spec.columns.map { column ->
+                    headerCell(h.cells.getValue(column.id), "$path.header.cells.${column.id}.style")
                 },
                 height = h.height.mm,
                 repeat = h.repeat
