@@ -21,6 +21,7 @@ import dev.reportgenerator.ir.PageSetup
 import dev.reportgenerator.ir.TextAlign
 import dev.reportgenerator.ir.TextStyle
 import dev.reportgenerator.layoutir.FontRef
+import dev.reportgenerator.layoutir.Line
 import dev.reportgenerator.layoutir.PositionedText
 import dev.reportgenerator.layoutir.Rectangle
 import kotlin.test.BeforeTest
@@ -296,11 +297,15 @@ class LayoutEngineTest {
 
         val result = layOut(document, textMeasurer, stubFontResolver)
 
-        // page frame (1) + blank, blank, header, blank, data row (5 single-column bordered rows)
+        // Bordered rows are drawn as four thin Lines per cell (not Rectangles; the only Rectangle is the
+        // page frame). Count left-border verticals: blank, blank, header, blank, data row (5 rows)
         // + however many blank filler rows it takes to cover the rest of an A4 page.
-        val rectangles = result.pages.first().elements.filterIsInstance<Rectangle>()
-        assertTrue(rectangles.size >= 6, "expected at least frame + 5 bordered rows, got ${rectangles.size}")
-        assertTrue(rectangles.filter { it.rect.width == 60.mm }.all { it.rect.height == 8.mm })
+        val lines = result.pages.first().elements.filterIsInstance<Line>()
+        val leftBorders = lines.filter { it.from.x == it.to.x && it.from.x == 20.mm }
+        assertTrue(leftBorders.size >= 5, "expected at least 5 bordered rows, got ${leftBorders.size}")
+        assertTrue(leftBorders.count { it.to.y - it.from.y == 8.mm } >= 5, "the 5 real rows must be 8mm tall")
+        // top + bottom border of each of those rows spans exactly the 60mm column
+        assertTrue(lines.count { it.from.y == it.to.y && it.to.x - it.from.x == 60.mm } >= 10)
     }
 
     @Test
@@ -394,9 +399,12 @@ class LayoutEngineTest {
 
         val result = layOut(document, textMeasurer, stubFontResolver)
 
-        // content height 30mm / 8mm rows = 3 whole filler rows (24mm), plus 1 page-frame rectangle
-        val rectangles = result.pages.single().elements.filterIsInstance<Rectangle>()
-        assertEquals(4, rectangles.size)
+        // content height 30mm / 8mm rows = 3 whole filler rows (24mm; the last absorbs the remainder),
+        // each drawn as Lines with one left border; the only Rectangle is the page frame.
+        val elements = result.pages.single().elements
+        assertEquals(1, elements.filterIsInstance<Rectangle>().size)
+        val leftBorders = elements.filterIsInstance<Line>().filter { it.from.x == it.to.x && it.from.x == 5.mm }
+        assertEquals(3, leftBorders.size)
     }
 
     @Test
@@ -413,8 +421,8 @@ class LayoutEngineTest {
         val result = layOut(document, textMeasurer, stubFontResolver)
 
         val rowBorderWidth = result.pages.first().elements
-            .filterIsInstance<Rectangle>()
-            .first { it.rect.width == 60.mm }
+            .filterIsInstance<Line>()
+            .first { it.from.y == it.to.y && it.to.x - it.from.x == 60.mm }
             .style.width.toMillimeters()
 
         assertTrue(rowBorderWidth < 0.4, "expected a thin (~0.25mm) row border, got ${rowBorderWidth}mm")
