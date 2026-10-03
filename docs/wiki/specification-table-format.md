@@ -23,6 +23,15 @@
 - Следуется 1 пустой строкой (спэйсер *after*)
 - Содержит строки данных с фиксированной высотой 8мм
 
+**Где живут константы.** Структура и стиль таблицы (ширины колонок, `stick`, тексты и стили шапки, высота
+строки 8 мм, число пустых строк до/после заголовка, колонка заголовка группы, заполнение страницы, цепочка
+заголовка, `bind` каждой ячейки строки) описаны в блоке `body` (`type: flow`, секция `table:`) файла
+`report-ir/src/main/resources/templates/gost-spec.yaml`. Кодом остаются: заголовки групп, их порядок и фильтр
+по виду (`Specification.kt`, `GROUPS`), сквозная нумерация позиций и текст количества
+(`SpecificationDataContext.kt`, `item.quantityText` помечено TEMPORARY до `format`). Алгоритм (измерение, перенос,
+пагинация, дозаполнение) остаётся кодом `report-layout`. Справка по YAML: `template-yaml.md`, раздел
+«Таблица потока».
+
 Все строки (заголовок, данные, пустые) имеют **тонкие границы** на каждой ячейке
 (ГОСТ 2.303: 0.7pt ≈ 0.247mm, ~S/3 от основной линии).
 
@@ -44,22 +53,29 @@ data class TextStyle(
 Оба поля `italic`/`underline` — семантические метки (не гарантируют наличие
 шрифта в конкретной гарнитуре). Рендер будет синтетическим.
 
-**`IrTable`** — добавлено:
+**`IrTable`**:
 ```kotlin
 data class IrTable(
     val columns: List<IrColumn>,
-    val header: IrTableHeader? = null,
-    val content: List<IrGroup>,
-    val rowHeight: Length? = null,           // ← new
-    val groupTitleColumn: String? = null,    // ← new
-    // ... остальное
+    val header: IrTableHeader?,
+    val content: List<IrTableElement>,
+    val style: TableStyle = ...,
+    val rowHeight: Length? = null,
+    val groupTitle: IrGroupTitle = IrGroupTitle(),   // заменил groupTitleColumn
+    val fillBlank: Boolean = true                    // только при rowHeight != null
 )
 ```
 
 - `rowHeight = null` → автовысота (старое поведение, обратная совместимость)
 - `rowHeight = 8.mm` → **фиксированная** высота, word-wrap в физические строки
-- `groupTitleColumn = "name"` → заголовок группы помещается **в одну колонку**
-  (не full-width спан), остальные колонки остаются пусты
+- `groupTitle.column = "name"` → заголовок группы помещается **в одну колонку**
+  (не full-width спан, это `column = null`), остальные колонки остаются пусты;
+  `spacerBefore` / `spacerAfter` (по умолчанию 2 / 1), `style`, `align`, `keepWithRows` (цепочка заголовка)
+- `fillBlank` — дозаполнять страницу пустыми строками (`fill: blank` в YAML)
+- `IrTableHeader.repeat` — шапка на каждой странице (по умолчанию да); `false`: только на первой,
+  остальные страницы начинаются у верхнего поля
+- Текст шапки хранится только в `IrTableHeader.cells`; поле `IrColumn.header` удалено (дубль)
+- Эту структуру собирает `FlowTables.build(spec, schema, groups)` из YAML-описания и данных кода
 
 **Стили**:
 ```kotlin
@@ -118,7 +134,7 @@ Layout IR: добавляет в `PageElement` список дополнител
 
 #### Блоки и спейсеры
 
-При `table.rowHeight != null` (в `buildBlocks`):
+При `table.rowHeight != null` (в `buildBlocks`; числа 2 и 1 это `groupTitle.spacerBefore` / `spacerAfter`):
 ```
 группа:
   2x blank (спэйсер before) [всегда keepWithNext = true]
@@ -144,7 +160,7 @@ Layout IR: добавляет в `PageElement` список дополнител
 В `renderPages`:
 1. Отслеживаем `pageFinalY: List<Length>` — финальная Y-координата закрытой
    каждой страницы
-2. После основного цикла выкладки, если `table.rowHeight != null`:
+2. После основного цикла выкладки, если `table.rowHeight != null` и `table.fillBlank`:
    ```kotlin
    for (page in pages) {
        val remaining = contentBottom(page) - pageFinalY[page]
@@ -190,132 +206,18 @@ SVG имеет встроенную поддержку `font-style="italic"`, б
 ### Report Builder (`reports/specification`)
 
 ```kotlin
-table(rowHeight = 8.mm, groupTitleColumn = "name") {
-    val items = data.items
-    
-    // 1. Сборочные единицы  2. Детали  3. Стандартные изделия  4. Прочие изделия  5. Материалы
-    // — каждый через groupIfNotEmpty(title, items.filter { it.kind == ... }),
-    // позиция nextPosition += 1 сквозная
+// Specification.kt: данные кода, структура из YAML
+val groups = GROUPS.mapNotNull { (title, kind) ->                 // заголовки, порядок, фильтр: код
+    data.items.filter { it.kind == kind }.takeIf { it.isNotEmpty() }
+        ?.let { items -> FlowGroup(title, items.map { itemRecord(it, ++nextPosition) }) }   // нумерация: код
 }
+table(FlowTables.build(GostSpecTemplate.flowTable, dataContext.schema, groups, GostSpecTemplate.flowTablePath))
 ```
 
-**Выравнивание по колонкам**:
-```kotlin
-row(sequenceNumber, designation, name, qty, note) {
-    cell(designation, align = TextAlign.LEFT)      // Обозначение
-    cell(name, align = TextAlign.LEFT)              // Наименование
-    cell(sequenceNumber, align = TextAlign.CENTER)  // Поз.
-    cell(qty, align = TextAlign.CENTER)             // Кол.
-    cell(note, align = TextAlign.CENTER)            // Примечание
-    // Формат / Зона: TextAlign.CENTER (дефолт)
-}
-```
+Запись строки `item` (схема объявлена адаптером `toDataContext()`): `position` Integer, `designation` String
+(нет значения = пусто), `name` String, `quantityText` String (TEMPORARY, считает `formattedQuantity()`),
+`unit` String (только материалы, у остальных значения нет), `kind` Enum. Ячейки с отсутствующим значением в YAML
+помечены `optional: true`.
 
-## Тестовое покрытие
-
-### `SpecificationBuilderTest`
-- 5 блоков в правильном порядке (ГОСТ соответствие)
-- Сквозная нумерация позиций через все 5 блоков
-- Пропуск пустого блока (если материалов нет, блок "Материалы" не появляется)
-- Единица в "Примечании" только у материалов, у остальных видов пусто даже если `unit` задан
-
-### `TableMeasurementTest` / `LayoutEngineTest`
-- `splitRowIntoPhysicalRows`: переполнение → N физических строк, каждая
-  высотой ровно `rowHeight`
-- Границы: каждая строка → `Rectangle` на каждую колонку (thin border)
-- Спейсеры: 2 пустые до заголовка + 1 после (проверка через count `BorderedRowBlock`)
-- Дозаполнение: маленький формат → нижняя часть всё равно заполнена бордерными
-  пустыми строками до `contentBottom`
-- Перенос: ширина = колонка минус 1 мм с обеих сторон (LEFT и CENTER); слово шире ширины
-  рвётся по символам; двойные пробелы не дают пустых строк
-- Сирота: заголовок группы + спейсеры переезжают на следующую страницу вместе с первой
-  строкой данных, если она не помещается
-- Выравнивание: `TextAlign.LEFT` паддинг, `TextAlign.CENTER` центрирование,
-  координаты меняются в зависимости от ширины
-
-### Golden snapshots
-- `StaticBlocksGoldenTest` (`reports/specification/src/test/resources/golden/*.txt`) —
-  текстовые дампы раскладки; фикстуры `spec-group-boundary` (граница группы у низа страницы)
-  и `spec-all-kinds-long-designation` (5 блоков, длинное обозначение, единицы) покрывают
-  поведение переноса/сироты/единиц
-- `specification.svg` — полный документ с 5 блоками, все визуальные детали
-  (границы, заголовки, подчёркивание, выравнивание)
-- `simple-table.svg` / `.png` — синтетический italic на горизонтальном и
-  вертикальном тексте
-
-## Multi-row item layout
-
-Когда элемент (название, обозначение) переносится на несколько физических строк (word-wrap), служебные колонки размещаются избирательно:
-
-- **Первая строка**: формат, зона, позиция (служебная информация в начале)
-- **Последняя строка**: количество, примечания (итоговая информация в конце)
-- **Все строки**: основной текст (обозначение, название)
-
-Реализация через флаги в `IrColumn`:
-```kotlin
-data class IrColumn(
-    val id: String,
-    val width: Length,
-    val header: String? = null,
-    val stickToFirstRow: Boolean = false,  // формат, зона, позиция
-    val stickToLastRow: Boolean = false    // количество, примечания
-)
-```
-
-В `splitRowIntoPhysicalRows()` для каждой физической строки проверяется флаг и подставляется текст либо на первой строке, либо на последней, либо на соответствующей линии основного контента.
-
-## Continuation-страницы
-
-Полностью реализованы (§34.3 ЕСКД):
-- На странице 2+ рисуются: frame rectangle, left margin frame, continuation stamp
-- Continuation stamp (185×15mm): 3 строки header (2 пустые + 1 с "Изм"/"Лист"/№ докум./Подп./Дата + номер листа справа)
-- Последняя полная фiller-строка на каждой странице рисуется БЕЗ нижней границы → визуально слита со штампом
-- Оставшееся место (не кратное 8mm) добавляется к последней фiller-строке → нет пустого зазора перед штампом
-
-## Представитель заказчика (ПЗ)
-
-Два варианта спецификации:
-- **С ПЗ** (default): включает таблицу представителя заказчика (mainTitleRightTable)
-- **Без ПЗ**: исключает таблицу представителя заказчика
-
-### Таблицы для ПЗ
-
-#### specLeftTable (левый верхний угол, вертикальная)
-- **Размер**: 12×120mm
-- **Структура**: два столбца (5mm + 7mm), две строки (60mm + 60mm)
-- **Содержимое**: 
-  - Первая строка (y=0..60mm): "Справ. №" (первый столбец)
-  - Вторая строка (y=60..120mm): (пусто)
-- **Ориентация**: текст вертикальный (VERTICAL_BOTTOM_TO_TOP)
-- **Привязка**: к левой границе рамки, внизу (BOTTOM_LEFT, BOTTOM_RIGHT)
-
-#### mainTitleRightTable (правый верхний угол, горизонтальная)
-- **Размер**: 120×22mm
-- **Структура**: три колонки (14mm + 53mm + 53mm) в первой строке, одна колонка (120mm) во второй строке
-- **Высоты строк**: 14mm (первая), 8mm (вторая)
-- **Содержимое**: пусто (для заполнения ПЗ вручную)
-- **Привязка**: к правой границе рамки, над основной надписью (BOTTOM_RIGHT с offset 40mm)
-- **Границы**: толстые (BorderWeight.THICK)
-- **Регистрация**: зарегистрирована в union-фильтре contentBottom() для правильного резервирования места
-
-### API
-
-```kotlin
-// С представителем заказчика (default)
-specification(data)
-// или явно
-specification(data, customerRepresentative = true)
-
-// Без представителя заказчика
-specification(data, customerRepresentative = false)
-```
-
-## Что НЕ входит (известные ограничения)
-
-- **Italic-шрифт** — собственного italic-начертания GOST Type B нет
-  (лицензионно не получилось). Вместо этого синтетический наклон (shear
-  matrix в PDF, `font-style` в SVG).
-- **Strikethrough** — не реализован (не требуется спецификацией, но может
-  потребоваться позже по аналогии с underline).
-- **Индивидуальные border-стили** на ячейке — все границы тонкие (0.7pt),
-  нет per-cell customization.
+Паритет со старым кодом проверяет `SpecificationTableParityTest`: `IrTable` из YAML равен таблице, которую строил
+прежний код (`LegacySpecificationTable`, только в тестах; кроме `IrColumn.header`, поля больше нет).

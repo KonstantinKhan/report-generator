@@ -1,12 +1,18 @@
 package dev.reportgenerator.template
 
+import dev.reportgenerator.geometry.Length
+import dev.reportgenerator.geometry.mm
+
 // Semantic checks on a parsed Template: ids, attach references (block + anchor existence), cycles,
-// `when` compatibility, table shape, blockset params/ports and recursion. Collects all errors.
+// `when` compatibility, table shape, flow table structure, blockset params/ports and recursion. Collects all
+// errors. `styleNames` = the text style names the consumer knows; when given, flow table style references are
+// checked against it (otherwise they stay opaque keys).
 object TemplateValidator {
-    fun validate(template: Template): List<TemplateError> {
+    fun validate(template: Template, styleNames: Set<String>? = null): List<TemplateError> {
         val errors = ArrayList<TemplateError>()
         val sheet = template.sheet
         validateSheet(sheet, errors)
+        val flowWidth = if (errors.isEmpty()) flowWidth(sheet) else null
 
         val rootAnchors = SHEET_ANCHOR_NAMES + sheet.anchors.keys
         val rootAttach = template.root
@@ -27,15 +33,27 @@ object TemplateValidator {
 
         val scope = Scope(
             rootName = "sheet", rootHas = { it in rootAnchors }, prefix = "", defaultAttach = rootAttach,
-            params = null, defs = template.blocksets, topLevel = true
+            params = null, defs = template.blocksets, topLevel = true, flowWidth = flowWidth, styleNames = styleNames
         )
         validateScope(template.blocks, scope, errors)
+        val flows = template.blocks.filter { it is FlowBlock && it.table != null }
+        if (flows.size > 1) {
+            val second = template.blocks.indexOf(flows[1])
+            errors += TemplateError("blocks[$second].table", "only one flow table per template (the engine lays out a single main table)")
+        }
         return errors
     }
 
-    fun require(template: Template) {
-        val errors = validate(template)
+    fun require(template: Template, styleNames: Set<String>? = null) {
+        val errors = validate(template, styleNames)
         if (errors.isNotEmpty()) throw TemplateException(errors)
+    }
+
+    // Width of the flow region as the template declares it: the sheet's content area (a flow with a table has no
+    // size and `reserves` only cut its bottom). Compared at Length resolution (0.01 mm), no tolerance.
+    private fun flowWidth(sheet: SheetSpec): Length {
+        val format = SheetFormats.resolve(sheet)
+        return format.width - sheet.margins.left.mm - sheet.margins.right.mm
     }
 
     private class Scope(
@@ -45,7 +63,9 @@ object TemplateValidator {
         val defaultAttach: AttachSpec,
         val params: Map<String, String?>?,
         val defs: Map<String, BlockSetDef>,
-        val topLevel: Boolean
+        val topLevel: Boolean,
+        val flowWidth: Length? = null,
+        val styleNames: Set<String>? = null
     )
 
     private fun validateSheet(sheet: SheetSpec, errors: MutableList<TemplateError>) {
@@ -220,6 +240,7 @@ object TemplateValidator {
             }
             is FlowBlock -> {
                 b.size?.let { size(it) }
+                b.table?.let { validateFlowTable(b, it, "$p.table", scope, errors) }
                 if (b.reserves) errors += TemplateError("$p.reserves", "flow block cannot reserve space")
                 if (b.size == null && b.attach != null) errors += TemplateError("$p.attach", "flow block without size fills the flow region and cannot be attached")
                 if (b.size == null && !scope.topLevel) errors += TemplateError("$p.size", "flow block inside a blockset needs a size")
@@ -292,6 +313,90 @@ object TemplateValidator {
             .map { TemplateError("${paths[it.rowIndex]}.cells", it.message) }
             .distinct()
             .forEach { errors += it }
+    }
+
+    private fun validateFlowTable(b: FlowBlock, t: FlowTableSpec, p: String, scope: Scope, errors: MutableList<TemplateError>) {
+        if (b.size != null) errors += TemplateError("${p.removeSuffix(".table")}.size", "flow table fills the flow region, remove 'size'")
+        if (b.visibleOn != PageSelector.ALL) errors += TemplateError("${p.removeSuffix(".table")}.when", "flow table is drawn on every page, 'when' must be all")
+        if (!scope.topLevel) errors += TemplateError(p, "flow table is allowed only at the top level, not inside a blockset")
+        if (t.rowHeight <= 0.0) errors += TemplateError("$p.rowHeight", "must be > 0, got ${t.rowHeight}")
+
+        if (t.columns.isEmpty()) errors += TemplateError("$p.columns", "flow table needs at least one column")
+        val ids = LinkedHashSet<String>()
+        t.columns.forEachIndexed { i, c ->
+            val cp = "$p.columns[$i]"
+            when {
+                !ID_PATTERN.matches(c.id) -> errors += TemplateError("$cp.id", "invalid id '${c.id}' (letters, digits, _ and -)")
+                !ids.add(c.id) -> errors += TemplateError("$cp.id", "duplicate column id '${c.id}'")
+            }
+            if (c.width <= 0.0) errors += TemplateError("$cp.width", "must be > 0, got ${c.width}")
+        }
+        val flowWidth = scope.flowWidth
+        if (flowWidth != null && t.columns.isNotEmpty() && t.columns.all { it.width > 0.0 }) {
+            val total = t.columns.fold(Length.ZERO) { acc, c -> acc + c.width.mm }
+            if (total != flowWidth) {
+                errors += TemplateError(
+                    "$p.columns",
+                    "column widths sum to ${total.toMillimeters()} mm, flow region is ${flowWidth.toMillimeters()} mm wide " +
+                        "(sheet content width, compared to 0.01 mm, no tolerance)"
+                )
+            }
+        }
+
+        val aliasKeys = t.styles.keys
+        val known = scope.styleNames
+        t.styles.forEach { (alias, target) ->
+            val sp = "$p.styles.$alias"
+            if (!ID_PATTERN.matches(alias)) errors += TemplateError(sp, "invalid style alias '$alias' (letters, digits, _ and -)")
+            if (known != null) {
+                if (alias in known) errors += TemplateError(sp, "alias '$alias' shadows a built-in style")
+                if (target !in known) errors += TemplateError(sp, "unknown style '$target' (${known.sorted().joinToString()})")
+            }
+        }
+        fun style(name: String?, path: String) {
+            if (name == null || known == null || name in aliasKeys || name in known) return
+            errors += TemplateError(path, "unknown style '$name' (aliases: ${aliasKeys.joinToString().ifEmpty { "none" }}; built-in: ${known.sorted().joinToString()})")
+        }
+        fun coverage(cells: Set<String>, path: String) {
+            cells.filter { it !in ids }.forEach { errors += TemplateError("$path.$it", "unknown column '$it' (columns: ${ids.joinToString()})") }
+            val missing = ids.filter { it !in cells }
+            if (missing.isNotEmpty()) errors += TemplateError(path, "missing cell for column ${missing.joinToString { "'$it'" }}")
+        }
+
+        t.header?.let { h ->
+            val hp = "$p.header"
+            if (h.height <= 0.0) errors += TemplateError("$hp.height", "must be > 0, got ${h.height}")
+            coverage(h.cells.keys, "$hp.cells")
+            h.cells.forEach { (id, c) ->
+                val cp = "$hp.cells.$id"
+                if (c.rotate !in setOf(0, 90)) errors += TemplateError("$cp.rotate", "expected 0|90, got ${c.rotate}")
+                if (c.lines != null && c.lines.isEmpty()) errors += TemplateError("$cp.lines", "must not be empty")
+                if (c.lines != null && c.rotate != 0) errors += TemplateError("$cp.lines", "'lines' (manual break) is for horizontal text, not with rotate")
+                style(c.style, "$cp.style")
+            }
+        }
+
+        t.groupTitle?.let { g ->
+            val gp = "$p.groupTitle"
+            if (g.column !in ids) errors += TemplateError("$gp.column", "unknown column '${g.column}' (columns: ${ids.joinToString()})")
+            if (g.spacerBefore < 0) errors += TemplateError("$gp.spacerBefore", "must be >= 0, got ${g.spacerBefore}")
+            if (g.spacerAfter < 0) errors += TemplateError("$gp.spacerAfter", "must be >= 0, got ${g.spacerAfter}")
+            style(g.style, "$gp.style")
+        }
+
+        coverage(t.rowCells.keys, "$p.row.cells")
+        t.rowCells.forEach { (id, c) ->
+            val cp = "$p.row.cells.$id"
+            if (c.text != null && c.bind != null) errors += TemplateError(cp, "cell has both 'text' and 'bind'")
+            c.bind?.let {
+                checkBind(it, "$cp.bind", errors)
+                if (BIND_EXPR.matches(it) && !Binding.path(it).startsWith("item.")) {
+                    errors += TemplateError("$cp.bind", "flow row binds read the row record: expected \${item.<field>}, got '$it'")
+                }
+            }
+            checkBindOptions(c.bind, c.format != null, c.optional, cp, errors)
+            style(c.style, "$cp.style")
+        }
     }
 
     private fun validateRow(row: FixedRow, p: String, errors: MutableList<TemplateError>) {

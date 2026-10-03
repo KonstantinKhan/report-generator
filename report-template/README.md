@@ -1,10 +1,19 @@
 # report-template
 
 Declarative page template: YAML -> model -> validation -> absolute geometry.
-Stage 2: the static blocks of the GOST specification sheet (stamps, margin tables) are described in
-`report-ir/src/main/resources/templates/gost-spec.yaml`; `FrameSpecs` (content) and `LayoutEngine`
-(placement, page visibility, content reservation) are driven by it. The paginated flow table itself is
-still engine code. Units in YAML: mm. Internally `Length` (1/100 mm).
+Stage 2: the whole specification sheet is described in `report-ir/src/main/resources/templates/gost-spec.yaml`:
+the static blocks (stamps, margin tables; `FrameSpecs` content, `LayoutEngine` placement, page visibility,
+content reservation) and the main (flow) table, a `type: flow` block with a `table:` section. The section says
+WHAT is drawn (columns, header, group title and spacers, row cells as `bind: ${item.x}`, styles, fill, keep);
+the layout algorithm (measure, wrap, pagination, blank fill) stays Kotlin in `report-layout`, and the data
+(groups, numbering, `item` records) is supplied by code. `FlowTableSpec` (model) is turned into an `IrTable`
+by `report-ir` `FlowTables`. Units in YAML: mm. Internally `Length` (1/100 mm).
+
+Flow table validation (`TemplateValidator`): unknown keys, column ids and widths, header / row cells must cover
+every column, group title column exists, binds are `${item.x}`, style names (aliases from `styles:` or the
+consumer's names, pass `styleNames` to `TemplateLoader.load`), and the column widths must sum to the flow region
+width = the template sheet's content width, exactly at 0.01 mm (no tolerance). `TemplateContract` checks the
+row binds against the `item` root of the data schema.
 
 ```kotlin
 val template = TemplateLoader.load(yamlText)            // parse + validate, throws TemplateException

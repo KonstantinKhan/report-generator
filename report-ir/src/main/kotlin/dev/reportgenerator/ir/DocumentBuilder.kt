@@ -52,6 +52,11 @@ class DocumentBuilder {
         elements += builder.build()
     }
 
+    // A ready table, e.g. built from a YAML flow spec (FlowTables).
+    fun table(table: IrTable) {
+        elements += table
+    }
+
     fun build(): IrDocument = IrDocument(currentPageSetup, elements)
 }
 
@@ -81,7 +86,7 @@ class TableBuilder(private val rowHeight: Length? = null, private val groupTitle
         content += GroupBuilder(title, constraints).apply(block).build()
     }
 
-    fun build(): IrTable = IrTable(columns, header, content, style, rowHeight, groupTitleColumn)
+    fun build(): IrTable = IrTable(columns, header, content, style, rowHeight, IrGroupTitle(column = groupTitleColumn))
 }
 
 class HeaderBuilder {
@@ -103,8 +108,8 @@ class HeaderBuilder {
 class ColumnsBuilder {
     private val columns = mutableListOf<IrColumn>()
 
-    fun column(id: String, width: Length, header: String? = null, stickToFirstRow: Boolean = false, stickToLastRow: Boolean = false) {
-        columns += IrColumn(id, width, header, stickToFirstRow, stickToLastRow)
+    fun column(id: String, width: Length, stickToFirstRow: Boolean = false, stickToLastRow: Boolean = false) {
+        columns += IrColumn(id, width, stickToFirstRow, stickToLastRow)
     }
 
     fun build(): List<IrColumn> = columns

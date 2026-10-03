@@ -14,6 +14,8 @@ import dev.reportgenerator.ir.TextOrientation
 import dev.reportgenerator.ir.TextStyle
 import dev.reportgenerator.template.Binding
 import dev.reportgenerator.template.BlockType
+import dev.reportgenerator.template.FlowBlock
+import dev.reportgenerator.template.FlowTableSpec
 import dev.reportgenerator.template.LineWeight
 import dev.reportgenerator.template.PageKind
 import dev.reportgenerator.template.ResolvedBlock
@@ -34,7 +36,17 @@ object GostSpecTemplate {
         val yaml = requireNotNull(GostSpecTemplate::class.java.getResourceAsStream(RESOURCE)) {
             "template resource missing: $RESOURCE"
         }.readBytes().toString(Charsets.UTF_8)
-        TemplateLoader.load(yaml)
+        TemplateLoader.load(yaml, Styles.named.keys)
+    }
+
+    // The main (flow) table of the sheet, and its YAML location for error messages.
+    val flowTable: FlowTableSpec by lazy { flowBlock().second.table!! }
+    val flowTablePath: String by lazy { "blocks[${flowBlock().first}].table" }
+
+    private fun flowBlock(): Pair<Int, FlowBlock> {
+        val found = template.blocks.withIndex().filter { (it.value as? FlowBlock)?.table != null }
+        check(found.size == 1) { "template '${template.name}' must have exactly one flow block with a table, found ${found.size}" }
+        return found.single().index to found.single().value as FlowBlock
     }
 
     // Content of one slot as a FrameSpec. The template's own sheet is only used to resolve the block;

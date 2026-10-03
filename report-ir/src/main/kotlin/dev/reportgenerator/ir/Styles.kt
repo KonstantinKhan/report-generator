@@ -39,4 +39,16 @@ object Styles {
     // GOST 2.303: thin line = S/3..S/2 of the thick line (S == tableBorder, ~0.706mm here),
     // i.e. 0.235-0.353mm. 0.7pt ~= 0.247mm, inside that range.
     val tableBorderThin = BorderStyle(widthPt = 0.7)
+
+    // Style names usable as `style:` in YAML (flow tables), see FlowTables.
+    val named: Map<String, TextStyle> = linkedMapOf(
+        "mainText" to mainText,
+        "tableText" to tableText,
+        "heading" to heading,
+        "designation" to designation,
+        "tableHeader" to tableHeader,
+        "groupHeader" to groupHeader,
+        "frameText" to frameText,
+        "frameTextLarge" to frameTextLarge
+    )
 }

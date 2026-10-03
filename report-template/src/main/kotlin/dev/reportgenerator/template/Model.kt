@@ -136,14 +136,82 @@ data class TextBlock(
 ) : BlockSpec
 
 // Data-driven table region. Without `size` it fills the flow region (sheet content area minus reserves).
+// `table` describes the main (flow) table: structure and style only, the layout algorithm (measure, wrap,
+// pagination) stays in the engine. A flow with a table fills the flow region, so it has no `size`.
 data class FlowBlock(
     override val id: String,
     val size: SizeSpec? = null,
+    val table: FlowTableSpec? = null,
     override val anchors: Map<String, Vec> = emptyMap(),
     override val attach: AttachSpec? = null,
     override val visibleOn: PageSelector = PageSelector.ALL,
     override val reserves: Boolean = false
 ) : BlockSpec
+
+// `stickToFirstRow` / `stickToLastRow` of the engine: a single-line value of a row wrapped by another column
+// sits on the first / last physical line of that row.
+enum class FlowStick(val key: String) {
+    NONE("none"), FIRST("first"), LAST("last");
+
+    companion object {
+        fun byKey(key: String): FlowStick? = entries.firstOrNull { it.key == key.lowercase() }
+    }
+}
+
+// `align` is the default for the column's row cell (a row cell's own `align` wins). Millimetres, no params.
+data class FlowColumn(val id: String, val width: Double, val stick: FlowStick = FlowStick.NONE, val align: TextAlign = TextAlign.LEFT)
+
+// `text` is the logical text, `lines` an optional manual line break of it (no auto-wrap then), `rotate` 0|90.
+// `style`: a key of `FlowTableSpec.styles` or a style name the consumer knows (null = consumer default).
+data class FlowHeaderCell(
+    val text: String,
+    val lines: List<String>? = null,
+    val rotate: Int = 0,
+    val align: TextAlign = TextAlign.CENTER,
+    val style: String? = null
+)
+
+// `cells` are keyed by column id and must cover every column. `repeat`: header on every page, not only the first.
+data class FlowHeader(val height: Double, val repeat: Boolean = true, val cells: Map<String, FlowHeaderCell>)
+
+// The group title row has the same per-column cells as a row; the title text goes into `column`.
+// `spacerBefore` / `spacerAfter` = blank bordered rows around the title.
+data class FlowGroupTitle(
+    val column: String,
+    val style: String? = null,
+    val align: TextAlign = TextAlign.CENTER,
+    val spacerBefore: Int = 0,
+    val spacerAfter: Int = 0
+)
+
+// Row cell: literal `text` or `bind` (root `item`, one record of the data the code supplies), `format` /
+// `optional` as for any bind. `align` null = the column's. No cell content = empty cell.
+data class FlowRowCell(
+    val text: String? = null,
+    val bind: String? = null,
+    val format: FormatSpec? = null,
+    val optional: Boolean = false,
+    val align: TextAlign? = null,
+    val style: String? = null
+)
+
+enum class FlowFill { NONE, BLANK }
+
+// `titleChain`: spacers + group title + the first data line stay together (a title is never left alone
+// at the bottom of a page).
+data class FlowKeep(val titleChain: Boolean = true)
+
+// `styles`: alias -> style name the consumer knows (cells may use either).
+data class FlowTableSpec(
+    val rowHeight: Double,
+    val columns: List<FlowColumn>,
+    val header: FlowHeader? = null,
+    val groupTitle: FlowGroupTitle? = null,
+    val rowCells: Map<String, FlowRowCell>,
+    val fill: FlowFill = FlowFill.NONE,
+    val keep: FlowKeep = FlowKeep(),
+    val styles: Map<String, String> = emptyMap()
+)
 
 // `format` / `optional` only go with `bind` (see FormatSpec, Binding).
 // `span` = columns, `rowSpan` = rows (the cell covers the rows below it in its columns; later rows leave those

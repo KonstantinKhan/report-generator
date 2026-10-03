@@ -172,4 +172,19 @@ class DataTest {
         val scalarList = assertFailsWith<TemplateException> { DataYaml.parse("doc: {l: [1, 2]}") }
         assertEquals("doc.l[0]", scalarList.errors.single().path)
     }
+
+    @Test
+    fun `item root as a sequence gives the flow table rows and a row schema`() {
+        val file = DataYaml.parseFile("doc: {a: x}\nitem:\n  - {n: 1, name: A}\n  - {n: 2, name: B, note: z}")
+
+        assertEquals(2, file.items.size)
+        assertEquals(DataValue.of(2), file.items[1].fields["n"])
+        assertEquals(
+            DataType.Record(mapOf("n" to DataType.Integer, "name" to DataType.Str, "note" to DataType.Str)),
+            file.context.schema.roots["item"]
+        )
+        assertEquals(DataType.Integer, file.context.schema.typeOf("item.n"))
+        // `item` as a plain mapping still works and yields no rows
+        assertEquals(0, DataYaml.parseFile("item: {n: 1}").items.size)
+    }
 }

@@ -24,10 +24,11 @@ object TemplateLoader {
         return Reader().template(root)
     }
 
-    // parse + validate.
-    fun load(yaml: String): Template = parse(yaml).also { TemplateValidator.require(it) }
+    // parse + validate. `styleNames` = the text style names the consumer knows (checked in flow tables).
+    fun load(yaml: String, styleNames: Set<String>? = null): Template =
+        parse(yaml).also { TemplateValidator.require(it, styleNames) }
 
-    fun load(path: Path): Template = load(Files.readString(path))
+    fun load(path: Path, styleNames: Set<String>? = null): Template = load(Files.readString(path), styleNames)
 }
 
 internal val PARAM_REF = Regex("""\$\{param\.([A-Za-z_][A-Za-z0-9_]*)}""")
@@ -201,9 +202,10 @@ private class Reader {
                 )
             }
             "flow" -> {
-                m.allow(path, COMMON_KEYS + "size")
+                m.allow(path, COMMON_KEYS + setOf("size", "table"))
                 FlowBlock(
                     id, m.optional("size")?.let { size(it, "$path.size") },
+                    m.optional("table")?.let { flowTable(it, "$path.table") },
                     common.anchors, common.attach, common.visibleOn, common.reserves
                 )
             }
@@ -239,6 +241,109 @@ private class Reader {
         val visibleOn: PageSelector,
         val reserves: Boolean
     )
+
+    private fun flowTable(node: YamlNode, path: String): FlowTableSpec {
+        val m = node.asMap(path)
+        m.allow(path, "rowHeight", "columns", "header", "groupTitle", "row", "fill", "keep", "styles")
+        val rowPath = "$path.row"
+        val row = m.required("row", path).asMap(rowPath)
+        row.allow(rowPath, "cells")
+        return FlowTableSpec(
+            rowHeight = plainNumber(m.required("rowHeight", path), "$path.rowHeight"),
+            columns = m.required("columns", path).asList("$path.columns").items.mapIndexed { i, n -> flowColumn(n, "$path.columns[$i]") },
+            header = m.optional("header")?.let { flowHeader(it, "$path.header") },
+            groupTitle = m.optional("groupTitle")?.let { flowGroupTitle(it, "$path.groupTitle") },
+            rowCells = cellMap(row.required("cells", rowPath), "$rowPath.cells", ::flowRowCell),
+            fill = m.optional("fill")?.let { n ->
+                when (n.scalar("$path.fill").lowercase()) {
+                    "blank" -> FlowFill.BLANK
+                    "none" -> FlowFill.NONE
+                    else -> fail("$path.fill", n, "expected blank|none")
+                }
+            } ?: FlowFill.NONE,
+            keep = m.optional("keep")?.let { n ->
+                val k = n.asMap("$path.keep")
+                k.allow("$path.keep", "titleChain")
+                FlowKeep(k.optional("titleChain")?.let { bool(it, "$path.keep.titleChain") } ?: true)
+            } ?: FlowKeep(),
+            styles = m.optional("styles")?.asMap("$path.styles")?.entries?.entries?.associate { (k, v) ->
+                k.content to v.scalar("$path.styles.${k.content}")
+            } ?: emptyMap()
+        )
+    }
+
+    private fun flowColumn(node: YamlNode, path: String): FlowColumn {
+        val m = node.asMap(path)
+        m.allow(path, "id", "width", "stick", "align")
+        return FlowColumn(
+            id = m.string("id", path) ?: fail(path, node, "missing required field 'id'"),
+            width = plainNumber(m.required("width", path), "$path.width"),
+            stick = m.optional("stick")?.let { n -> FlowStick.byKey(n.scalar("$path.stick")) ?: fail("$path.stick", n, "expected first|last|none") }
+                ?: FlowStick.NONE,
+            align = m.optional("align")?.let { flowAlign(it, "$path.align") } ?: TextAlign.LEFT
+        )
+    }
+
+    private fun flowHeader(node: YamlNode, path: String): FlowHeader {
+        val m = node.asMap(path)
+        m.allow(path, "height", "repeat", "cells")
+        return FlowHeader(
+            height = plainNumber(m.required("height", path), "$path.height"),
+            repeat = m.optional("repeat")?.let { bool(it, "$path.repeat") } ?: true,
+            cells = cellMap(m.required("cells", path), "$path.cells", ::flowHeaderCell)
+        )
+    }
+
+    private fun flowGroupTitle(node: YamlNode, path: String): FlowGroupTitle {
+        val m = node.asMap(path)
+        m.allow(path, "column", "style", "align", "spacerBefore", "spacerAfter")
+        return FlowGroupTitle(
+            column = m.string("column", path) ?: fail(path, node, "missing required field 'column'"),
+            style = m.string("style", path),
+            align = m.optional("align")?.let { flowAlign(it, "$path.align") } ?: TextAlign.CENTER,
+            spacerBefore = m.optional("spacerBefore")?.let { integer(it, "$path.spacerBefore") } ?: 0,
+            spacerAfter = m.optional("spacerAfter")?.let { integer(it, "$path.spacerAfter") } ?: 0
+        )
+    }
+
+    // Cells keyed by column id; `~` (null) = empty cell, a scalar = literal text.
+    private fun <T> cellMap(node: YamlNode, path: String, cell: (YamlNode, String) -> T): Map<String, T> =
+        node.asMap(path).entries.entries.associate { (k, v) -> k.content to cell(v, "$path.${k.content}") }
+
+    private fun flowHeaderCell(node: YamlNode, path: String): FlowHeaderCell {
+        if (node is YamlNull) return FlowHeaderCell("")
+        if (node is YamlScalar) return FlowHeaderCell(node.content)
+        val m = node.asMap(path)
+        m.allow(path, "text", "lines", "rotate", "align", "style")
+        return FlowHeaderCell(
+            text = m.string("text", path) ?: fail(path, node, "missing required field 'text'"),
+            lines = m.optional("lines")?.asList("$path.lines")?.items?.mapIndexed { i, n -> n.scalar("$path.lines[$i]") },
+            rotate = m.optional("rotate")?.let { rotate(it, "$path.rotate") } ?: 0,
+            align = m.optional("align")?.let { flowAlign(it, "$path.align") } ?: TextAlign.CENTER,
+            style = m.string("style", path)
+        )
+    }
+
+    private fun flowRowCell(node: YamlNode, path: String): FlowRowCell {
+        if (node is YamlNull) return FlowRowCell()
+        if (node is YamlScalar) return FlowRowCell(text = node.content)
+        val m = node.asMap(path)
+        m.allow(path, "text", "bind", "format", "optional", "align", "style")
+        return FlowRowCell(
+            text = m.string("text", path), bind = m.string("bind", path),
+            format = m.optional("format")?.let { format(it, "$path.format") },
+            optional = m.optional("optional")?.let { bool(it, "$path.optional") } ?: false,
+            align = m.optional("align")?.let { flowAlign(it, "$path.align") },
+            style = m.string("style", path)
+        )
+    }
+
+    // Flow table cells are drawn by the engine's bordered rows: left and center only.
+    private fun flowAlign(node: YamlNode, path: String): TextAlign = when (node.scalar(path).lowercase()) {
+        "left" -> TextAlign.LEFT
+        "center" -> TextAlign.CENTER
+        else -> fail(path, node, "expected left|center")
+    }
 
     private fun row(node: YamlNode, path: String): RowSpec {
         val m = node.asMap(path)

@@ -9,7 +9,6 @@ import dev.reportgenerator.ir.IrRow
 import dev.reportgenerator.ir.IrTable
 import dev.reportgenerator.ir.LayoutConstraints
 import dev.reportgenerator.ir.Styles
-import dev.reportgenerator.ir.TextAlign
 import dev.reportgenerator.ir.TextStyle
 
 private val CELL_PADDING: Length = 1.mm
@@ -240,11 +239,12 @@ private fun buildLegacyBlocks(
 }
 
 // Every physical row — group title, blank spacer, or a (possibly word-wrapped) data line — is a
-// BorderedRowBlock so it's uniformly bordered per column. The "2 blank before / 1 blank after"
-// spacer rule around a group title is expressed here as an unconditional keepWithNext chain
-// (blank, blank, header, blank all bind to the next block, ending at the group's first data line)
-// so they can never be split by a page break or left orphaned at the bottom of a page —
-// independent of the group's own keepTogether (which only decides whether the WHOLE group binds).
+// BorderedRowBlock so it's uniformly bordered per column. The spacer rule around a group title
+// (IrGroupTitle.spacerBefore blanks before, spacerAfter after; 2 / 1 on the specification form) is
+// expressed here as a keepWithNext chain (blanks, header, blanks all bind to the next block, ending at
+// the group's first data line) so they can never be split by a page break or left orphaned at the
+// bottom of a page — independent of the group's own keepTogether (which only decides whether the
+// WHOLE group binds). IrGroupTitle.keepWithRows = false drops the chain.
 private fun buildBorderedBlocks(
     table: IrTable,
     offsets: List<Length>,
@@ -255,6 +255,7 @@ private fun buildBorderedBlocks(
     tablePath: String
 ): List<LayoutBlock> {
     val blocks = mutableListOf<LayoutBlock>()
+    val title = table.groupTitle
 
     fun physicalRowBlocks(row: IrRow, path: String): List<BorderedRowBlock> =
         splitRowIntoPhysicalRows(row, table.columns, textMeasurer).mapIndexed { lineIndex, cells ->
@@ -265,7 +266,7 @@ private fun buildBorderedBlocks(
         when (element) {
             is IrGroup -> {
                 val headerPath = "$tablePath/Group[${element.title}]"
-                val titleColumnIndex = table.groupTitleColumn?.let { id -> table.columns.indexOfFirst { it.id == id } }
+                val titleColumnIndex = title.column?.let { id -> table.columns.indexOfFirst { it.id == id } }
 
                 // A title too wide for its cell must wrap onto a new physical row, exactly like a
                 // data cell would (splitRowIntoPhysicalRows) — not overflow its fixed 8mm height
@@ -273,7 +274,7 @@ private fun buildBorderedBlocks(
                 val headerBlocks = if (titleColumnIndex != null && titleColumnIndex >= 0) {
                     val titleRow = IrRow(
                         cells = table.columns.mapIndexed { i, _ ->
-                            if (i == titleColumnIndex) IrCell(element.title, style = Styles.groupHeader, align = TextAlign.CENTER) else IrCell("")
+                            if (i == titleColumnIndex) IrCell(element.title, style = title.style, align = title.align) else IrCell("")
                         },
                         constraints = element.constraints
                     )
@@ -281,7 +282,7 @@ private fun buildBorderedBlocks(
                 } else {
                     listOf(
                         BorderedRowBlock(
-                            cells = listOf(IrCell(element.title, style = Styles.groupHeader, align = TextAlign.CENTER)),
+                            cells = listOf(IrCell(element.title, style = title.style, align = title.align)),
                             columns = listOf(IrColumn("groupHeader", tableWidth)),
                             offsets = listOf(contentLeft),
                             rowHeight = rowHeight,
@@ -291,25 +292,26 @@ private fun buildBorderedBlocks(
                     )
                 }
 
-                val blankBefore1 = blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[0]")
-                val blankBefore2 = blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[1]")
-                val blankAfter = blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[2]")
+                val blanksBefore = (0 until title.spacerBefore).map { blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[$it]") }
+                val blanksAfter = (0 until title.spacerAfter).map {
+                    blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[${title.spacerBefore + it}]")
+                }
 
                 val rowBlocks = element.rows.flatMapIndexed { rowIndex, row ->
                     physicalRowBlocks(row, "$headerPath/Row[$rowIndex]")
                 }
 
-                val prefix = listOf(blankBefore1, blankBefore2) + headerBlocks + listOf(blankAfter)
+                val prefix = blanksBefore + headerBlocks + blanksAfter
                 val unit = prefix + rowBlocks
 
                 val effective = unit.mapIndexed { i, block ->
                     // Every block of the prefix binds forward (blanks -> header line(s) ->
-                    // blankAfter), and blankAfter binds to the FIRST data line only — so a title
+                    // blanksAfter), and the last one binds to the FIRST data line only — so a title
                     // plus its spacers can never be stranded at the bottom of a page, while the
                     // rest of a long group stays free to break. A group without data rows has
                     // nothing to bind to (and must not bind to the next group's spacers). The
                     // whole group binds together only when keepTogether says so.
-                    val inPrefix = i < prefix.size - 1 || (i == prefix.size - 1 && rowBlocks.isNotEmpty())
+                    val inPrefix = title.keepWithRows && (i < prefix.size - 1 || (i == prefix.size - 1 && rowBlocks.isNotEmpty()))
                     val boundToRows = element.constraints.keepTogether && i < unit.lastIndex
                     if (inPrefix || boundToRows) withKeepWithNext(block) else block
                 }

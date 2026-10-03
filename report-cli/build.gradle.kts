@@ -27,3 +27,9 @@ tasks.register<JavaExec>("runTemplate") {
     val extra = providers.gradleProperty("args")
     argumentProviders.add(CommandLineArgumentProvider { extra.orNull?.split(" ")?.filter { it.isNotBlank() } ?: emptyList() })
 }
+
+// The flow table test lays out several pages; PdfBoxTextMeasurer re-parses the TTF on every measure() call,
+// which exceeds the default test heap (same as reports:specification).
+tasks.test {
+    maxHeapSize = "4g"
+}

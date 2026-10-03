@@ -20,8 +20,14 @@ import java.time.format.DateTimeParseException
 // A tag forces the type: `!str "007"`, `!int`, `!decimal`, `!date`, `!bool`. `~` declares a String field
 // without a value. A mapping is a Record, a sequence of mappings is a List of records (scalar lists are
 // not supported yet). Error paths look like `doc.mass`.
+// The `item` root may also be a sequence of mappings: the rows of the flow table (DataFile.items); the
+// schema of the `item` root is then the union of the rows' fields.
+class DataFile(val context: DataContext, val items: List<DataValue.Record>)
+
 object DataYaml {
-    fun parse(yaml: String): DataContext {
+    fun parse(yaml: String): DataContext = parseFile(yaml).context
+
+    fun parseFile(yaml: String): DataFile {
         val root = try {
             Yaml.default.parseToYamlNode(yaml)
         } catch (e: YamlException) {
@@ -30,17 +36,26 @@ object DataYaml {
         val map = (root.unwrap() as? YamlMap) ?: throw TemplateException("", "data file must be a mapping with roots ${DATA_ROOTS.joinToString()}")
         val types = LinkedHashMap<String, DataType.Record>()
         val values = LinkedHashMap<String, DataValue.Record>()
+        var items = emptyList<DataValue.Record>()
         for ((k, v) in map.entries) {
             val name = k.content
             if (name !in DATA_ROOTS) throw TemplateException(name, "unknown root '$name' (${DATA_ROOTS.joinToString()}) (line ${k.location.line})")
+            if (name == "item" && v.unwrap() is YamlList) {
+                val (type, value) = list(v.unwrap() as YamlList, name)
+                types[name] = (type as DataType.ListOf).of
+                items = (value as DataValue.ListOf).items
+                continue
+            }
             val (type, value) = record(v, name)
             types[name] = type
             values[name] = value
         }
-        return MapDataContext(DataSchema(types), values)
+        return DataFile(MapDataContext(DataSchema(types), values), items)
     }
 
     fun load(path: Path): DataContext = parse(Files.readString(path))
+
+    fun loadFile(path: Path): DataFile = parseFile(Files.readString(path))
 
     private fun record(node: YamlNode, path: String): Pair<DataType.Record, DataValue.Record> {
         val map = (node.unwrap() as? YamlMap) ?: fail(path, node, "expected a mapping")

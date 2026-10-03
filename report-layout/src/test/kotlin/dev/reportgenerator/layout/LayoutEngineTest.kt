@@ -445,7 +445,7 @@ class LayoutEngineTest {
             header = null,
             content = listOf(IrGroup("Очень длинное название раздела спецификации", listOf(IrRow(listOf(cell(""), cell("Вал")))))),
             rowHeight = 8.mm,
-            groupTitleColumn = "name"
+            groupTitle = dev.reportgenerator.ir.IrGroupTitle(column = "name")
         )
         val offsets = columnOffsets(columns, 20.mm)
 

@@ -7,8 +7,8 @@
 Полная справочная схема — `report-template/README.md`. Эта страница объясняет, как читать
 и писать шаблоны. Рабочие примеры:
 
-- `report-ir/src/main/resources/templates/gost-spec.yaml` — статические блоки спецификации ГОСТ.
-  Править осторожно: golden-тест сравнивает вывод побайтно.
+- `report-ir/src/main/resources/templates/gost-spec.yaml` — лист спецификации ГОСТ целиком: статические блоки
+  и таблица потока (блок `body`). Править осторожно: golden-тест сравнивает вывод побайтно.
 - `report-cli/src/main/resources/templates/sheet-frame.yaml` — минимум: лист и рамка.
 - `report-cli/src/main/resources/templates/table-demo.yaml` — таблица, поворот, текст.
 - `report-template/src/test/resources/templates/mini-spec.yaml` — все возможности модели.
@@ -73,7 +73,7 @@ blocks:     # размещаемые блоки и вызовы наборов
 | `rect` | прямоугольник, линия по умолчанию тонкая (0.25 мм) | `size`, `thickness` |
 | `table` | сетка колонок и рядов с ячейками | `columns`, `rows`, `rotate`, `borders` |
 | `text` | одна надпись | `size`, `text` или `bind` (+ `format`, `optional`), `align`, `rotate`, `fontSize` |
-| `flow` | область под основную таблицу с данными | без `size` занимает область потока |
+| `flow` | область под основную таблицу с данными | `table` (см. «Таблица потока»), без `size` занимает область потока |
 
 `frame` и `rect` рисуются одинаково, отличаются только толщиной по умолчанию.
 Только контур: заливки и текста нет. Надпись внутри делается блоком `text`,
@@ -219,7 +219,9 @@ fun SpecificationData.toDataContext(): DataContext = dataContext {
 из файла. Тип по виду скаляра: `3` Integer, `1.5` Decimal, `2026-01-31` Date, `true|false` Boolean,
 иное String. Тег принудительно задаёт тип: `!str "007"`, `!int`, `!decimal`, `!date`, `!bool`.
 `~` объявляет String-поле без значения (годится для `optional: true`). Карта это `Record`,
-последовательность карт это `List` (списки скаляров пока не поддержаны).
+последовательность карт это `List` (списки скаляров пока не поддержаны). Корень `item:` может быть
+последовательностью карт: это строки таблицы потока (`DataYaml.parseFile`, `DataFile.items`), схема корня `item`
+выводится как объединение полей строк.
 
 ```yaml
 doc:
@@ -341,6 +343,106 @@ blocks:
 Движок считает набор в локальных координатах и один раз сдвигает целиком.
 `headerStrip` ничего не знает о листе, поэтому годится и для `firstStamp`, и для `restStamp`.
 
+## Таблица потока (`flow` + `table`)
+
+Основная таблица листа (тело спецификации). YAML описывает ЧТО рисовать (структура, стиль, параметры), алгоритм
+раскладки (измерение, перенос слов, пагинация, дозаполнение страницы, цепочки keep, два прохода) остаётся кодом
+`report-layout`. Данные поставляет код: группы (заголовки, порядок, фильтр по виду), сквозная нумерация и
+запись `item` каждой строки. Группировка, сортировка, нумерация и форматирование в YAML появятся позже
+(следующий этап: `groupBy` / `sortBy` / `sequence` / `format` / `where`).
+
+Блок `flow` с `table:` занимает область потока: `size`, `attach`, `reserves` и `when` кроме `all` не допускаются,
+внутри набора (`blocksets`) такой блок недопустим, на шаблон приходится одна таблица потока. `flow` без `table`
+и без `size` остаётся просто областью потока (не якорь, не резервирует место).
+
+| Ключ `table:` | Значение |
+|---|---|
+| `rowHeight` | высота строки, мм (> 0), обязательно |
+| `columns` | список `{id, width, stick, align}`; `width` мм; `stick`: `first` / `last` / `none` (по умолчанию) = `stickToFirstRow` / `stickToLastRow` (одностроковое значение садится на первую / последнюю физическую строку строки, растянутой другой колонкой); `align`: `left` (по умолчанию) / `center`, умолчание для ячейки строки |
+| `header` | `{height, repeat, cells}`: `height` мм; `repeat: true` (по умолчанию) шапка на каждой странице, `false` только на первой (остальные страницы начинаются у верхнего поля); `cells` по id колонки, покрывают все колонки, `~` пустая |
+| `header.cells.<id>` | `{text, lines, rotate, align, style}` или скаляр (= `text`). `text` обязателен; `lines` ручной перенос (без авто-переноса, не вместе с `rotate`); `rotate`: 0 / 90 (270 ошибка); `align`: `center` по умолчанию |
+| `groupTitle` | `{column, style, align, spacerBefore, spacerAfter}`: заголовок группы кладётся в колонку `column` (остальные ячейки строки пустые); `spacerBefore` / `spacerAfter` пустые строки с границами до и после (по умолчанию 0, в спецификации 2 и 1); `align` `center` по умолчанию. Без секции заголовок идёт одной ячейкой на всю ширину без спейсеров |
+| `row` | `{cells}`: ячейки по id колонки, покрывают все колонки |
+| `row.cells.<id>` | `{text, bind, format, optional, align, style}`, скаляр (= `text`) или `~` (пустая). `bind` только вида `${item.поле}`; `align` по умолчанию из колонки |
+| `fill` | `blank`: дозаполнить страницу пустыми строками с границами до рамки; `none` (по умолчанию) нет |
+| `keep` | `{titleChain: true}` (по умолчанию): пустые строки до, заголовок группы, пустые после и первая строка данных не разрываются границей страницы (заголовок-сирота внизу страницы невозможен); `false` цепочки нет |
+| `styles` | псевдонимы `{имя: стиль}`; ячейка ссылается на псевдоним или прямо на имя стиля |
+
+**Стили.** Имена стилей закрытый набор `Styles.named` из `report-ir`: `mainText`, `tableText`, `heading`,
+`designation`, `tableHeader`, `groupHeader`, `frameText`, `frameTextLarge`. Умолчания: ячейка строки `tableText`,
+шапка `tableHeader`, заголовок группы `groupHeader`. Неизвестное имя это ошибка с путём
+(`blocks[5].table.row.cells.name.style`), если загрузчику переданы известные имена
+(`TemplateLoader.load(yaml, styleNames)`; `GostSpecTemplate` и CLI передают `Styles.named.keys`), иначе ошибка
+возникает при сборке `IrTable`.
+
+**Ширина.** Сумма `width` колонок должна равняться ширине области потока, то есть ширине области контента листа
+шаблона (`sheet`: ширина минус левое и правое поле), с точностью до 0.01 мм, без допуска. Ошибка с путём
+`blocks[i].table.columns`. Проверка идёт по `sheet` самого шаблона: при раскладке документа на другом формате
+(`PageSetup`, например A3 альбомная) колонки сохраняют свою ширину, как и раньше.
+
+**Контракт.** Корень `item` в схеме данных это запись одной строки, поля объявляет адаптер (для спецификации
+`SpecificationData.toDataContext()`): `position` Integer, `designation` String, `name` String, `quantityText`
+String (временно считает код, до `format` на следующем этапе), `unit` String (только у материалов), `kind`
+Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL). Поле без значения в записи (нет обозначения, нет единицы) требует
+`optional: true` в ячейке, иначе ошибка раскладки. Контракт проверяет bind-ы ячеек строки по схеме
+(`blocks[5].table.row.cells.name.bind`).
+
+**Соответствие IR** (`report-ir` `FlowTables.build`): `columns[]` в `IrColumn` (`stick: first` в
+`stickToFirstRow`, `last` в `stickToLastRow`), `rowHeight` в `IrTable.rowHeight`, `header` в `IrTableHeader`
+(`height`, `repeat`; ячейка: `rotate: 90` в `VERTICAL_BOTTOM_TO_TOP`, `lines` в `manualLines`; текст шапки только
+здесь), `groupTitle` и `keep.titleChain` в `IrGroupTitle` (`column`, `style`, `align`, `spacerBefore`,
+`spacerAfter`, `keepWithRows`), `fill: blank` в `IrTable.fillBlank`, ячейки строки в `IrCell` по bind-ам записи
+`item`. Движок строит из `IrGroupTitle` цепочку `keepWithNext` и пустые строки, из `fillBlank` дозаполнение.
+
+Пример из `gost-spec.yaml` (спецификация ГОСТ 2.106, колонки 6+6+8+70+63+10+22 = 185 мм):
+
+```yaml
+- id: body
+  type: flow
+  table:
+    rowHeight: 8
+    fill: blank
+    keep: {titleChain: true}
+    styles: {head: tableHeader, data: tableText, groupTitle: groupHeader}
+    columns:
+      - {id: format, width: 6, stick: first, align: center}
+      - {id: zone, width: 6, stick: first, align: center}
+      - {id: position, width: 8, stick: first, align: center}
+      - {id: designation, width: 70}
+      - {id: name, width: 63}
+      - {id: quantity, width: 10, stick: last, align: center}
+      - {id: note, width: 22, stick: last, align: center}
+    header:
+      height: 15
+      repeat: true
+      cells:
+        format: {text: "Формат", rotate: 90, style: head}
+        # ... zone, position, designation, name, quantity аналогично
+        note: {text: "Примечание", lines: ["Приме-", "чание"], style: head}
+    groupTitle: {column: name, style: groupTitle, align: center, spacerBefore: 2, spacerAfter: 1}
+    row:
+      cells:
+        format: ~
+        zone: ~
+        position: {bind: "${item.position}", style: data}
+        designation: {bind: "${item.designation}", optional: true, style: data}
+        name: {bind: "${item.name}", style: data}
+        quantity: {bind: "${item.quantityText}", style: data}
+        note: {bind: "${item.unit}", optional: true, style: data}
+```
+
+**Ограничения.** Группы, их заголовки, порядок, нумерация и `quantityText` задаёт код. Параметры `${param.x}`
+в таблице потока не поддерживаются, ширины и высоты числами. Выравнивание `right` в таблице потока нет, поворот
+только 0 и 90. Таблица рисуется от левого поля листа на каждой странице; блок `flow` с таблицей и блоки слотов
+уже участвуют в расстановке, но не рисуются самим `flow`. В `TemplateMain` таблица рисуется (см. ниже).
+
+**`TemplateMain` и таблица потока.** Если в шаблоне есть `flow` с `table:`, строки берутся из корня `item:` файла
+`--data` (последовательность карт), таблица проходит через настоящий движок (перенос, пагинация, дозаполнение),
+число страниц определяет пагинация (`--pages` игнорируется), остальные блоки шаблона дорисовываются на каждую
+страницу. Групп в этом режиме нет (плоский список строк). Блоки с id слотов (`stamp`, `leftMargin`, ...) в таком
+шаблоне лучше не называть: движок считает их своими. Рамку листа движок рисует сам по полям, рамка из шаблона
+ляжет поверх.
+
 ## Область потока
 
 `flowRegion` — область контента минус блоки с `reserves: true`, видимые на странице.
@@ -354,24 +456,30 @@ blocks:
 Блоки `stamp`, `continuationStamp`, `leftMargin`, `belowFrame`, `specLeft`, `mainTitleRight`
 жёстко связаны с кодом: `report-ir/.../StaticSlot.kt` сопоставляет им поля `PageSetup`.
 В своём YAML id любые. Привязка к слотам нужна только основному движку спецификации.
-Таблица потока (тело спецификации) в YAML не описана и остаётся кодом движка.
+Таблица потока (тело спецификации) описана блоком `body` (см. «Таблица потока»); его id не слот.
 
 ## Известные ограничения
 
 - Поворот текста в `TemplateMain` только 0 и 90 (в Layout IR нет других ориентаций).
   YAML принимает 270, адаптер на нём падает с понятной ошибкой.
-- `flow` в `TemplateMain` ничего не рисует.
+- `flow` без `table:` в `TemplateMain` ничего не рисует; с `table:` рисует через движок (строки из `item:` в `--data`).
 - Один шрифт (GOST Type B), поле `style` в `TemplateMain` игнорируется.
 - `repeat.from` не резолвится.
 - Блоки шаблона не из слотов участвуют в расстановке основного движка, но не рисуются.
-- Bind только скалярный: коллекции, `repeat.from`, группировка и сортировка (следующие этапы) не резолвятся. Выражений нет.
+- Bind только скалярный: `repeat.from`, группировка, сортировка, нумерация и форматирование таблицы потока в YAML
+  (следующий этап) не резолвятся. Выражений нет.
 - Лист нулевой или отрицательной ширины и высоты даёт ошибку валидации.
 
 ## Тесты
 
 - `report-template`: загрузка, валидация, привязки, поворот, наборы, область потока; `DataTest` (типы, схема,
   форматы, `--data`), `TemplateContractTest` (контракт, `format`, `optional`, пути ошибок).
-- `report-cli`: `TemplateMainTest` (смоук `--data`, ошибка контракта до раскладки).
+- `report-template`: `FlowTableTest` (загрузка, неизвестные ключи, структура, ширина, стили, контракт строки).
+- `report-ir`: `FlowTablesTest` (YAML-описание в `IrTable`: стили, шапка, optional).
+- `report-layout`: `FlowTableLayoutTest` (спейсеры, цепочка, `fillBlank`, `header.repeat`).
+- `reports/specification`: `SpecificationTableParityTest` (`IrTable` из YAML равен старой таблице,
+  `LegacySpecificationTable` только в тестах).
+- `report-cli`: `TemplateMainTest` (смоук `--data`, ошибка контракта до раскладки, таблица потока с пагинацией).
 - `report-geometry`: `AnchorTest` для `placeOrigin` и `resolveAnchor`.
 - `report-ir`: `FrameSpecsTemplateParityTest` сверяет `FrameSpecs` из YAML со старыми
   константами (`LegacyFrameSpecs.kt`, только для этой сверки).

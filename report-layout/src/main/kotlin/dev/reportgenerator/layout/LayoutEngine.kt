@@ -55,9 +55,11 @@ data class PageLayoutMetrics(
     // Rects of the static blocks that reserve content space (template `reserves: true`) on first / later
     // pages, resolved by layOutStaticBlocks from PageSetup.staticTemplate.
     val firstPageBlocks: List<Rect> = emptyList(),
-    val continuationPageBlocks: List<Rect> = emptyList()
+    val continuationPageBlocks: List<Rect> = emptyList(),
+    // false: the table header is drawn on the first page only, later pages start at the top margin.
+    val repeatHeader: Boolean = true
 ) {
-    val contentTop: Length get() = margins.top + headerHeight
+    fun contentTop(isFirstPage: Boolean): Length = margins.top + if (isFirstPage || repeatHeader) headerHeight else Length.ZERO
 
     val frameRect: Rect get() = frameRectOf(format, margins)
 
@@ -68,7 +70,8 @@ data class PageLayoutMetrics(
     // flowRegionFor about a possible top case.
     fun contentBottom(isFirstPage: Boolean): Length {
         val blocks = if (isFirstPage) firstPageBlocks else continuationPageBlocks
-        val content = Rect(margins.left, contentTop, format.width - margins.left - margins.right, frameRect.bottom - contentTop)
+        val top = contentTop(isFirstPage)
+        val content = Rect(margins.left, top, format.width - margins.left - margins.right, frameRect.bottom - top)
         return TemplateResolver.flowRegionFor(content, blocks).bottom
     }
 }
@@ -113,7 +116,8 @@ fun layOut(
         margins = setup.margins,
         headerHeight = headerLayout.height,
         firstPageBlocks = staticBlocks.firstReserved,
-        continuationPageBlocks = staticBlocks.continuationReserved
+        continuationPageBlocks = staticBlocks.continuationReserved,
+        repeatHeader = table.header?.repeat ?: true
     )
 
     return renderPages(units, metrics, staticBlocks, headerLayout.elements, setup, textMeasurer, fontResolver, table, offsets)
@@ -158,14 +162,14 @@ private fun renderPages(
     // Final `y` of each page at the moment it closes — needed after the loop to know how much
     // space is left to fill with blank bordered rows (fixed-rowHeight tables only, see below).
     val pageFinalY = mutableListOf<Length>()
-    var y = metrics.contentTop
+    var y = metrics.contentTop(isFirstPage = true)
 
     fun isFirstPage() = pageContents.size == 1
 
     fun startNewPage() {
         pageFinalY += y
         pageContents.add(mutableListOf())
-        y = metrics.contentTop
+        y = metrics.contentTop(isFirstPage = false)
     }
     for (unit in units) {
         val unitHeight = unit.fold(Length.ZERO) { acc, block -> acc + block.height }
@@ -199,11 +203,11 @@ private fun renderPages(
 
     pageFinalY += y
 
-    // Fixed-rowHeight tables (IrTable.rowHeight != null): the page must be fully covered with
-    // bordered rows down to the frame/margin, even past the last real row (or with zero elements
-    // at all) — not just as far as content happened to reach.
+    // Fixed-rowHeight tables (IrTable.rowHeight != null, IrTable.fillBlank): the page must be fully
+    // covered with bordered rows down to the frame/margin, even past the last real row (or with zero
+    // elements at all) — not just as far as content happened to reach.
     val rowHeight = table.rowHeight
-    if (rowHeight != null) {
+    if (rowHeight != null && table.fillBlank) {
         pageContents.forEachIndexed { index, content ->
             val pageNumber = index + 1
             val bottom = metrics.contentBottom(index == 0)
@@ -243,7 +247,7 @@ private fun renderPages(
         val pageNumber = index + 1
         val chrome = mutableListOf<PageElement>()
         chrome += frameRectangle(metrics, setup.frameStyle)
-        chrome += headerElements
+        if (pageNumber == 1 || metrics.repeatHeader) chrome += headerElements
         // which blocks appear on which pages, and where, is the static template's business
         val bindings = pageData(setup.dataContext, pageNumber, totalPages)
         val blocks = if (pageNumber == 1) staticBlocks.first else staticBlocks.continuation

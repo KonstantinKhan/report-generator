@@ -7,6 +7,7 @@ import dev.reportgenerator.ir.FrameSpec
 import dev.reportgenerator.ir.PageSetup
 import dev.reportgenerator.ir.StaticSlot
 import dev.reportgenerator.template.BlockSpec
+import dev.reportgenerator.template.FlowBlock
 import dev.reportgenerator.template.Margins
 import dev.reportgenerator.template.Orientation
 import dev.reportgenerator.template.PageKind
@@ -40,6 +41,9 @@ internal fun layOutStaticBlocks(setup: PageSetup): StaticLayout {
     val blocks = declared.blocks.mapNotNull { block ->
         val slot = StaticSlot.byBlockId(block.id)
         when {
+            // the flow table spec is validated against the template's own sheet; at layout time the sheet is the
+            // document's, and the table is built into the IrTable by the caller, so it does not take part here
+            block is FlowBlock -> block.copy(table = null)
             slot == null -> block
             slot !in specs -> null
             else -> sizedAs(block, specs.getValue(slot))

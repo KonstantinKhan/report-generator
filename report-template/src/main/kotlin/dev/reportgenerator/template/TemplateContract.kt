@@ -29,6 +29,11 @@ object TemplateContract {
                         is RepeatRows -> checkRow(row.row, "$p.rows[$r].repeat.row", schema, errors)
                     }
                 }
+                // flow table row cells read the row record (root `item`) of the schema; every other part of the
+                // table is static
+                is FlowBlock -> b.table?.rowCells?.forEach { (id, c) ->
+                    c.bind?.let { checkBind(it, c.format, "$p.table.row.cells.$id", schema, errors) }
+                }
                 else -> {}
             }
         }

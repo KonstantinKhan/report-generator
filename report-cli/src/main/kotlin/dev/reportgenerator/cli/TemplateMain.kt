@@ -1,13 +1,24 @@
 package dev.reportgenerator.cli
 
+import dev.reportgenerator.geometry.Insets
+import dev.reportgenerator.geometry.mm
+import dev.reportgenerator.ir.FlowTables
+import dev.reportgenerator.ir.IrDocument
+import dev.reportgenerator.ir.PageSetup
+import dev.reportgenerator.ir.Styles
 import dev.reportgenerator.layout.DefaultFontRegistry
 import dev.reportgenerator.layout.PdfBoxTextMeasurer
+import dev.reportgenerator.layout.layOut
 import dev.reportgenerator.layout.layOutTemplate
 import dev.reportgenerator.layoutir.LaidOutDocument
 import dev.reportgenerator.renderpdf.renderToPdf
 import dev.reportgenerator.rendersvg.render
 import dev.reportgenerator.template.DataContext
+import dev.reportgenerator.template.DataFile
+import dev.reportgenerator.template.DataValue
 import dev.reportgenerator.template.DataYaml
+import dev.reportgenerator.template.FlowBlock
+import dev.reportgenerator.template.FlowTableSpec
 import dev.reportgenerator.template.PageKind
 import dev.reportgenerator.template.Template
 import dev.reportgenerator.template.TemplateContract
@@ -61,16 +72,17 @@ fun main(args: Array<String>) {
     try {
         // --- Загрузка шаблона: разбор YAML и валидация (ошибки: TemplateException с путями вида blocks[2].attach.to) ---
         val template = if (templateFile != null) {
-            TemplateLoader.load(templateFile.toPath())
+            TemplateLoader.load(templateFile.toPath(), Styles.named.keys)
         } else {
             TemplateLoader.load(
                 requireNotNull(object {}.javaClass.getResourceAsStream(DEFAULT_TEMPLATE)) { "resource missing: $DEFAULT_TEMPLATE" }
-                    .readBytes().toString(Charsets.UTF_8)
+                    .readBytes().toString(Charsets.UTF_8),
+                Styles.named.keys
             )
         }
         // --- Данные: из файла (типы по виду значений) или демо ---
-        val data = if (dataFile != null) DataYaml.load(dataFile.toPath()) else DEMO_DATA
-        renderTemplate(template, data, pages, outputDir).forEach { println("wrote ${it.absolutePath}") }
+        val data = if (dataFile != null) DataYaml.loadFile(dataFile.toPath()) else DataFile(DEMO_DATA, emptyList())
+        renderTemplate(template, data.context, pages, outputDir, data.items).forEach { println("wrote ${it.absolutePath}") }
     } catch (e: TemplateException) {
         // Ошибка в YAML: печатаем каждую как "путь: сообщение" и выходим с кодом 1.
         System.err.println("template error:")
@@ -90,7 +102,9 @@ fun main(args: Array<String>) {
 
 // Контракт, раскладка страниц и запись SVG (по файлу на страницу) и PDF. Возвращает записанные файлы.
 // Контракт проверяется до раскладки: TemplateException со всеми ошибками.
-internal fun renderTemplate(template: Template, data: DataContext, pages: Int, outputDir: File): List<File> {
+// Если в шаблоне есть `flow` с `table:`, строки таблицы берутся из `items` (корень `item:` файла данных),
+// число страниц определяет пагинация настоящего движка, а `pages` игнорируется.
+internal fun renderTemplate(template: Template, data: DataContext, pages: Int, outputDir: File, items: List<DataValue.Record> = emptyList()): List<File> {
     TemplateContract.require(template, data.schema)
     outputDir.mkdirs()
 
@@ -99,7 +113,10 @@ internal fun renderTemplate(template: Template, data: DataContext, pages: Int, o
     val textMeasurer = PdfBoxTextMeasurer(fonts.registry, fonts::resolve)
 
     // --- Раскладка: для каждой страницы шаблон разрешается в абсолютные координаты, затем превращается в Layout IR ---
-    val laidOut = LaidOutDocument(
+    val flowIndex = template.blocks.indexOfFirst { it is FlowBlock && it.table != null }
+    val laidOut = if (flowIndex >= 0) {
+        layOutWithFlow(template, (template.blocks[flowIndex] as FlowBlock).table!!, "blocks[$flowIndex].table", data, items, textMeasurer, fonts)
+    } else LaidOutDocument(
         (1..pages).map { number ->
             // Страница 1 видит блоки с when: first (и all), остальные видят when: rest (и all).
             val kind = if (number == 1) PageKind.FIRST else PageKind.REST
@@ -120,6 +137,41 @@ internal fun renderTemplate(template: Template, data: DataContext, pages: Int, o
     val pdf = File(outputDir, "$name.pdf")
     pdf.writeBytes(renderToPdf(laidOut, fonts.registry))
     return written + pdf
+}
+
+// Шаблон с таблицей потока: таблица (IrTable из YAML-описания и строк данных) идёт через настоящий движок
+// (измерение, перенос, пагинация, заполнение пустыми строками), блоки шаблона (рамка, надписи, таблицы) дорисовываются
+// на каждую получившуюся страницу, page.total известен после пагинации. Блоки шаблона в раскладке движка только
+// резервируют место (reserves), рисует их layOutTemplate; блоки с id слотов (stamp, leftMargin, ...) движок
+// считает своими и здесь не учитывает, их в таком шаблоне лучше не называть. Рамку листа движок рисует сам
+// (по полям листа), рамка из шаблона ляжет поверх неё.
+private fun layOutWithFlow(
+    template: Template,
+    spec: FlowTableSpec,
+    specPath: String,
+    data: DataContext,
+    items: List<DataValue.Record>,
+    textMeasurer: PdfBoxTextMeasurer,
+    fonts: DefaultFontRegistry
+): LaidOutDocument {
+    val first = TemplateResolver.resolve(template, PageKind.FIRST)
+    val m = template.sheet.margins
+    val setup = PageSetup(
+        format = first.sheet.format,
+        margins = Insets(m.top.mm, m.right.mm, m.bottom.mm, m.left.mm),
+        dataContext = data,
+        staticTemplate = template
+    )
+    val table = FlowTables.buildRows(spec, data.schema, items, specPath)
+    val flowPages = layOut(IrDocument(setup, listOf(table)), textMeasurer, fonts::resolve).pages
+    val total = flowPages.size
+    return LaidOutDocument(
+        flowPages.map { page ->
+            val kind = if (page.number == 1) PageKind.FIRST else PageKind.REST
+            val chrome = layOutTemplate(TemplateResolver.resolve(template, kind), data, textMeasurer, fonts::resolve, page.number, total)
+            page.copy(elements = page.elements + chrome.elements)
+        }
+    )
 }
 
 // Печатает сообщение в stderr и завершает процесс с кодом 1. Nothing: компилятор знает, что дальше код не идёт.
