@@ -10,7 +10,6 @@ report-cli/output/
 /output/
 .DS_Store
 .env
-/reports/
 
 # docker image export
 /report-server.tar
