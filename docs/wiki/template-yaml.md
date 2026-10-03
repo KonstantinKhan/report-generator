@@ -6,8 +6,8 @@
 Конвейер: YAML → модель → валидация → резолвер → абсолютная геометрия.
 Единицы в YAML: мм. Оси: x вправо, y вниз, начало — левый верхний угол листа.
 
-Полная справочная схема — `report-template/README.md`. Эта страница объясняет, как читать
-и писать шаблоны. Рабочие примеры:
+Эта страница — справка по шаблонам: как читать и писать их,
+поля и правила проверки; Kotlin API, зависимости и карта классов — в разделе «Архитектура и API». Рабочие примеры:
 
 - `report-ir/src/main/resources/templates/gost-spec.yaml` — лист спецификации ГОСТ целиком: статические блоки
   и таблица потока (блок `body`). Править осторожно: golden-тест сравнивает вывод побайтно.
@@ -15,7 +15,7 @@
 - `report-cli/src/main/resources/templates/table-demo.yaml` — таблица, поворот, текст.
 - `report-cli/src/main/resources/templates/purchased-list.yaml` (+ `purchased-list-data.yaml`) — таблица потока с `groupBy`, `sortBy`,
   `computed` (нумерация в группе), `cases`, `format`; запуск `--data purchased-list-data.yaml`.
-- `report-template/src/test/resources/templates/mini-spec.yaml` — все возможности модели.
+- `report-template/src/test/resources/templates/mini-spec.yaml` — все возможности модели (полный пример).
 
 ## Как запустить свой шаблон
 
@@ -41,9 +41,16 @@
 ```yaml
 name: my-template
 sheet:      # формат, ориентация, поля, свои точки
+root:       # куда встают блоки без attach (необязательно)
 blocksets:  # определения наборов (необязательно)
 blocks:     # размещаемые блоки и вызовы наборов
 ```
+
+`sheet`: `format` (`A4|A3|A2|A1|A0`, по умолчанию A4) или `width` + `height` в мм; `orientation`
+(`portrait|landscape`; portrait: короткая сторона это ширина, и для явных размеров тоже); `margins`
+`{top, right, bottom, left}` (по умолчанию 0, задают область контента); `anchors: {имя: {x, y}}` свои
+точки от левого верхнего угла листа. `root: {self, to, offset}` задаёт, куда встают блоки без `attach`;
+по умолчанию `topLeft` -> `sheet.topLeft`.
 
 ### Три уровня
 
@@ -83,7 +90,8 @@ blocks:     # размещаемые блоки и вызовы наборов
 Только контур: заливки и текста нет. Надпись внутри делается блоком `text`,
 привязанным к `box.center`.
 
-`thickness`: `thin`, `thick` или число в мм.
+`thickness`: `thin`, `thick` или число в мм. `thin` = 0.25, `thick` = 0.71: это ширины `BorderWeight` движка
+с точностью до 1/100 мм (`Styles.tableBorder` 2 pt = 0.7056 мм -> 0.71, `tableBorderThin` 0.7 pt -> 0.25).
 
 ### Общие поля любого блока
 
@@ -148,10 +156,16 @@ blocks:
 - `borders`: `none`, `thin`, `thick` для всех сторон или `{top, right, bottom, left}`
   для перечисленных. Пропущенная сторона наследуется: ячейка, затем таблица, затем `thick`.
 - `rotate` ячейки: поворот текста против часовой, 90 читается снизу вверх.
-- `rotate` таблицы (0, 90, 270): таблица описывается без поворота, блок занимает
-  повёрнутый охватывающий прямоугольник. Якоря ячеек пересчитываются.
-- `repeat: {count: N, row: {...}}` порождает N одинаковых рядов.
-  `repeat.from: ...` разбирается, но строк пока не даёт.
+- `rotate` таблицы (0, 90, 270, против часовой как у ячейки): таблица описывается без поворота (своя сетка
+  w x h), блок занимает повёрнутый охватывающий прямоугольник (h x w для 90 и 270), его левый верхний угол
+  это точка размещения. Неповёрнутая точка уходит так: 90 -> (y, w - x), 270 -> (h - y, x). Стандартные
+  якоря (блока и `cell[r,c].*`) пересчитываются по повёрнутым прямоугольникам (`topLeft` = левый верхний в осях листа);
+  `col[i].*`, `row[j].*` и свои якоря это точки, которые едут с блоком (`col[0].left` таблицы с поворотом 90
+  лежит внизу левой грани блока). Границы ячеек переезжают вместе со своими сторонами. Итоговый `rotate` ячейки =
+  поворот блока + поворот ячейки (по модулю 360, возможен 180). Поворачиваются только таблицы
+  (`rotate` у `text` это поворот глифов).
+- `repeat: {count: N, row: {...}}` порождает N одинаковых рядов (раскрывается при загрузке).
+  `repeat.from: "doc.items"` (данные) разбирается, но строк пока не даёт.
 - `style` — непрозрачный ключ; `report-ir` понимает `frameText` и `frameTextLarge`.
 
 ### Bind
@@ -171,9 +185,15 @@ blocks:
 `page.number` и `page.total` (`Integer`) объявлены в каждой схеме всегда, значения добавляет движок
 при раскладке каждой страницы (они известны только после пагинации).
 
-**Вывод значения** по умолчанию: `String` как есть, `Integer` без форматирования, `Decimal` через
+В коде: `DataType` = `Str`, `Integer`, `Decimal`, `Date`, `Bool`, `Enum(values)`, `ListOf(Record)`, `Record(fields)`
+(`DataModel.kt`); `DataSchema` это дерево именованных типизированных полей под корнями `doc`, `page`, `item`
+(`lookup(path)`); `DataValue` типизированные значения; `DataContext` (`schema` + `get(path): DataValue?`,
+реализации `MapDataContext` и `overlay(...)`); `DataContext.withPage(number, total)` накладывает номер страницы.
+`DataYaml.parse/load` строит контекст из YAML-карты (см. `--data` ниже).
+
+**Вывод значения** по умолчанию (`ValueFormatter.render`): `String` как есть, `Integer` без форматирования, `Decimal` через
 `BigDecimal.toPlainString()` (без локали), `Date` в ISO (`2026-01-31`), `Boolean` как `true`/`false`,
-`Enum` его именем.
+`Enum` его именем. В модели Bind хранится как записан (`ResolvedCell.bind`, `ResolvedBlock.bind`) вместе с `format` / `optional`.
 
 **`format`** (необязательный, только вместе с `bind`, замкнутый набор ключей):
 
@@ -190,11 +210,11 @@ blocks:
 - Для остальных типов `format` ошибка.
 
 **`optional: true`** (только вместе с `bind`): если значения нет, выводится пустая строка. Без него
-отсутствие значения при раскладке это ошибка (`IllegalStateException`: путь есть в схеме, а данных нет).
+отсутствие значения при раскладке это ошибка (`Binding.render` -> `IllegalStateException`: путь есть в схеме, а данных нет).
 
 **Контракт** (`TemplateContract.check(template, schema): List<TemplateError>`, `require` бросает
-`TemplateException`). Собирает все ошибки с YAML-путями: `blocks[3].rows[1].cells[2].bind`,
-`blocks[4].format`. Проверяет, что корень и путь есть в схеме (для неизвестного поля подсказка
+`TemplateException`). Собирает все bind-ы (ячейки, текстовые блоки, ряды `repeat`, определения наборов) и все ошибки с YAML-путями:
+`blocks[3].rows[1].cells[2].bind`, `blocks[4].format`. Проверяет, что корень и путь есть в схеме (для неизвестного поля подсказка
 `did you mean 'doc.designation'?`), что значение скалярное, что `format` подходит типу и его
 шаблон корректен. Bind-ы внутри блок-наборов проверяются один раз по пути определения
 (`blocksets.sig.blocks[1].bind`): `${param.x}` в bind недопустим, поэтому у всех экземпляров
@@ -245,7 +265,9 @@ attach: {self: bottomRight, to: sheet.contentBottomRight, offset: {x: 0, y: -40}
 
 `self` по умолчанию `topLeft`. `offset` в осях листа: x вправо, y вниз, миллиметры.
 Один и тот же угол у `self` и у цели вкладывает блок внутрь цели, противоположный
-выносит наружу.
+выносит наружу. Формула размещения это `placeOrigin` из `report-geometry`. Её старший родственник
+`resolveAnchor` (по угловым якорям, `offset` положителен «внутрь» относительно угла блока) даёт тот же результат:
+перевод в оси листа это смена знака `offset` у правых и нижних углов блока (тесты сверяют обе формулы).
 
 Раздельно по осям:
 
@@ -376,6 +398,9 @@ blocks:
 | `groupBy` | `{field, order, titles, skipEmpty, omit}`: разбиение по enum-полю на группы; нет = плоская таблица |
 | `computed` | вычисляемые поля: `{имя: {sequence: {scope, start, step}}}` или арифметика `{имя: {multiply\|add\|subtract\|divide: [операнды], scale, rounding}}` |
 | `totals` | итоги и агрегаты: список `{id, scope, agg, field, label, labelColumn, valueColumn, format, style, where, skipEmpty, scale, rounding}`; строки подвала группы и таблицы (см. «Итоги») |
+
+**Валидация** (`TemplateValidator`): неизвестные ключи, id и ширины колонок, ячейки шапки и строки покрывают
+каждую колонку, колонка заголовка группы существует, bind-ы вида `${item.x}`, имена стилей, сумма ширин (ниже).
 
 **Стили.** Имена стилей закрытый набор `Styles.named` из `report-ir`: `mainText`, `tableText`, `heading`,
 `designation`, `tableHeader`, `groupHeader`, `totalText`, `frameText`, `frameTextLarge`. Умолчания: ячейка строки
@@ -655,8 +680,10 @@ enum без тегов, его домен задаёт сам шаблон (`ord
 `flowRegion` — область контента минус блоки с `reserves: true`, видимые на странице.
 Правило как у `contentBottom()` движка: считаются только блоки, перекрывающие колонку
 контента по горизонтали; побеждает ближайшая верхняя грань (объединение, не сумма);
-срезается только низ области. Верхний случай (блок у верхнего края) сознательно не
-реализован.
+срезается только низ области. `flowRegionFor(content, rects)` то же правило на голых прямоугольниках
+(движок передаёт туда `[contentTop, frame bottom)`). Верхний случай (блок, висящий от верхнего края,
+срезает область сверху) сознательно не реализован: в движке его нет, а резервирующий блок у самого верха
+сейчас схлопнул бы область (его верхняя грань ближайшая).
 
 ## Слоты `gost-spec.yaml`
 
@@ -664,6 +691,14 @@ enum без тегов, его домен задаёт сам шаблон (`ord
 жёстко связаны с кодом: `report-ir/.../StaticSlot.kt` сопоставляет им поля `PageSetup`.
 В своём YAML id любые. Привязка к слотам нужна только основному движку спецификации.
 Таблица потока (тело спецификации) описана блоком `body` (см. «Таблица потока»); его id не слот.
+
+Соответствие слотов (`StaticSlot`) полям `PageSetup`: `frame` = `stamp`, `continuationFrame` = `continuationStamp`,
+`leftMarginFrame` = `leftMargin`, `specLeftTable` = `specLeft`, `mainTitleRightTable` = `mainTitleRight`,
+`belowFrame` = `belowFrame`. `PageSetup.staticTemplate` (по умолчанию `gost-spec.yaml`) задаёт шаблон. `FrameSpecs.*`
+это блоки шаблона, превращённые в `FrameSpec` (ячейки в координатах блока). При раскладке движок резолвит шаблон
+на реальном листе (формат и поля `PageSetup`), каждый активный слот имеет размер своего `FrameSpec`: расстановка,
+`when` и `reserves` берутся из YAML и для стандартных, и для своих `FrameSpec`. Пустой (`null`) слот убирает свой блок.
+Сама рамка листа это якоря `sheet.content*`.
 
 ## Известные ограничения
 
@@ -675,6 +710,43 @@ enum без тегов, его домен задаёт сам шаблон (`ord
 - Блоки шаблона не из слотов участвуют в расстановке основного движка, но не рисуются.
 - Bind только скалярный: `repeat.from` не резолвится. Выражений нет (только закрытая арифметика `computed` и `totals`, см. «Данные таблицы»); вложенных и накопительных итогов нет.
 - Лист нулевой или отрицательной ширины и высоты даёт ошибку валидации.
+
+## Архитектура и API
+
+Конвейер: YAML -> модель (`TemplateLoader`) -> валидация (`TemplateValidator`, `TemplateContract`) -> резолвер
+(`TemplateResolver`) -> абсолютная геометрия. Таблица потока: `FlowTableSpec` (модель) + данные -> `FlowShaper` -> `FlowTables`
+(`report-ir`) -> `IrTable` -> раскладка в `report-layout`.
+
+```kotlin
+val template = TemplateLoader.load(yamlText, styleNames)   // разбор + валидация, бросает TemplateException; styleNames необязателен
+val first = TemplateResolver.resolve(template, PageKind.FIRST)   // PageKind: FIRST | REST
+first.blocks        // видимые блоки в порядке зависимостей: абсолютный Rect + якоря + ячейки
+first.flowRegion    // область контента минус блоки с `reserves`
+```
+
+**Зависимости.** `report-template` зависит только от `report-geometry` (`Length`, `Rect`, `Point`, `PageFormat`,
+`Corner`, `placeOrigin`, `resolveAnchor`; из внешних только kaml). `report-layout` зависит от него через `report-ir`,
+обратной зависимости нет. Граф модулей целиком: [modules.md](modules.md), [architecture.md](architecture.md).
+
+**Карта классов таблицы потока.**
+
+| Класс | Что делает |
+|---|---|
+| `FlowShaper.shapeTable(spec, schema, rows)` (`FlowData.kt`) | `where`, сортировка, группы, нумерация, итоги: форма данных таблицы |
+| `FlowCellRenderer` (`FlowData.kt`) | текст ячейки строки: `cases`, `bind`, `format`, `optional` |
+| `FlowArithmetic.kt` | арифметические `computed` (типы, зависимости, цикл, точный расчёт) |
+| `FlowTotals.kt` | агрегаты `totals` |
+| `FlowContract` (`FlowContract.kt`) | проверка bind-ов, предикатов, `sortBy`, `groupBy`, `cases`, `format` по корню `item` схемы |
+| `FlowTables.build(spec, schema, rows)` (`report-ir`) | собирает `IrTable`; итоги группы в `IrGroup.footer`, итоги таблицы в `IrTable.footer`; раскладка держит подвал вместе с последней строкой данных |
+
+Порядок формирования данных: `where` -> арифметика `computed` -> `sortBy` -> `groupBy` -> `sequence` -> `totals`
+(подробности в «Данные таблицы»).
+
+### Ошибки
+
+`TemplateException.errors` это список `путь: сообщение`, например
+`blocks[2].attach.to: unknown anchor 'stamp.cell[9,9].topLeft'`,
+`blocks[0].attach.to: attach cycle: a -> c -> b -> a`.
 
 ## Тесты
 

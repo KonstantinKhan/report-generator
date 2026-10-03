@@ -1,6 +1,6 @@
 # Minimal sheet template: A4 portrait sheet with the GOST frame. Edit and re-run:
 #   ./gradlew :report-cli:runTemplate -Pargs="path/to/your.yaml output"
-# Units: mm. Axes: x right, y down, origin = sheet top-left. Full schema: report-template/README.md
+# Units: mm. Axes: x right, y down, origin = sheet top-left. Full schema: docs/wiki/template-yaml.md
 name: sheet-frame
 
 sheet:

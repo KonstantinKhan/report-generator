@@ -2,7 +2,7 @@
 
 Пошаговое руководство для инженера, который собирает много YAML-шаблонов и гоняет их через
 `./gradlew :report-cli:runTemplate`. Это практикум (цель, YAML, что увидеть, типичная ошибка), а не справочник:
-по полям смотрите [template-yaml.md](template-yaml.md) и `report-template/README.md`.
+по полям и API смотрите [template-yaml.md](template-yaml.md).
 
 Каждый шаг лежит в файле `report-cli/src/main/resources/templates/tutorial/NN-*.yaml` и реально запускался.
 Числа в «что увидеть» взяты из полученных SVG (команда проверки: `grep '<rect\|<line\|<text' файл.svg`).
@@ -756,5 +756,5 @@ RUN $T/10-complete.yaml output --data $T/10-complete-data.yaml
 - Итоги: без вложенных подитогов и накопительных; `min`/`max` только числа.
 - Не проверено: PDF визуально (генерируется, содержимое проверялось только по SVG); `!int`, `!bool`, `!decimal`, `!date` теги кроме `!str`/`!enum`; `repeat: {count: N}`; `flow` внутри набора; свои `width`/`height` листа вместо `format`.
 
-См. также: [template-yaml.md](template-yaml.md) (справка по полям), `report-template/README.md` (схема и API),
+См. также: [template-yaml.md](template-yaml.md) (справка по полям, схема и API),
 `report-ir/src/main/resources/templates/gost-spec.yaml` (боевой шаблон).
