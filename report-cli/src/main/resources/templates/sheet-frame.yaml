@@ -173,10 +173,73 @@ blocks:
   - id: mainInscription
     use: mainInscriptionSet
     when: first
+    reserves: true          # без этого таблица-поток пойдёт под основную надпись
     attach: { self: bottomRight, to: frame.bottomRight }
   - id: bottomLeftTable
     use: bottomLeftTableSet
     attach: { self: bottomRight, to: frame.bottomLeft }
   - id: topLeftTable
     use: topLeftTableSet
-    attach: { self: topRight, to: frame.topLeft}
+    attach: { self: topRight, to: frame.topLeft }
+  - id: content
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank
+      remainder: gap
+      keep: { titleChain: true }
+      styles:
+        head: { base: tableHeader, size: 7 }
+        data: tableText
+        headSmall: {base: tableHeader, size: 4.5}
+      # Вычисляемые поля (доступны в ячейках как ${item.<имя>}): сквозной номер строки и сумма количеств.
+      computed:
+        pos: { sequence: { scope: table, start: 1, step: 1 } }
+        total: { add: [ countPerProduct, countPerSet, countPerSetting ] }
+      columns:
+        - { id: n, width: 7, align: center }
+        - { id: name, width: 60, align: left }
+        - { id: productCode, width: 45, align: center }
+        - { id: docDesignation, width: 70, align: center }
+        - { id: contractor, width: 55, align: center }
+        - { id: inclusion, width: 70, align: center }
+        - { id: countPerProduct, width: 16, align: center }
+        - { id: countPerSet, width: 16, align: center }
+        - { id: countPerSetting, width: 16, align: center }
+        - { id: total, width: 16, align: center }
+        - { id: note, width: 24, align: center }
+      header:
+        repeat: true
+        rows:
+          - height: 9
+            cells:
+              - { text: "№ строки", rowSpan: 2, rotate: 90, style: headSmall }
+              - { text: "Наименование", rowSpan: 2, align: center, style: head }
+              - { text: "Код\nпродукции", rowSpan: 2, style: head }
+              - { text: "Обозначение документа\nна поставку", rowSpan: 2, style: head }
+              - { text: "Поставщик", rowSpan: 2, style: head }
+              - { text: "Куда входит (обозначение)", rowSpan: 2, lines: [ "Куда входит", "(обозначение)" ], style: head }
+              - {text: "Количество", span: 4, style: head}
+              - { text: "Приме-\nчание", rowSpan: 2, style: head }
+          - height: 18
+            cells:
+              - { text: "на из-\nделие", style: headSmall }
+              - { text: "в комп-\nлекты", style: headSmall }
+              - { text: "на ре-\nгулир.", style: headSmall }
+              - { text: "всего", style: headSmall }
+      row:
+        # Ячейки задаются картой по id колонки и должны покрывать ВСЕ колонки. Значения берутся из `item`
+        # (файл данных: sheet-frame-data.yaml). `optional: true` — если значения нет, ячейка пустая, а не ошибка.
+        cells:
+          n: { bind: "${line.number}", style: data }
+          name: { bind: "${item.name}", style: data }
+          productCode: { bind: "${item.productCode}", optional: true, style: data }
+          docDesignation: { bind: "${item.docDesignation}", optional: true, style: data }
+          contractor: { bind: "${item.contractor}", optional: true, style: data }
+          inclusion: { bind: "${item.inclusion}", optional: true, style: data }
+          countPerProduct: { bind: "${item.countPerProduct}", optional: true, style: data }
+          countPerSet: { bind: "${item.countPerSet}", optional: true, style: data }
+          countPerSetting: { bind: "${item.countPerSetting}", optional: true, style: data }
+          total: { bind: "${item.total}", optional: true, style: data }
+          note: { bind: "${item.note}", optional: true, style: data }
+

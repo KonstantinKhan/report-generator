@@ -1,0 +1,15 @@
+# Тестовые данные для sheet-frame.yaml (ведомость покупных изделий). Запуск:
+#   ./gradlew :report-cli:runTemplate -Pargs="src/main/resources/templates/sheet-frame.yaml output --data src/main/resources/templates/sheet-frame-data.yaml"
+# `item` — список строк таблицы. Поля, на которые ссылается шаблон: name (обязательное), productCode, docDesignation,
+# contractor, inclusion, countPerProduct, countPerSet, countPerSetting, note (необязательные, `optional: true`).
+# pos (номер строки) и total (сумма трёх количеств) вычисляются шаблоном (`computed`), в данных их нет.
+# Три количества задаём числом (в сумме total нужны все три: строка без значения операнда не даёт суммы).
+item:
+  - {name: "Подшипник 6204 ГОСТ 8338-75", productCode: "41 1130", docDesignation: "ГОСТ 8338-75", contractor: "ПодшипникТорг", inclusion: "АБВГ.301111.001", countPerProduct: 2, countPerSet: 1, countPerSetting: 0, note: ""}
+  - {name: "Подшипник 6000 ГОСТ 8338-75", productCode: "41 1130", docDesignation: "ГОСТ 8338-75", contractor: "ПодшипникТорг", inclusion: "АБВГ.301111.001", countPerProduct: 1, countPerSet: 0, countPerSetting: 0}
+  - {name: "Болт М6x20 ГОСТ 7798-70", productCode: "12 8210", docDesignation: "ГОСТ 7798-70", contractor: "Метиз", inclusion: "АБВГ.301111.002", countPerProduct: 24, countPerSet: 4, countPerSetting: 2, note: "с шайбой"}
+  - {name: "Болт М6x100 ГОСТ 7798-70", productCode: "12 8210", docDesignation: "ГОСТ 7798-70", contractor: "Метиз", inclusion: "АБВГ.301111.002", countPerProduct: 8, countPerSet: 0, countPerSetting: 0}
+  - {name: "Шайба 6 ГОСТ 11371-78", productCode: "12 8310", docDesignation: "ГОСТ 11371-78", contractor: "Метиз", inclusion: "АБВГ.301111.002", countPerProduct: 48, countPerSet: 8, countPerSetting: 4}
+  - {name: "Автомат ABB S201 C16", productCode: "34 2110", docDesignation: "ТУ 3422-001-12345678-2020", contractor: "ЭлектроСнаб", inclusion: "АБВГ.468351.003", countPerProduct: 1, countPerSet: 1, countPerSetting: 0, note: "поставка по заявке"}
+  - {name: "Кабель ВВГнг 3x1,5", productCode: "35 6110", docDesignation: "ГОСТ 31996-2012", contractor: "ЭлектроСнаб", inclusion: "АБВГ.468351.003", countPerProduct: 12, countPerSet: 0, countPerSetting: 3}
+  - {name: "Втулка распределительная консольная весовая", productCode: "41 7020", docDesignation: "ТУ 41-7020-0001-2022", contractor: "ОАО «Промснаб»", inclusion: "АБВГ.301111.001", countPerProduct: 3, countPerSet: 1, countPerSetting: 1}
