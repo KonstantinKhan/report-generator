@@ -1,0 +1,8 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: опечатка в ключе блока
+name: e08
+sheet:
+  format: A4
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - {id: a, type: rect, sise: {width: 10, height: 10}}

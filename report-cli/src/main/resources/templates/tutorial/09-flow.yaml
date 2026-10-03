@@ -1,0 +1,48 @@
+# Шаг 9а: таблица-поток. Колонки, шапка (поворот, ручной перенос), стили, строки, fill, keep.
+# Ширины колонок: 10+85+25+20+45 = 185 мм = ширина области контента (210 - 20 - 5).
+name: t09-flow
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  # штамп снизу; reserves: true вычитает его из области потока: таблица кончается над ним
+  - id: titleBlock
+    type: table
+    reserves: true
+    columns: [185]
+    rows:
+      - {height: 15, cells: [{bind: "${doc.designation}", align: center, fontSize: 14}]}
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  - id: body
+    type: flow                          # без size, attach, reserves; один на шаблон
+    table:
+      rowHeight: 8                      # высота строки, мм
+      fill: blank                       # дозаполнить страницу пустыми строками до штампа
+      keep: {titleChain: true}
+      styles: {head: tableHeader, data: tableText}
+      columns:
+        - {id: n, width: 10, align: center}
+        - {id: name, width: 85}
+        - {id: qty, width: 25, align: center}
+        - {id: unit, width: 20, align: center}
+        - {id: note, width: 45}
+      header:
+        height: 15
+        repeat: true                    # шапка на каждой странице
+        cells:                          # по id колонки, покрыть надо все
+          n: {text: "№", rotate: 90, style: head}
+          name: {text: "Наименование", style: head}
+          qty: {text: "Кол.", style: head}
+          unit: {text: "Ед.", style: head}
+          note: {text: "Примечание", lines: ["Приме-", "чание"], style: head}
+      row:
+        cells:
+          n: {bind: "${item.n}", style: data}
+          name: {bind: "${item.name}", style: data}
+          qty: {bind: "${item.qty}", style: data}
+          unit: {bind: "${item.unit}", style: data}
+          note: {bind: "${item.note}", optional: true, style: data}

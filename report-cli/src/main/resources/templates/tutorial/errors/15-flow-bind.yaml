@@ -1,0 +1,55 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: bind не item.* и неизвестное поле item. Данные: ../09b-groups-data.yaml
+# Колонки: 10+85+25+20+45 = 185 мм.
+name: e15
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: body
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank
+      styles: {head: tableHeader, data: tableText, title: groupHeader}
+      where: {not: {field: status, eq: "отменено"}}       # отменённые строки в таблицу не попадают
+      sortBy:
+        - {field: name, order: asc, nulls: last}           # внутри группы по имени, натурально: «Болт 2» раньше «Болт 10»
+      groupBy:
+        field: kind                                        # поле item, читается как enum; домен = order + omit
+        order: [FASTENER, CABLE]                           # порядок групп
+        titles: {FASTENER: "Крепёж", CABLE: "Кабели"}
+        omit: [DISCONTINUED]                               # значение осознанно отбрасывается (без этого было бы ошибкой)
+      computed:
+        pos: {sequence: {scope: group, start: 1, step: 1}} # нумерация с 1 в каждой группе
+      groupTitle: {column: name, style: title, align: center, spacerBefore: 1, spacerAfter: 1}
+      columns:
+        - {id: pos, width: 10, align: center}
+        - {id: name, width: 85}
+        - {id: qty, width: 25, align: center}
+        - {id: unit, width: 20, align: center}
+        - {id: note, width: 45}
+      header:
+        height: 10
+        cells:
+          pos: {text: "№", style: head}
+          name: {text: "Наименование", style: head}
+          qty: {text: "Кол.", style: head}
+          unit: {text: "Ед.", style: head}
+          note: {text: "Примечание", style: head}
+      row:
+        cells:
+          pos: {bind: "${item.pos}", style: data}
+          name: {bind: "${item.nme}", style: data}
+          qty:                                              # cases: первый подходящий вариант; собственное содержимое = else
+            style: data
+            cases:
+              - where: {field: unit, in: [шт, компл]}
+                bind: "${item.qty}"
+                format: {pattern: "0", rounding: HALF_UP}   # штуки: целое
+            bind: "${item.qty}"
+            format: {pattern: "0.##", locale: ru, rounding: HALF_UP}   # остальное: до 2 знаков, запятая
+          unit: {bind: "${item.unit}", style: data}
+          note: {bind: "${item.note}", optional: true, style: data}

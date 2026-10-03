@@ -41,6 +41,8 @@
 - **[template-yaml.md](template-yaml.md)** — YAML-шаблоны страницы (`report-template`):
   блоки, наборы, типы (`frame`/`rect`/`table`/`text`/`flow`), привязка и якоря,
   запуск своего шаблона через `runTemplate`
+- **[template-guide.md](template-guide.md)** — практикум «Как создавать шаблон с нуля»:
+  от пустого листа до таблицы-потока с итогами, реальные запуски, тексты ошибок, чек-лист
 - **[loodsman-integration.md](loodsman-integration.md)** — клиент Loodsman PDM
   API: авторизация, разделение свойств/атрибутов, правило ключевого атрибута
   по типу объекта, известные грабли API

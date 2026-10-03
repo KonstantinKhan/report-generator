@@ -1,0 +1,12 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: format Decimal на строке
+name: e02
+sheet:
+  format: A4
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: t
+    type: text
+    bind: "${doc.designation}"
+    format: {pattern: "0.00"}
+    size: {width: 100, height: 6}

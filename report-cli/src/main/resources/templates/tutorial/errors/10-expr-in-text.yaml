@@ -1,0 +1,8 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: две подстановки в одном bind
+name: e10
+sheet:
+  format: A4
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - {id: t, type: text, bind: "${doc.designation}/${doc.name}", size: {width: 100, height: 6}}

@@ -1,0 +1,35 @@
+# Шаг 3: основная надпись (штамп) как таблица: колонки, ряды, span, rowSpan, границы, текст и bind.
+name: t03-stamp
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: frame
+    type: frame
+    size: {width: 185, height: 287}
+    attach: {self: topLeft, to: sheet.contentTopLeft}
+
+  # штамп 110 x 26 мм: 20+25+20+45 по ширине, 10+8+8 по высоте
+  - id: stamp
+    type: table
+    columns: [20, 25, 20, 45]
+    rows:
+      - height: 10
+        cells:
+          - {text: "Обозн.", align: center}
+          - {bind: "${doc.designation}", span: 3, align: center, fontSize: 14}
+      - height: 8
+        cells:
+          - {text: "Наимен.", rowSpan: 2, align: center}      # ячейка тянется на 2 ряда
+          - {bind: "${doc.name}", span: 3, borders: {bottom: thin}}
+      - height: 8
+        cells:                                                # колонка 0 занята rowSpan сверху: ячейки только для 1..3
+          # общая граница рисуется, если её просит ЛЮБОЙ из соседей, и побеждает толстая:
+          # чтобы получить тонкую линию, тонкой её надо назвать с обеих сторон (top у нижних ячеек = bottom у верхней)
+          - {text: "Лист", align: center, borders: {top: thin, right: thin}}
+          - {bind: "${page.number}", align: center, borders: {top: thin, left: thin, right: thin}}
+          - {bind: "${page.total}", align: center, borders: {top: thin, left: thin}}
+    attach: {self: bottomRight, to: frame.bottomRight}        # угол штампа вкладывается в угол рамки

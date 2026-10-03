@@ -1,0 +1,8 @@
+# Данные для 08-data.yaml. Тип по виду значения; тег принудительно задаёт тип.
+doc:
+  designation: ВП.01.002
+  mass: 7.255                 # Decimal
+  issued: 2026-03-09          # Date
+  code: !str "007"            # String (без тега: Integer 7)
+  status: !enum DRAFT         # Enum, домен = значения из файла
+  checker: ~                  # String без значения (только для optional: true)

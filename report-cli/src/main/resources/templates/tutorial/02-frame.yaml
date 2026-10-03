@@ -1,0 +1,19 @@
+# Шаг 2: рамка по области контента. A4 книжная, поля 20/5/5/5: 210-20-5 = 185, 297-5-5 = 287.
+name: t02-frame
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: frame
+    type: frame                # толстая линия по умолчанию
+    size: {width: 185, height: 287}
+    attach: {self: topLeft, to: sheet.contentTopLeft}
+
+  # для сравнения: rect того же размера, тонкий по умолчанию; сдвинут на 10 мм внутрь
+  - id: inner
+    type: rect
+    size: {width: 165, height: 267}
+    attach: {self: topLeft, to: frame.topLeft, offset: {x: 10, y: 10}}

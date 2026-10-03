@@ -1,0 +1,8 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: незнакомая толщина и нулевой размер
+name: e11
+sheet:
+  format: A4
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - {id: t, type: rect, thickness: bold, size: {width: 10, height: 10}}
