@@ -13,6 +13,7 @@ internal data class ChildLink(
 
 internal fun mapItemKind(typeName: String?): String? = when (typeName?.trim()?.lowercase()) {
     "деталь" -> "PART"
+    "сборочная единица" -> "ASSEMBLY"
     "стандартное изделие" -> "STANDARD"
     "прочее изделие" -> "OTHER"
     "материал по кд" -> "MATERIAL"

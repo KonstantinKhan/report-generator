@@ -10,6 +10,7 @@ class SpecificationAssemblyTest {
     @Test
     fun `maps known Loodsman type names to item kinds`() {
         assertEquals("PART", mapItemKind("Деталь"))
+        assertEquals("ASSEMBLY", mapItemKind("Сборочная единица"))
         assertEquals("STANDARD", mapItemKind("Стандартное изделие"))
         assertEquals("OTHER", mapItemKind("Прочее изделие"))
         assertEquals("MATERIAL", mapItemKind("Материал по КД"))
@@ -19,31 +20,33 @@ class SpecificationAssemblyTest {
     fun `mapping is case and whitespace insensitive`() {
         assertEquals("PART", mapItemKind("  деталь  "))
         assertEquals("STANDARD", mapItemKind("СТАНДАРТНОЕ ИЗДЕЛИЕ"))
+        assertEquals("ASSEMBLY", mapItemKind(" Сборочная Единица "))
     }
 
     @Test
     fun `unknown or missing type name maps to null`() {
-        assertNull(mapItemKind("Сборочная единица"))
+        assertNull(mapItemKind("Документ"))
         assertNull(mapItemKind(null))
     }
 
     @Test
-    fun `builds items from resolved attributes and skips children with unrecognized type`() {
+    fun `builds items from resolved attributes and skips only children with unrecognized type`() {
         val children = listOf(
             ChildLink(idLink = 10, idChild = 100, idType = 1),
             ChildLink(idLink = 11, idChild = 101, idType = 1),
             ChildLink(idLink = 12, idChild = 102, idType = 1),
+            ChildLink(idLink = 13, idChild = 103, idType = 1),
         )
-        val typeNameByObjectId = mapOf(100 to "Деталь", 101 to "Материал по КД", 102 to "Сборочная единица")
+        val typeNameByObjectId = mapOf(100 to "Деталь", 101 to "Материал по КД", 102 to "Сборочная единица", 103 to "Документ")
         // 101 is a Material: product field IS the Наименование, no separate name attribute is fetched for it.
-        val designationByObjectId = mapOf(100 to "A.1", 101 to "Клей", 102 to "A.3")
+        val designationByObjectId = mapOf(100 to "A.1", 101 to "Клей", 102 to "A.3", 103 to "D.1")
         val nameByObjectId = mapOf(100 to "Болт", 102 to "Подсборка")
-        val quantityByLinkId = mapOf(10 to 4.0, 11 to 1.5, 12 to 1.0)
+        val quantityByLinkId = mapOf(10 to 4.0, 11 to 1.5, 12 to 1.0, 13 to 1.0)
         val unitByLinkId = mapOf(11 to "кг")
 
         val items = buildItems(children, typeNameByObjectId, designationByObjectId, nameByObjectId, quantityByLinkId, unitByLinkId)
 
-        assertEquals(2, items.size)
+        assertEquals(3, items.size)
         assertEquals("A.1", items[0].designation)
         assertEquals("Болт", items[0].name)
         assertEquals("PART", items[0].kind)
@@ -55,6 +58,11 @@ class SpecificationAssemblyTest {
         assertEquals("MATERIAL", items[1].kind)
         assertEquals(1.5, items[1].quantity)
         assertEquals("кг", items[1].unit)
+        // Assembly: key attribute is Обозначение, name comes from the separate Наименование attribute.
+        assertEquals("A.3", items[2].designation)
+        assertEquals("Подсборка", items[2].name)
+        assertEquals("ASSEMBLY", items[2].kind)
+        assertEquals(1.0, items[2].quantity)
     }
 
     @Test
