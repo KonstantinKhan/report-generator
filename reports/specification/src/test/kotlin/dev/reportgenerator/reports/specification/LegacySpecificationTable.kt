@@ -3,7 +3,6 @@ package dev.reportgenerator.reports.specification
 import dev.reportgenerator.data.ItemKind
 import dev.reportgenerator.data.SpecificationData
 import dev.reportgenerator.data.SpecificationItem
-import dev.reportgenerator.data.formattedQuantity
 import dev.reportgenerator.geometry.mm
 import dev.reportgenerator.ir.GroupBuilder
 import dev.reportgenerator.ir.IrCell
@@ -12,6 +11,9 @@ import dev.reportgenerator.ir.TableBuilder
 import dev.reportgenerator.ir.TextAlign
 import dev.reportgenerator.ir.TextOrientation
 import dev.reportgenerator.ir.document
+import java.math.BigDecimal
+import java.math.RoundingMode
+import kotlin.math.roundToLong
 
 // The specification table as it was built before it moved into gost-spec.yaml (all constants hardcoded:
 // widths, header texts and styles, rowHeight 8, group title column). Kept only for SpecificationTableParityTest;
@@ -72,9 +74,24 @@ object LegacySpecificationTable {
                 IrCell(position.toString(), align = TextAlign.CENTER),
                 IrCell(item.designation ?: ""),
                 IrCell(item.name),
-                IrCell(item.formattedQuantity(), align = TextAlign.CENTER),
+                IrCell(item.legacyFormattedQuantity(), align = TextAlign.CENTER),
                 IrCell(if (item.kind == ItemKind.MATERIAL) item.unit ?: "" else "", align = TextAlign.CENTER)
             )
         )
     }
+}
+
+// The quantity text as SpecificationData.formattedQuantity() produced it before `format` moved into the YAML
+// (the `quantity` cell of gost-spec.yaml). The oracle of SpecificationQuantityFormatTest.
+// MATERIAL quantities can be fractional (up to 2 decimals); every other kind is always a whole count
+// in Loodsman, so it's rounded and shown without a fractional part.
+fun SpecificationItem.legacyFormattedQuantity(): String = when (kind) {
+    ItemKind.MATERIAL -> legacyMaterialQuantity(quantity)
+    else -> quantity.roundToLong().toString()
+}
+
+private fun legacyMaterialQuantity(value: Double): String {
+    val plain = BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).toPlainString()
+    val trimmed = if (plain.contains('.')) plain.trimEnd('0').trimEnd('.') else plain
+    return trimmed.replace('.', ',')
 }

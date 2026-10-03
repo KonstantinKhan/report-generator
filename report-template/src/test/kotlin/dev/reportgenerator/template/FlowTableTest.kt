@@ -26,6 +26,7 @@ class FlowTableTest {
           cells:
             pos: {text: "Поз.", rotate: 90, style: head}
             name: {text: "Наименование", lines: ["Наиме-", "нование"]}
+        groupBy: {field: kind, order: [A, B], titles: {A: "Группа А", B: "Группа Б"}}
         groupTitle: {column: name, style: head, align: center, spacerBefore: 2, spacerAfter: 1}
         row:
           cells:
@@ -45,6 +46,7 @@ class FlowTableTest {
         item {
             integer("position")
             string("name")
+            enum("kind", listOf("A", "B"))
         }
     }
 
@@ -61,6 +63,7 @@ class FlowTableTest {
         assertEquals(FlowHeaderCell("Поз.", rotate = 90, style = "head"), t.header?.cells?.get("pos"))
         assertEquals(listOf("Наиме-", "нование"), t.header?.cells?.get("name")?.lines)
         assertEquals(FlowGroupTitle("name", "head", TextAlign.CENTER, 2, 1), t.groupTitle)
+        assertEquals(FlowGroupBy("kind", listOf("A", "B"), mapOf("A" to "Группа А", "B" to "Группа Б")), t.groupBy)
         assertEquals(FlowRowCell(bind = "\${item.name}", optional = true, align = TextAlign.CENTER), t.rowCells["name"])
         assertEquals(mapOf("head" to "tableHeader", "data" to "tableText"), t.styles)
     }
@@ -73,6 +76,7 @@ class FlowTableTest {
                 rowHeight: 8
                 columns: [{id: a, width: 185}]
                 header: {height: 10, cells: {a: ~}}
+                groupBy: {field: k, order: [X], titles: {X: T}}
                 groupTitle: {column: a}
                 row: {cells: {a: "const"}}
                 """
@@ -253,7 +257,7 @@ class FlowTableTest {
 
         // no `item` declared at all
         val none = TemplateContract.check(template, dataSchema { doc { string("x") } })
-        assertEquals(setOf("blocks[0].table.row.cells.pos.bind", "blocks[0].table.row.cells.name.bind"), none.map { it.path }.toSet())
+        assertEquals(setOf("blocks[0].table.groupBy.field", "blocks[0].table.row.cells.pos.bind", "blocks[0].table.row.cells.name.bind"), none.map { it.path }.toSet())
     }
 
     @Test

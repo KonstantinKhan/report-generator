@@ -25,10 +25,11 @@
 
 **Где живут константы.** Структура и стиль таблицы (ширины колонок, `stick`, тексты и стили шапки, высота
 строки 8 мм, число пустых строк до/после заголовка, колонка заголовка группы, заполнение страницы, цепочка
-заголовка, `bind` каждой ячейки строки) описаны в блоке `body` (`type: flow`, секция `table:`) файла
-`report-ir/src/main/resources/templates/gost-spec.yaml`. Кодом остаются: заголовки групп, их порядок и фильтр
-по виду (`Specification.kt`, `GROUPS`), сквозная нумерация позиций и текст количества
-(`SpecificationDataContext.kt`, `item.quantityText` помечено TEMPORARY до `format`). Алгоритм (измерение, перенос,
+заголовка, `bind` каждой ячейки строки) и ПРАВИЛА данных (заголовки и порядок групп `groupBy`, сквозная нумерация
+позиций `computed.position`, формат количества `format` + `cases`: материалы `0.##` с запятой, остальные целое HALF_UP,
+правило «единица только у материалов») описаны в блоке `body` (`type: flow`, секция `table:`) файла
+`report-ir/src/main/resources/templates/gost-spec.yaml`. Кодом остаются только данные: `Specification.kt` собирает
+`DataContext` и вызывает `FlowTables.build`, `SpecificationDataContext.kt` отдаёт сырые поля записи. Алгоритм (измерение, перенос,
 пагинация, дозаполнение) остаётся кодом `report-layout`. Справка по YAML: `template-yaml.md`, раздел
 «Таблица потока».
 
@@ -75,7 +76,7 @@ data class IrTable(
 - `IrTableHeader.repeat` — шапка на каждой странице (по умолчанию да); `false`: только на первой,
   остальные страницы начинаются у верхнего поля
 - Текст шапки хранится только в `IrTableHeader.cells`; поле `IrColumn.header` удалено (дубль)
-- Эту структуру собирает `FlowTables.build(spec, schema, groups)` из YAML-описания и данных кода
+- Эту структуру собирает `FlowTables.build(spec, schema, rows)` из YAML-описания и записей `item` (правила в YAML)
 
 **Стили**:
 ```kotlin
@@ -206,18 +207,15 @@ SVG имеет встроенную поддержку `font-style="italic"`, б
 ### Report Builder (`reports/specification`)
 
 ```kotlin
-// Specification.kt: данные кода, структура из YAML
-val groups = GROUPS.mapNotNull { (title, kind) ->                 // заголовки, порядок, фильтр: код
-    data.items.filter { it.kind == kind }.takeIf { it.isNotEmpty() }
-        ?.let { items -> FlowGroup(title, items.map { itemRecord(it, ++nextPosition) }) }   // нумерация: код
-}
-table(FlowTables.build(GostSpecTemplate.flowTable, dataContext.schema, groups, GostSpecTemplate.flowTablePath))
+// Specification.kt: только данные, правила таблицы в YAML
+val dataContext = data.toDataContext()
+table(FlowTables.build(GostSpecTemplate.flowTable, dataContext.schema, data.itemRecords(), GostSpecTemplate.flowTablePath))
 ```
 
-Запись строки `item` (схема объявлена адаптером `toDataContext()`): `position` Integer, `designation` String
-(нет значения = пусто), `name` String, `quantityText` String (TEMPORARY, считает `formattedQuantity()`),
-`unit` String (только материалы, у остальных значения нет), `kind` Enum. Ячейки с отсутствующим значением в YAML
-помечены `optional: true`.
+Запись строки `item` (схема объявлена адаптером `toDataContext()`) несёт сырые типизированные поля: `designation` String
+(нет значения = пусто), `name` String, `kind` Enum, `quantity` Decimal, `unit` String (нет значения = пусто). Позицию,
+группы и тексты считает YAML (`groupBy`, `computed`, `cases`, `format`), ячейки с отсутствующим значением помечены
+`optional: true`.
 
 Паритет со старым кодом проверяет `SpecificationTableParityTest`: `IrTable` из YAML равен таблице, которую строил
 прежний код (`LegacySpecificationTable`, только в тестах; кроме `IrColumn.header`, поля больше нет).

@@ -11,6 +11,8 @@
   и таблица потока (блок `body`). Править осторожно: golden-тест сравнивает вывод побайтно.
 - `report-cli/src/main/resources/templates/sheet-frame.yaml` — минимум: лист и рамка.
 - `report-cli/src/main/resources/templates/table-demo.yaml` — таблица, поворот, текст.
+- `report-cli/src/main/resources/templates/purchased-list.yaml` (+ `purchased-list-data.yaml`) — таблица потока с `groupBy`, `sortBy`,
+  `computed` (нумерация в группе), `cases`, `format`; запуск `--data purchased-list-data.yaml`.
 - `report-template/src/test/resources/templates/mini-spec.yaml` — все возможности модели.
 
 ## Как запустить свой шаблон
@@ -345,11 +347,11 @@ blocks:
 
 ## Таблица потока (`flow` + `table`)
 
-Основная таблица листа (тело спецификации). YAML описывает ЧТО рисовать (структура, стиль, параметры), алгоритм
+Основная таблица листа (тело спецификации). YAML описывает ЧТО рисовать (структура, стиль, параметры) и КАК данные
+попадают в таблицу (фильтр, сортировка, группы, нумерация, формат значения, условный вариант ячейки). Алгоритм
 раскладки (измерение, перенос слов, пагинация, дозаполнение страницы, цепочки keep, два прохода) остаётся кодом
-`report-layout`. Данные поставляет код: группы (заголовки, порядок, фильтр по виду), сквозная нумерация и
-запись `item` каждой строки. Группировка, сортировка, нумерация и форматирование в YAML появятся позже
-(следующий этап: `groupBy` / `sortBy` / `sequence` / `format` / `where`).
+`report-layout`. Код поставляет только типизированные записи `item` (сырые значения): строка спецификации не содержит
+правил таблицы. Все операции закрытый набор структурных ключей, строкового языка выражений и скриптов нет.
 
 Блок `flow` с `table:` занимает область потока: `size`, `attach`, `reserves` и `when` кроме `all` не допускаются,
 внутри набора (`blocksets`) такой блок недопустим, на шаблон приходится одна таблица потока. `flow` без `table`
@@ -361,12 +363,16 @@ blocks:
 | `columns` | список `{id, width, stick, align}`; `width` мм; `stick`: `first` / `last` / `none` (по умолчанию) = `stickToFirstRow` / `stickToLastRow` (одностроковое значение садится на первую / последнюю физическую строку строки, растянутой другой колонкой); `align`: `left` (по умолчанию) / `center`, умолчание для ячейки строки |
 | `header` | `{height, repeat, cells}`: `height` мм; `repeat: true` (по умолчанию) шапка на каждой странице, `false` только на первой (остальные страницы начинаются у верхнего поля); `cells` по id колонки, покрывают все колонки, `~` пустая |
 | `header.cells.<id>` | `{text, lines, rotate, align, style}` или скаляр (= `text`). `text` обязателен; `lines` ручной перенос (без авто-переноса, не вместе с `rotate`); `rotate`: 0 / 90 (270 ошибка); `align`: `center` по умолчанию |
-| `groupTitle` | `{column, style, align, spacerBefore, spacerAfter}`: заголовок группы кладётся в колонку `column` (остальные ячейки строки пустые); `spacerBefore` / `spacerAfter` пустые строки с границами до и после (по умолчанию 0, в спецификации 2 и 1); `align` `center` по умолчанию. Без секции заголовок идёт одной ячейкой на всю ширину без спейсеров |
+| `groupTitle` | `{column, style, align, spacerBefore, spacerAfter}` (только вместе с `groupBy`): заголовок группы кладётся в колонку `column` (остальные ячейки строки пустые); `spacerBefore` / `spacerAfter` пустые строки с границами до и после (по умолчанию 0, в спецификации 2 и 1); `align` `center` по умолчанию. Без секции заголовок идёт одной ячейкой на всю ширину без спейсеров |
 | `row` | `{cells}`: ячейки по id колонки, покрывают все колонки |
-| `row.cells.<id>` | `{text, bind, format, optional, align, style}`, скаляр (= `text`) или `~` (пустая). `bind` только вида `${item.поле}`; `align` по умолчанию из колонки |
+| `row.cells.<id>` | `{text, bind, format, optional, align, style, cases}`, скаляр (= `text`) или `~` (пустая). `bind` только вида `${item.поле}`; `align` по умолчанию из колонки; `cases` условные варианты содержимого |
 | `fill` | `blank`: дозаполнить страницу пустыми строками с границами до рамки; `none` (по умолчанию) нет |
 | `keep` | `{titleChain: true}` (по умолчанию): пустые строки до, заголовок группы, пустые после и первая строка данных не разрываются границей страницы (заголовок-сирота внизу страницы невозможен); `false` цепочки нет |
 | `styles` | псевдонимы `{имя: стиль}`; ячейка ссылается на псевдоним или прямо на имя стиля |
+| `where` | предикат фильтра строк (см. «Данные таблицы»); нет = все строки |
+| `sortBy` | список `{field, order: asc\|desc, nulls: first\|last}`; нет = порядок источника |
+| `groupBy` | `{field, order, titles, skipEmpty, omit}`: разбиение по enum-полю на группы; нет = плоская таблица |
+| `computed` | вычисляемые поля `{имя: {sequence: {scope, start, step}}}` |
 
 **Стили.** Имена стилей закрытый набор `Styles.named` из `report-ir`: `mainText`, `tableText`, `heading`,
 `designation`, `tableHeader`, `groupHeader`, `frameText`, `frameTextLarge`. Умолчания: ячейка строки `tableText`,
@@ -381,11 +387,77 @@ blocks:
 (`PageSetup`, например A3 альбомная) колонки сохраняют свою ширину, как и раньше.
 
 **Контракт.** Корень `item` в схеме данных это запись одной строки, поля объявляет адаптер (для спецификации
-`SpecificationData.toDataContext()`): `position` Integer, `designation` String, `name` String, `quantityText`
-String (временно считает код, до `format` на следующем этапе), `unit` String (только у материалов), `kind`
-Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL). Поле без значения в записи (нет обозначения, нет единицы) требует
-`optional: true` в ячейке, иначе ошибка раскладки. Контракт проверяет bind-ы ячеек строки по схеме
-(`blocks[5].table.row.cells.name.bind`).
+`SpecificationData.toDataContext()`): `designation` String, `name` String, `kind` Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL),
+`quantity` Decimal, `unit` String. Поле без значения в записи (нет обозначения, нет единицы) требует `optional: true`
+(в ячейке или в варианте `cases`), иначе ошибка раскладки. К полям записи добавляются `computed` (Integer).
+Контракт проверяет по схеме (пути `blocks[5].table...`): bind-ы ячеек и вариантов, поля и литералы в `where` / `sortBy` /
+`groupBy` / `cases[].where`, `format` под тип, пересечение имён `computed` с полями. Неизвестное поле это ошибка
+загрузки (с подсказкой ближайшего имени), а не пустой столбец.
+
+### Данные таблицы: where, sortBy, groupBy, computed, cases, format
+
+Порядок: `where` (фильтр) -> `sortBy` (устойчивая сортировка) -> `groupBy` (разбиение) -> `computed` (числа по итоговому
+порядку). `where`, `sortBy`, `groupBy` читают только собственные поля записи; имена `computed` видны ячейкам и `cases`.
+
+**Предикат** (закрытый набор): `{field: kind, eq: MATERIAL}`, `ne`, `in: [A, B]`, `{field: unit, isNull: true}`,
+`notNull: true`; комбинаторы `{and: [..]}`, `{or: [..]}`, `{not: p}` (каждый единственный ключ предиката). Литерал
+типизируется по полю: Enum (значение должно быть членом схемы), Integer, Decimal (сравнение по числу: 1 = 1.00), Boolean,
+Date (ISO), String. Нет значения у поля: `eq` и `in` ложны, `ne` истинно.
+
+**`sortBy`**: ключи по порядку, `order` по умолчанию `asc`, `nulls` по умолчанию `last` (пустые идут в конец при любом
+`order`, `first` в начало). Нет `sortBy` = порядок источника. Сортировка устойчивая. Порядок значений: числа и Date по
+значению, Boolean `false < true`, Enum по порядку значений в схеме, String натурально (числовые куски по числу:
+`Вал 2` раньше `Вал 10`; остальное по русскому алфавиту, регистр не учитывается, `java.text.Collator` ru, PRIMARY).
+
+**`groupBy`** (`field` обязательно enum-поле):
+
+```yaml
+groupBy:
+  field: kind
+  order: [ASSEMBLY, PART, STANDARD, OTHER, MATERIAL]   # порядок групп
+  titles: {ASSEMBLY: "Сборочные единицы", ...}          # заголовок каждого значения из order
+  skipEmpty: true     # по умолчанию: значение без строк группы не даёт (нет заголовка и спейсеров); false оставляет пустую
+  omit: []            # значения, которые сознательно отбрасываются
+```
+
+Каждое значение enum из схемы должно быть в `order` или `omit` (иначе ошибка контракта в `groupBy.order`): строка не
+пропадает молча. Значение не из схемы в `order` / `omit` / `titles` ошибка. Данные вне схемы невозможны: адаптер строит
+значения enum из той же схемы; если строка всё же несёт значение вне `order` и `omit`, при сборке бросается
+`IllegalStateException`. Внутри группы строки идут в порядке после `where` / `sortBy`. `titles` лишь для значений
+`order`. Без `groupBy` таблица плоская (`groupTitle` тогда ошибка).
+
+**`computed`**: `name: {sequence: {scope: table|group, start: 1, step: 1}}` даёт Integer `start + step * k`. `scope: table`
+сквозная нумерация по всем группам в порядке таблицы (спецификация), `group` счёт заново в каждой группе. Имя не
+должно совпадать с полем записи (ошибка `computed.<имя>`), `step` не 0. Использование: `${item.position}`.
+
+**`cases`** (ячейка строки): `cases: [{where: <предикат>, text|bind, format, optional}, ...]`. Выигрывает первый вариант,
+чей `where` истинен; иначе собственное содержимое ячейки (`text` или `bind` + `format` + `optional`, по сути `else`);
+если нет ни варианта, ни собственного содержимого, ячейка пустая. `optional` и `format` задаются на каждый вариант
+отдельно. Кроме `where` и содержимого вариант других ключей не имеет (`align` и `style` общие для ячейки).
+
+**`format`** на Decimal-bind (как раньше): `{pattern: "0.##", locale: ru, rounding: HALF_UP}`. Количество в
+спецификации:
+
+```yaml
+quantity:
+  style: data
+  cases:
+    - where: {field: kind, eq: MATERIAL}              # материалы: до 2 знаков, хвостовые нули срезаны, запятая
+      bind: "${item.quantity}"
+      format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
+  bind: "${item.quantity}"                            # остальные виды: целое, HALF_UP
+  format: {pattern: "0", rounding: HALF_UP}
+note:                                                 # единица только у материалов
+  style: data
+  cases:
+    - where: {field: kind, eq: MATERIAL}
+      bind: "${item.unit}"
+      optional: true
+```
+
+**Что не покрыто:** итоги и агрегаты (sum, count, подвалы групп), выражения (`${a} * ${b}`), вычисляемые строки,
+сортировка по вычисляемому полю, группировка по не-enum полю, вложенные группы, подстановка значений в `titles`,
+несколько таблиц потока на шаблон.
 
 **Соответствие IR** (`report-ir` `FlowTables.build`): `columns[]` в `IrColumn` (`stick: first` в
 `stickToFirstRow`, `last` в `stickToLastRow`), `rowHeight` в `IrTable.rowHeight`, `header` в `IrTableHeader`
@@ -401,9 +473,23 @@ Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL). Поле без значения в
   type: flow
   table:
     rowHeight: 8
-    fill: blank
-    keep: {titleChain: true}
+    fill: blank                  # cover each page down to the frame with blank bordered rows
+    keep: {titleChain: true}     # spacers + title + first data line are never split by a page break
     styles: {head: tableHeader, data: tableText, groupTitle: groupHeader}
+    # GOST R 2.106-2019 p.1 order. A kind without items makes no group (skipEmpty), no sortBy = source order.
+    groupBy:
+      field: kind
+      order: [ASSEMBLY, PART, STANDARD, OTHER, MATERIAL]
+      titles:
+        ASSEMBLY: "Сборочные единицы"
+        PART: "Детали"
+        STANDARD: "Стандартные изделия"
+        OTHER: "Прочие изделия"
+        MATERIAL: "Материалы"
+      skipEmpty: true
+    # one running number over all groups (scope: table), 1, 2, 3, ...
+    computed:
+      position: {sequence: {scope: table, start: 1, step: 1}}
     columns:
       - {id: format, width: 6, stick: first, align: center}
       - {id: zone, width: 6, stick: first, align: center}
@@ -414,10 +500,14 @@ Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL). Поле без значения в
       - {id: note, width: 22, stick: last, align: center}
     header:
       height: 15
-      repeat: true
+      repeat: true               # on every page
       cells:
         format: {text: "Формат", rotate: 90, style: head}
-        # ... zone, position, designation, name, quantity аналогично
+        zone: {text: "Зона", rotate: 90, style: head}
+        position: {text: "Поз.", rotate: 90, style: head}
+        designation: {text: "Обозначение", style: head}
+        name: {text: "Наименование", style: head}
+        quantity: {text: "Кол.", rotate: 90, style: head}
         note: {text: "Примечание", lines: ["Приме-", "чание"], style: head}
     groupTitle: {column: name, style: groupTitle, align: center, spacerBefore: 2, spacerAfter: 1}
     row:
@@ -427,11 +517,36 @@ Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL). Поле без значения в
         position: {bind: "${item.position}", style: data}
         designation: {bind: "${item.designation}", optional: true, style: data}
         name: {bind: "${item.name}", style: data}
-        quantity: {bind: "${item.quantityText}", style: data}
-        note: {bind: "${item.unit}", optional: true, style: data}
+        # materials: up to 2 decimals, trailing zeros trimmed, decimal comma (1,5; 0,35; 3). Every other kind
+        # is a whole count (rounded half up): Loodsman counts them in pieces.
+        quantity:
+          style: data
+          cases:
+            - where: {field: kind, eq: MATERIAL}
+              bind: "${item.quantity}"
+              format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
+          bind: "${item.quantity}"
+          format: {pattern: "0", rounding: HALF_UP}
+        # the unit is shown for materials only (other kinds are pieces and get no unit)
+        note:
+          style: data
+          cases:
+            - where: {field: kind, eq: MATERIAL}
+              bind: "${item.unit}"
+              optional: true
 ```
 
-**Ограничения.** Группы, их заголовки, порядок, нумерация и `quantityText` задаёт код. Параметры `${param.x}`
+**Миграция (этап 3).** Раньше код задавал группы (`FlowGroup`, `GROUPS` в `Specification.kt`), нумерацию (`item.position`) и
+текст количества (`item.quantityText`, `formattedQuantity()`), а `unit` отдавался только материалам. Теперь запись `item`
+несёт сырые поля (`designation`, `name`, `kind`, `quantity` Decimal, `unit`), а группировку, нумерацию, формат
+количества и правило «единица только у материалов» описывает YAML. `FlowTables.build(spec, schema, rows, path)` принимает
+плоский список записей (`FlowGroup` и `buildRows` удалены), сам проверяет контракт и применяет правила.
+`formattedQuantity()` удалена из `report-data`; её копия `legacyFormattedQuantity` живёт в тестах как эталон
+(`SpecificationQuantityFormatTest`). Известные отличия YAML-формата от старого кода только для отрицательных и нечисловых
+значений (недостижимы для данных Loodsman), см. комментарий теста. Свой шаблон со старым контрактом: `item.position` объявите
+в `computed`, `item.quantityText` замените ячейкой с `format`, `groupTitle` без `groupBy` теперь ошибка.
+
+**Ограничения.** Параметры `${param.x}`
 в таблице потока не поддерживаются, ширины и высоты числами. Выравнивание `right` в таблице потока нет, поворот
 только 0 и 90. Таблица рисуется от левого поля листа на каждой странице; блок `flow` с таблицей и блоки слотов
 уже участвуют в расстановке, но не рисуются самим `flow`. В `TemplateMain` таблица рисуется (см. ниже).
@@ -439,7 +554,11 @@ Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL). Поле без значения в
 **`TemplateMain` и таблица потока.** Если в шаблоне есть `flow` с `table:`, строки берутся из корня `item:` файла
 `--data` (последовательность карт), таблица проходит через настоящий движок (перенос, пагинация, дозаполнение),
 число страниц определяет пагинация (`--pages` игнорируется), остальные блоки шаблона дорисовываются на каждую
-страницу. Групп в этом режиме нет (плоский список строк). Блоки с id слотов (`stamp`, `leftMargin`, ...) в таком
+страницу. Группы, сортировка, нумерация и форматы работают как в спецификации: поле `groupBy.field` читается из файла как
+enum без тегов, его домен задаёт сам шаблон (`order` + `omit`), значение вне домена даёт ошибку контракта
+`...groupBy.order`, а не потерянную строку (тег `!enum` тоже есть, домен тогда значения файла). Колонка с 1 и 2.5 в разных
+строках становится Decimal. Пример: `purchased-list.yaml` + `purchased-list-data.yaml` (стиль «Ведомость покупных
+изделий», не точная форма ЕСКД). Блоки с id слотов (`stamp`, `leftMargin`, ...) в таком
 шаблоне лучше не называть: движок считает их своими. Рамку листа движок рисует сам по полям, рамка из шаблона
 ляжет поверх.
 
@@ -466,19 +585,20 @@ Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL). Поле без значения в
 - Один шрифт (GOST Type B), поле `style` в `TemplateMain` игнорируется.
 - `repeat.from` не резолвится.
 - Блоки шаблона не из слотов участвуют в расстановке основного движка, но не рисуются.
-- Bind только скалярный: `repeat.from`, группировка, сортировка, нумерация и форматирование таблицы потока в YAML
-  (следующий этап) не резолвятся. Выражений нет.
+- Bind только скалярный: `repeat.from` не резолвится. Выражений нет; итогов и агрегатов таблицы потока нет (см. «Данные таблицы»).
 - Лист нулевой или отрицательной ширины и высоты даёт ошибку валидации.
 
 ## Тесты
 
 - `report-template`: загрузка, валидация, привязки, поворот, наборы, область потока; `DataTest` (типы, схема,
   форматы, `--data`), `TemplateContractTest` (контракт, `format`, `optional`, пути ошибок).
-- `report-template`: `FlowTableTest` (загрузка, неизвестные ключи, структура, ширина, стили, контракт строки).
+- `report-template`: `FlowTableTest` (загрузка, неизвестные ключи, структура, ширина, стили, контракт строки), `FlowShapingTest`
+  (where / sortBy / groupBy / computed / cases / format: загрузка, валидация, контракт, прогон на данных, `DataYaml`).
 - `report-ir`: `FlowTablesTest` (YAML-описание в `IrTable`: стили, шапка, optional).
 - `report-layout`: `FlowTableLayoutTest` (спейсеры, цепочка, `fillBlank`, `header.repeat`).
 - `reports/specification`: `SpecificationTableParityTest` (`IrTable` из YAML равен старой таблице,
-  `LegacySpecificationTable` только в тестах).
+  `LegacySpecificationTable` только в тестах), `SpecificationQuantityFormatTest` (формат количества и правило единицы против
+  старого форматтера).
 - `report-cli`: `TemplateMainTest` (смоук `--data`, ошибка контракта до раскладки, таблица потока с пагинацией).
 - `report-geometry`: `AnchorTest` для `placeOrigin` и `resolveAnchor`.
 - `report-ir`: `FrameSpecsTemplateParityTest` сверяет `FrameSpecs` из YAML со старыми

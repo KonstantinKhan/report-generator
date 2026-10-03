@@ -26,6 +26,7 @@ import dev.reportgenerator.template.TemplateException
 import dev.reportgenerator.template.TemplateLoader
 import dev.reportgenerator.template.TemplateResolver
 import dev.reportgenerator.template.dataContext
+import dev.reportgenerator.template.declaredEnumValues
 import java.io.File
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -81,7 +82,11 @@ fun main(args: Array<String>) {
             )
         }
         // --- Данные: из файла (типы по виду значений) или демо ---
-        val data = if (dataFile != null) DataYaml.loadFile(dataFile.toPath()) else DataFile(DEMO_DATA, emptyList())
+        // Поля item, по которым шаблон группирует (groupBy.field), читаются как enum: домен задаёт сам шаблон
+        // (order / omit), поэтому в файле данных теги не нужны.
+        val itemEnums = template.blocks.filterIsInstance<FlowBlock>().firstNotNullOfOrNull { it.table }
+            ?.let { t -> t.groupBy?.let { g -> mapOf(g.field to t.declaredEnumValues().getValue(g.field)) } } ?: emptyMap()
+        val data = if (dataFile != null) DataYaml.loadFile(dataFile.toPath(), itemEnums) else DataFile(DEMO_DATA, emptyList())
         renderTemplate(template, data.context, pages, outputDir, data.items).forEach { println("wrote ${it.absolutePath}") }
     } catch (e: TemplateException) {
         // Ошибка в YAML: печатаем каждую как "путь: сообщение" и выходим с кодом 1.
@@ -162,7 +167,7 @@ private fun layOutWithFlow(
         dataContext = data,
         staticTemplate = template
     )
-    val table = FlowTables.buildRows(spec, data.schema, items, specPath)
+    val table = FlowTables.build(spec, data.schema, items, specPath)
     val flowPages = layOut(IrDocument(setup, listOf(table)), textMeasurer, fonts::resolve).pages
     val total = flowPages.size
     return LaidOutDocument(

@@ -184,15 +184,68 @@ data class FlowGroupTitle(
     val spacerAfter: Int = 0
 )
 
+// Structured, closed row predicate (flow table `where`, `groupBy`-less filtering, `cases`). `field` is a field of
+// the row record `item` (no root prefix). Literals are kept as written and typed against the field's type by the
+// contract (Enum: a member of the schema's values, Integer, Decimal, Boolean, ISO Date, String). No expressions.
+sealed interface Predicate {
+    data class Eq(val field: String, val value: String) : Predicate
+    data class Ne(val field: String, val value: String) : Predicate
+    data class In(val field: String, val values: List<String>) : Predicate
+    data class IsNull(val field: String) : Predicate
+    data class NotNull(val field: String) : Predicate
+    data class And(val items: List<Predicate>) : Predicate
+    data class Or(val items: List<Predicate>) : Predicate
+    data class Not(val item: Predicate) : Predicate
+}
+
+enum class SortOrder { ASC, DESC }
+
+enum class NullsOrder { FIRST, LAST }
+
+// One `sortBy` key. `nulls` places rows without a value for the field first / last regardless of `order`.
+data class FlowSort(val field: String, val order: SortOrder = SortOrder.ASC, val nulls: NullsOrder = NullsOrder.LAST)
+
+// `scope`: one running number over the whole table (group order) or restarted in every group.
+enum class SequenceScope { TABLE, GROUP }
+
+// `computed:` entries, a closed set. `sequence` gives an Integer: start, start + step, ...
+sealed interface FlowComputed {
+    data class Sequence(val scope: SequenceScope = SequenceScope.TABLE, val start: Long = 1, val step: Long = 1) : FlowComputed
+}
+
+// Rows are split by an Enum field of the row record into groups, in `order`; `titles` = the group title text of
+// every value in `order`. `skipEmpty` (default): a value without rows makes no group (no title, no spacers),
+// false: an empty group is kept. `omit`: values that are dropped on purpose; every value the field can have must
+// be in `order` or `omit` (contract), so no row is lost silently.
+data class FlowGroupBy(
+    val field: String,
+    val order: List<String>,
+    val titles: Map<String, String>,
+    val skipEmpty: Boolean = true,
+    val omit: List<String> = emptyList()
+)
+
+// One variant of a cell: `where` true -> this text / bind (with `format`, `optional`) is the cell's content.
+data class FlowCase(
+    val where: Predicate,
+    val text: String? = null,
+    val bind: String? = null,
+    val format: FormatSpec? = null,
+    val optional: Boolean = false
+)
+
 // Row cell: literal `text` or `bind` (root `item`, one record of the data the code supplies), `format` /
 // `optional` as for any bind. `align` null = the column's. No cell content = empty cell.
+// `cases`: the first case whose `where` holds wins; otherwise the cell's own text / bind / format / optional
+// (the default); no case matching and no default content = empty.
 data class FlowRowCell(
     val text: String? = null,
     val bind: String? = null,
     val format: FormatSpec? = null,
     val optional: Boolean = false,
     val align: TextAlign? = null,
-    val style: String? = null
+    val style: String? = null,
+    val cases: List<FlowCase> = emptyList()
 )
 
 enum class FlowFill { NONE, BLANK }
@@ -202,6 +255,10 @@ enum class FlowFill { NONE, BLANK }
 data class FlowKeep(val titleChain: Boolean = true)
 
 // `styles`: alias -> style name the consumer knows (cells may use either).
+// Data shaping, in this order: `where` (filter rows) -> `sortBy` (stable; none = source order) -> `groupBy`
+// (none = a flat table; groups follow `order`, rows keep their order inside) -> `computed` (numbers over the
+// final order, so `scope: table` runs through the groups in table order). `where`, `sortBy`, `groupBy` read the
+// record's own fields; `computed` names are visible to row cells and `cases` only.
 data class FlowTableSpec(
     val rowHeight: Double,
     val columns: List<FlowColumn>,
@@ -210,7 +267,11 @@ data class FlowTableSpec(
     val rowCells: Map<String, FlowRowCell>,
     val fill: FlowFill = FlowFill.NONE,
     val keep: FlowKeep = FlowKeep(),
-    val styles: Map<String, String> = emptyMap()
+    val styles: Map<String, String> = emptyMap(),
+    val where: Predicate? = null,
+    val sortBy: List<FlowSort> = emptyList(),
+    val groupBy: FlowGroupBy? = null,
+    val computed: Map<String, FlowComputed> = emptyMap()
 )
 
 // `format` / `optional` only go with `bind` (see FormatSpec, Binding).

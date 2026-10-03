@@ -1,0 +1,74 @@
+# Sample flow table: a "Ведомость покупных изделий" style list (NOT an exact ESKD form). Shows what the YAML does with
+# the data: groups with their own titles and order, sorting, numbering that restarts in every group, a number
+# format and a conditional cell. Render with the sample data:
+#   ./gradlew :report-cli:runTemplate -Pargs="src/main/resources/templates/purchased-list.yaml output --data src/main/resources/templates/purchased-list-data.yaml"
+# Item fields come from the data file: category (grouped, read as enum: its values are `groupBy.order`), name,
+# supplier, qty, unit, price (optional). Columns: 10+75+40+15+15+30 = 185 mm = A4 content width (20 left + 5 right margin).
+name: purchased-list
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {left: 20, top: 5, right: 5, bottom: 5}
+
+blocks:
+  - id: body
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank
+      styles: {head: tableHeader, data: tableText, title: groupHeader}
+      # fasteners first, then bearings; electrics last. A category without rows makes no group.
+      groupBy:
+        field: category
+        order: [FASTENER, BEARING, ELECTRIC]
+        titles:
+          FASTENER: "Крепёж"
+          BEARING: "Подшипники"
+          ELECTRIC: "Электроизделия"
+      # inside a group: by name (natural order, 'Болт 2' before 'Болт 10'), rows without a name last
+      sortBy:
+        - {field: name, order: asc, nulls: last}
+      # numbering restarts in every group
+      computed:
+        pos: {sequence: {scope: group, start: 1, step: 1}}
+      columns:
+        - {id: pos, width: 10, stick: first, align: center}
+        - {id: name, width: 75}
+        - {id: supplier, width: 40}
+        - {id: qty, width: 15, stick: last, align: center}
+        - {id: unit, width: 15, stick: last, align: center}
+        - {id: price, width: 30, stick: last, align: center}
+      header:
+        height: 12
+        cells:
+          pos: {text: "№", style: head}
+          name: {text: "Наименование", style: head}
+          supplier: {text: "Поставщик", style: head}
+          qty: {text: "Кол.", style: head}
+          unit: {text: "Ед.", style: head}
+          price: {text: "Цена, руб.", style: head}
+      groupTitle: {column: name, style: title, align: center, spacerBefore: 1, spacerAfter: 1}
+      row:
+        cells:
+          pos: {bind: "${item.pos}", style: data}
+          name: {bind: "${item.name}", style: data}
+          supplier: {bind: "${item.supplier}", optional: true, style: data}
+          # whole numbers for pieces, up to 2 decimals for the rest (decimal comma)
+          qty:
+            style: data
+            cases:
+              - where: {field: unit, in: [шт, компл]}
+                bind: "${item.qty}"
+                format: {pattern: "0", rounding: HALF_UP}
+            bind: "${item.qty}"
+            format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
+          unit: {bind: "${item.unit}", style: data}
+          # no price: "по запросу"
+          price:
+            style: data
+            cases:
+              - where: {field: price, isNull: true}
+                text: "по запросу"
+            bind: "${item.price}"
+            format: {pattern: "0.00", locale: ru, rounding: HALF_UP}

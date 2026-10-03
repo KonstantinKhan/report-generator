@@ -13,6 +13,15 @@ object TemplateContract {
         return errors
     }
 
+    // One flow table on its own (the engine builds it from rows supplied by code); `path` = its YAML location.
+    fun checkFlowTable(spec: FlowTableSpec, schema: DataSchema, path: String): List<TemplateError> =
+        ArrayList<TemplateError>().also { FlowContract.check(spec, schema, path, it) }
+
+    fun requireFlowTable(spec: FlowTableSpec, schema: DataSchema, path: String) {
+        val errors = checkFlowTable(spec, schema, path)
+        if (errors.isNotEmpty()) throw TemplateException(errors)
+    }
+
     fun require(template: Template, schema: DataSchema) {
         val errors = check(template, schema)
         if (errors.isNotEmpty()) throw TemplateException(errors)
@@ -29,11 +38,8 @@ object TemplateContract {
                         is RepeatRows -> checkRow(row.row, "$p.rows[$r].repeat.row", schema, errors)
                     }
                 }
-                // flow table row cells read the row record (root `item`) of the schema; every other part of the
-                // table is static
-                is FlowBlock -> b.table?.rowCells?.forEach { (id, c) ->
-                    c.bind?.let { checkBind(it, c.format, "$p.table.row.cells.$id", schema, errors) }
-                }
+                // a flow table reads the row record (root `item`) of the schema (FlowContract); the rest is static
+                is FlowBlock -> b.table?.let { FlowContract.check(it, schema, "$p.table", errors) }
                 else -> {}
             }
         }
@@ -44,7 +50,7 @@ object TemplateContract {
     }
 
     // `owner` = YAML path of the cell / text block that holds the bind.
-    private fun checkBind(bind: String, format: FormatSpec?, owner: String, schema: DataSchema, errors: MutableList<TemplateError>) {
+    internal fun checkBind(bind: String, format: FormatSpec?, owner: String, schema: DataSchema, errors: MutableList<TemplateError>) {
         val path = Binding.path(bind)
         if (!BIND_EXPR.matches(bind)) {
             errors += TemplateError("$owner.bind", "bind must be a single path expression like \${doc.designation}, got '$bind'")
@@ -71,7 +77,7 @@ object TemplateContract {
     }
 
     // Closest known name within edit distance 2 (case-insensitive), or null.
-    private fun nearest(name: String, known: List<String>): String? =
+    internal fun nearest(name: String, known: List<String>): String? =
         known.map { it to distance(name.lowercase(), it.lowercase()) }.filter { it.second <= 2 }.minByOrNull { it.second }?.first
 
     private fun distance(a: String, b: String): Int {

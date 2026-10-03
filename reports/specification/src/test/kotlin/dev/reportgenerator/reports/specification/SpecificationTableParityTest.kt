@@ -32,6 +32,12 @@ class SpecificationTableParityTest {
     fun `all kinds equal the legacy table`() = assertEquals(LegacySpecificationTable.table(data(allKinds)), table(data(allKinds)))
 
     @Test
+    fun `items in a shuffled source order equal the legacy table (kinds regroup, source order kept inside)`() {
+        val shuffled = allKinds.reversed() + allKinds.take(3)
+        assertEquals(LegacySpecificationTable.table(data(shuffled)), table(data(shuffled)))
+    }
+
+    @Test
     fun `empty specification equals the legacy table`() = assertEquals(LegacySpecificationTable.table(data(emptyList())), table(data(emptyList())))
 
     @Test

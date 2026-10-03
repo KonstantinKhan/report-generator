@@ -1,31 +1,36 @@
 package dev.reportgenerator.ir
 
 import dev.reportgenerator.geometry.mm
-import dev.reportgenerator.template.Binding
 import dev.reportgenerator.template.DataSchema
 import dev.reportgenerator.template.DataValue
+import dev.reportgenerator.template.FlowCellRenderer
 import dev.reportgenerator.template.FlowFill
+import dev.reportgenerator.template.FlowShaper
 import dev.reportgenerator.template.FlowStick
 import dev.reportgenerator.template.FlowTableSpec
 import dev.reportgenerator.template.MapDataContext
+import dev.reportgenerator.template.TemplateContract
 import dev.reportgenerator.template.TemplateError
 import dev.reportgenerator.template.TemplateException
+import dev.reportgenerator.template.itemFields
+import dev.reportgenerator.template.itemSchema
 import dev.reportgenerator.template.TextAlign as TemplateTextAlign
 
-// One group of the flow table as the code assembles it: the title and its rows (one `item` record each).
-// Titles, order and filtering of groups stay code for now (the template describes structure and style).
-data class FlowGroup(val title: String, val rows: List<DataValue.Record>)
-
-// YAML flow table spec (FlowTableSpec) + data supplied by code -> IrTable. Structure, widths, header,
-// spacers, styles and the bind of every row cell come from the spec; the layout algorithm (measure, wrap,
-// pagination, fill) stays in report-layout. `schema` declares the `item` record the row binds read.
+// YAML flow table spec (FlowTableSpec) + rows supplied by code -> IrTable. Structure, widths, header, spacers,
+// styles, the data rules (where / sortBy / groupBy / computed numbering) and the content of every row cell
+// (bind, format, cases) come from the spec; the layout algorithm (measure, wrap, pagination, fill) stays in
+// report-layout. `schema` declares the `item` record the rows are made of (the code adds no table logic).
 object FlowTables {
     private const val DEFAULT_ROW_STYLE = "tableText"
     private const val DEFAULT_HEADER_STYLE = "tableHeader"
     private const val DEFAULT_TITLE_STYLE = "groupHeader"
 
-    // `path` = YAML location of the spec (e.g. `blocks[5].table`), for error messages.
-    fun build(spec: FlowTableSpec, schema: DataSchema, groups: List<FlowGroup>, path: String = "table"): IrTable {
+    // `rows` = one `item` record per row, in source order. `path` = YAML location of the spec (e.g.
+    // `blocks[5].table`), for error messages. The spec is checked against `schema` first (TemplateContract).
+    fun build(spec: FlowTableSpec, schema: DataSchema, rows: List<DataValue.Record>, path: String = "table"): IrTable {
+        TemplateContract.requireFlowTable(spec, schema, path)
+        val shaped = FlowShaper.shape(spec, schema, rows)
+        val rowSchema = spec.itemSchema(schema)
         val styles = StyleResolver(spec)
         val columns = spec.columns.map {
             IrColumn(it.id, it.width.mm, stickToFirstRow = it.stick == FlowStick.FIRST, stickToLastRow = it.stick == FlowStick.LAST)
@@ -63,13 +68,17 @@ object FlowTables {
             val cell = spec.rowCells.getValue(it.id)
             it.id to styles.resolve(cell.style ?: DEFAULT_ROW_STYLE, "$path.row.cells.${it.id}.style")
         }
+        val fields = spec.itemFields(schema)
+        val renderers = spec.columns.associate { it.id to FlowCellRenderer(spec.rowCells.getValue(it.id), fields) }
         fun row(item: DataValue.Record): IrRow {
-            val data = MapDataContext(schema, mapOf("item" to item))
+            val data = MapDataContext(rowSchema, mapOf("item" to item))
             return IrRow(
                 spec.columns.map { column ->
                     val cell = spec.rowCells.getValue(column.id)
-                    val text = cell.bind?.let { Binding.render(it, cell.format, cell.optional, data) } ?: cell.text.orEmpty()
-                    IrCell(text, style = rowStyles.getValue(column.id), align = (cell.align ?: column.align).toIr())
+                    IrCell(
+                        renderers.getValue(column.id).render(item, data),
+                        style = rowStyles.getValue(column.id), align = (cell.align ?: column.align).toIr()
+                    )
                 }
             )
         }
@@ -77,17 +86,12 @@ object FlowTables {
         return IrTable(
             columns = columns,
             header = header,
-            content = groups.map { g -> IrGroup(g.title, g.rows.map(::row)) },
+            content = if (spec.groupBy == null) shaped.flatMap { it.rows }.map(::row)
+            else shaped.map { g -> IrGroup(requireNotNull(g.title), g.rows.map(::row)) },
             rowHeight = spec.rowHeight.mm,
             groupTitle = groupTitle,
             fillBlank = spec.fill == FlowFill.BLANK
         )
-    }
-
-    // Rows with no groups (a plain list of `item` records).
-    fun buildRows(spec: FlowTableSpec, schema: DataSchema, rows: List<DataValue.Record>, path: String = "table"): IrTable {
-        val grouped = build(spec, schema, listOf(FlowGroup("", rows)), path)
-        return grouped.copy(content = (grouped.content.single() as IrGroup).rows)
     }
 
     // alias (FlowTableSpec.styles) first, then a built-in style name.

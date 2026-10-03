@@ -1,19 +1,29 @@
 # report-template
 
 Declarative page template: YAML -> model -> validation -> absolute geometry.
-Stage 2: the whole specification sheet is described in `report-ir/src/main/resources/templates/gost-spec.yaml`:
+Stage 2/3: the whole specification sheet is described in `report-ir/src/main/resources/templates/gost-spec.yaml`:
 the static blocks (stamps, margin tables; `FrameSpecs` content, `LayoutEngine` placement, page visibility,
 content reservation) and the main (flow) table, a `type: flow` block with a `table:` section. The section says
 WHAT is drawn (columns, header, group title and spacers, row cells as `bind: ${item.x}`, styles, fill, keep);
-the layout algorithm (measure, wrap, pagination, blank fill) stays Kotlin in `report-layout`, and the data
-(groups, numbering, `item` records) is supplied by code. `FlowTableSpec` (model) is turned into an `IrTable`
+the layout algorithm (measure, wrap, pagination, blank fill) stays Kotlin in `report-layout`. Stage 3 moved the data
+rules into the same section, as a closed set of structured operations (no string expressions, no scripting): `where`,
+`sortBy`, `groupBy` (order, titles, skipEmpty, omit), `computed` (`sequence`, scope table|group), and per cell
+`format` + `cases` (first matching predicate wins, the cell's own content is the default). Predicates are
+`{field, eq|ne|in|isNull|notNull}` plus `and`/`or`/`not`. The code only supplies typed `item` records (raw values). `FlowTableSpec` (model) is turned into an `IrTable`
 by `report-ir` `FlowTables`. Units in YAML: mm. Internally `Length` (1/100 mm).
 
 Flow table validation (`TemplateValidator`): unknown keys, column ids and widths, header / row cells must cover
 every column, group title column exists, binds are `${item.x}`, style names (aliases from `styles:` or the
 consumer's names, pass `styleNames` to `TemplateLoader.load`), and the column widths must sum to the flow region
-width = the template sheet's content width, exactly at 0.01 mm (no tolerance). `TemplateContract` checks the
-row binds against the `item` root of the data schema.
+width = the template sheet's content width, exactly at 0.01 mm (no tolerance). `TemplateContract` (`FlowContract`)
+checks the row binds, predicates, `sortBy`, `groupBy`, `cases` and `format` against the `item` root of the data
+schema, with YAML paths: fields exist and are scalars, literals fit the type (enum values are schema members),
+`groupBy` reads an Enum field and every enum value is in `order` or `omit` (nothing is dropped silently),
+`computed` names (Integer) do not clash with record fields and are visible to cells / `cases` only. Order of
+shaping: where -> sortBy (stable, strings natural + Russian collation, nulls last by default) -> groupBy ->
+computed. `FlowShaper` / `FlowCellRenderer` (`FlowData.kt`) run it; `FlowTables.build(spec, schema, rows)` in
+`report-ir` makes the `IrTable`. Reference: `docs/wiki/template-yaml.md`. Not covered: totals / aggregates,
+expressions, sorting by computed fields, nested or non-enum grouping.
 
 ```kotlin
 val template = TemplateLoader.load(yamlText)            // parse + validate, throws TemplateException

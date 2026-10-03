@@ -387,15 +387,62 @@ object TemplateValidator {
         coverage(t.rowCells.keys, "$p.row.cells")
         t.rowCells.forEach { (id, c) ->
             val cp = "$p.row.cells.$id"
-            if (c.text != null && c.bind != null) errors += TemplateError(cp, "cell has both 'text' and 'bind'")
-            c.bind?.let {
-                checkBind(it, "$cp.bind", errors)
-                if (BIND_EXPR.matches(it) && !Binding.path(it).startsWith("item.")) {
-                    errors += TemplateError("$cp.bind", "flow row binds read the row record: expected \${item.<field>}, got '$it'")
-                }
+            rowContent(c.text, c.bind, c.format != null, c.optional, cp, errors)
+            c.cases.forEachIndexed { i, case ->
+                val kp = "$cp.cases[$i]"
+                predicateShape(case.where, "$kp.where", errors)
+                rowContent(case.text, case.bind, case.format != null, case.optional, kp, errors)
             }
-            checkBindOptions(c.bind, c.format != null, c.optional, cp, errors)
             style(c.style, "$cp.style")
+        }
+
+        // data shaping
+        t.where?.let { predicateShape(it, "$p.where", errors) }
+        t.groupBy?.let { g ->
+            val gp = "$p.groupBy"
+            if (g.order.isEmpty()) errors += TemplateError("$gp.order", "must list at least one value")
+            g.order.groupBy { it }.filterValues { it.size > 1 }.keys.forEach { errors += TemplateError("$gp.order", "duplicate value '$it'") }
+            g.omit.filter { it in g.order }.forEach { errors += TemplateError("$gp.omit", "'$it' is also in 'order'") }
+            g.order.filter { it !in g.titles }.forEach { errors += TemplateError("$gp.titles", "missing title for '$it'") }
+            g.titles.keys.filter { it !in g.order }.forEach { errors += TemplateError("$gp.titles.$it", "'$it' is not in 'order' (a title belongs to a group)") }
+        }
+        if (t.groupTitle != null && t.groupBy == null) {
+            errors += TemplateError("$p.groupTitle", "'groupTitle' needs 'groupBy' (there are no groups to title)")
+        }
+        t.sortBy.forEachIndexed { i, s -> if (s.field.isEmpty()) errors += TemplateError("$p.sortBy[$i].field", "must not be empty") }
+        t.computed.forEach { (name, op) ->
+            val cp = "$p.computed.$name"
+            if (!ID_PATTERN.matches(name)) errors += TemplateError(cp, "invalid computed name '$name' (letters, digits, _ and -)")
+            if (op is FlowComputed.Sequence && op.step == 0L) errors += TemplateError("$cp.sequence.step", "must not be 0")
+        }
+    }
+
+    // Content of a cell or a case: `text` xor `bind` (an `item` path), `format` / `optional` need a bind.
+    private fun rowContent(text: String?, bind: String?, hasFormat: Boolean, optional: Boolean, path: String, errors: MutableList<TemplateError>) {
+        if (text != null && bind != null) errors += TemplateError(path, "cell has both 'text' and 'bind'")
+        bind?.let {
+            checkBind(it, "$path.bind", errors)
+            if (BIND_EXPR.matches(it) && !Binding.path(it).startsWith("item.")) {
+                errors += TemplateError("$path.bind", "flow row binds read the row record: expected \${item.<field>}, got '$it'")
+            }
+        }
+        checkBindOptions(bind, hasFormat, optional, path, errors)
+    }
+
+    // Shape rules the loader cannot see: no empty and / or, no empty `in`.
+    private fun predicateShape(pr: Predicate, path: String, errors: MutableList<TemplateError>) {
+        when (pr) {
+            is Predicate.And -> {
+                if (pr.items.isEmpty()) errors += TemplateError("$path.and", "must not be empty")
+                pr.items.forEachIndexed { i, q -> predicateShape(q, "$path.and[$i]", errors) }
+            }
+            is Predicate.Or -> {
+                if (pr.items.isEmpty()) errors += TemplateError("$path.or", "must not be empty")
+                pr.items.forEachIndexed { i, q -> predicateShape(q, "$path.or[$i]", errors) }
+            }
+            is Predicate.Not -> predicateShape(pr.item, "$path.not", errors)
+            is Predicate.In -> if (pr.values.isEmpty()) errors += TemplateError("$path.in", "must not be empty")
+            else -> {}
         }
     }
 

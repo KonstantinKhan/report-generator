@@ -244,7 +244,7 @@ private class Reader {
 
     private fun flowTable(node: YamlNode, path: String): FlowTableSpec {
         val m = node.asMap(path)
-        m.allow(path, "rowHeight", "columns", "header", "groupTitle", "row", "fill", "keep", "styles")
+        m.allow(path, "rowHeight", "columns", "header", "groupTitle", "row", "fill", "keep", "styles", "where", "sortBy", "groupBy", "computed")
         val rowPath = "$path.row"
         val row = m.required("row", path).asMap(rowPath)
         row.allow(rowPath, "cells")
@@ -268,8 +268,92 @@ private class Reader {
             } ?: FlowKeep(),
             styles = m.optional("styles")?.asMap("$path.styles")?.entries?.entries?.associate { (k, v) ->
                 k.content to v.scalar("$path.styles.${k.content}")
+            } ?: emptyMap(),
+            where = m.optional("where")?.let { predicate(it, "$path.where") },
+            sortBy = m.optional("sortBy")?.let { n ->
+                n.asList("$path.sortBy").items.mapIndexed { i, k -> flowSort(k, "$path.sortBy[$i]") }
+            } ?: emptyList(),
+            groupBy = m.optional("groupBy")?.let { flowGroupBy(it, "$path.groupBy") },
+            computed = m.optional("computed")?.let { n ->
+                n.asMap("$path.computed").entries.entries.associate { (k, v) -> k.content to flowComputed(v, "$path.computed.${k.content}") }
             } ?: emptyMap()
         )
+    }
+
+    // {field, order: asc|desc, nulls: first|last}
+    private fun flowSort(node: YamlNode, path: String): FlowSort {
+        val m = node.asMap(path)
+        m.allow(path, "field", "order", "nulls")
+        return FlowSort(
+            field = m.string("field", path) ?: fail(path, node, "missing required field 'field'"),
+            order = m.optional("order")?.let { n ->
+                SortOrder.entries.firstOrNull { it.name == n.scalar("$path.order").uppercase() } ?: fail("$path.order", n, "expected asc|desc")
+            } ?: SortOrder.ASC,
+            nulls = m.optional("nulls")?.let { n ->
+                NullsOrder.entries.firstOrNull { it.name == n.scalar("$path.nulls").uppercase() } ?: fail("$path.nulls", n, "expected first|last")
+            } ?: NullsOrder.LAST
+        )
+    }
+
+    private fun flowGroupBy(node: YamlNode, path: String): FlowGroupBy {
+        val m = node.asMap(path)
+        m.allow(path, "field", "order", "titles", "skipEmpty", "omit")
+        fun names(key: String) = m.optional(key)?.asList("$path.$key")?.items?.mapIndexed { i, n -> n.scalar("$path.$key[$i]") }
+        return FlowGroupBy(
+            field = m.string("field", path) ?: fail(path, node, "missing required field 'field'"),
+            order = names("order") ?: fail(path, node, "missing required field 'order'"),
+            titles = m.optional("titles")?.asMap("$path.titles")?.entries?.entries?.associate { (k, v) ->
+                k.content to v.scalar("$path.titles.${k.content}")
+            } ?: emptyMap(),
+            skipEmpty = m.optional("skipEmpty")?.let { bool(it, "$path.skipEmpty") } ?: true,
+            omit = names("omit") ?: emptyList()
+        )
+    }
+
+    // `computed.<name>`: a closed set of one-key operations, now only `sequence`.
+    private fun flowComputed(node: YamlNode, path: String): FlowComputed {
+        val m = node.asMap(path)
+        m.allow(path, "sequence")
+        val seq = m.required("sequence", path).asMap("$path.sequence")
+        val sp = "$path.sequence"
+        seq.allow(sp, "scope", "start", "step")
+        return FlowComputed.Sequence(
+            scope = seq.optional("scope")?.let { n ->
+                SequenceScope.entries.firstOrNull { it.name == n.scalar("$sp.scope").uppercase() } ?: fail("$sp.scope", n, "expected table|group")
+            } ?: SequenceScope.TABLE,
+            start = seq.optional("start")?.let { long(it, "$sp.start") } ?: 1,
+            step = seq.optional("step")?.let { long(it, "$sp.step") } ?: 1
+        )
+    }
+
+    // Closed predicate: `{field, eq|ne|in|isNull|notNull}` or exactly one of `{and: [..]}`, `{or: [..]}`, `{not: p}`.
+    private fun predicate(node: YamlNode, path: String): Predicate {
+        val m = node.asMap(path)
+        m.allow(path, "field", "eq", "ne", "in", "isNull", "notNull", "and", "or", "not")
+        val keys = m.entries.keys.map { it.content }
+        val combinators = keys.filter { it in setOf("and", "or", "not") }
+        if (combinators.isNotEmpty()) {
+            if (keys.size != 1) fail(path, node, "'${combinators.first()}' must be the only key of a predicate, got ${keys.joinToString()}")
+            fun items(key: String) = m.required(key, path).asList("$path.$key").items.mapIndexed { i, n -> predicate(n, "$path.$key[$i]") }
+            return when (combinators.single()) {
+                "and" -> Predicate.And(items("and"))
+                "or" -> Predicate.Or(items("or"))
+                else -> Predicate.Not(predicate(m.required("not", path), "$path.not"))
+            }
+        }
+        val field = m.string("field", path) ?: fail(path, node, "missing required field 'field' (or one of and|or|not)")
+        val ops = keys.filter { it != "field" }
+        if (ops.size != 1) fail(path, node, "expected exactly one of eq|ne|in|isNull|notNull next to 'field', got ${ops.ifEmpty { listOf("none") }.joinToString()}")
+        return when (val op = ops.single()) {
+            "eq" -> Predicate.Eq(field, m.required("eq", path).scalar("$path.eq"))
+            "ne" -> Predicate.Ne(field, m.required("ne", path).scalar("$path.ne"))
+            "in" -> Predicate.In(field, m.required("in", path).asList("$path.in").items.mapIndexed { i, n -> n.scalar("$path.in[$i]") })
+            else -> {
+                val flag = m.required(op, path)
+                if (!bool(flag, "$path.$op")) fail("$path.$op", flag, "expected true (use ${if (op == "isNull") "notNull" else "isNull"} for the opposite)")
+                if (op == "isNull") Predicate.IsNull(field) else Predicate.NotNull(field)
+            }
+        }
     }
 
     private fun flowColumn(node: YamlNode, path: String): FlowColumn {
@@ -328,13 +412,25 @@ private class Reader {
         if (node is YamlNull) return FlowRowCell()
         if (node is YamlScalar) return FlowRowCell(text = node.content)
         val m = node.asMap(path)
-        m.allow(path, "text", "bind", "format", "optional", "align", "style")
+        m.allow(path, "text", "bind", "format", "optional", "align", "style", "cases")
         return FlowRowCell(
             text = m.string("text", path), bind = m.string("bind", path),
             format = m.optional("format")?.let { format(it, "$path.format") },
             optional = m.optional("optional")?.let { bool(it, "$path.optional") } ?: false,
             align = m.optional("align")?.let { flowAlign(it, "$path.align") },
-            style = m.string("style", path)
+            style = m.string("style", path),
+            cases = m.optional("cases")?.asList("$path.cases")?.items?.mapIndexed { i, n -> flowCase(n, "$path.cases[$i]") } ?: emptyList()
+        )
+    }
+
+    private fun flowCase(node: YamlNode, path: String): FlowCase {
+        val m = node.asMap(path)
+        m.allow(path, "where", "text", "bind", "format", "optional")
+        return FlowCase(
+            where = predicate(m.required("where", path), "$path.where"),
+            text = m.string("text", path), bind = m.string("bind", path),
+            format = m.optional("format")?.let { format(it, "$path.format") },
+            optional = m.optional("optional")?.let { bool(it, "$path.optional") } ?: false
         )
     }
 
@@ -453,6 +549,9 @@ private class Reader {
 
     private fun integer(node: YamlNode, path: String): Int =
         node.scalar(path).toIntOrNull() ?: fail(path, node, "expected integer")
+
+    private fun long(node: YamlNode, path: String): Long =
+        node.scalar(path).toLongOrNull() ?: fail(path, node, "expected integer")
 
     private fun plainNumber(node: YamlNode, path: String): Double =
         node.scalar(path).toDoubleOrNull() ?: fail(path, node, "expected number (mm)")

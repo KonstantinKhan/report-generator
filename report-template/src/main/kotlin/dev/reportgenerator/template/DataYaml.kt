@@ -17,7 +17,9 @@ import java.time.format.DateTimeParseException
 // Plain nested YAML map -> DataContext, the schema inferred from the file. Roots `doc` / `item` (and
 // `page`, whose number / total are overridden by the engine). Scalar types by shape:
 //   123 -> Integer, 1.5 -> Decimal, 2026-01-31 -> Date, true|false -> Boolean, anything else -> String.
-// A tag forces the type: `!str "007"`, `!int`, `!decimal`, `!date`, `!bool`. `~` declares a String field
+// A tag forces the type: `!str "007"`, `!int`, `!decimal`, `!date`, `!bool`, `!enum` (the field's domain is the
+// values seen in the file, see also `itemEnums`). Rows of a list may mix 1 and 1.5 in one field: it becomes Decimal.
+// `~` declares a String field
 // without a value. A mapping is a Record, a sequence of mappings is a List of records (scalar lists are
 // not supported yet). Error paths look like `doc.mass`.
 // The `item` root may also be a sequence of mappings: the rows of the flow table (DataFile.items); the
@@ -27,7 +29,10 @@ class DataFile(val context: DataContext, val items: List<DataValue.Record>)
 object DataYaml {
     fun parse(yaml: String): DataContext = parseFile(yaml).context
 
-    fun parseFile(yaml: String): DataFile {
+    // `itemEnums`: `item` fields (name -> the values the template declares for it, FlowTableSpec.declaredEnumValues)
+    // that are read as Enum instead of String. Their domain = the declared values + any other value seen in the
+    // rows, so a value the template does not know about is reported by the contract (groupBy.order), not lost.
+    fun parseFile(yaml: String, itemEnums: Map<String, Collection<String>> = emptyMap()): DataFile {
         val root = try {
             Yaml.default.parseToYamlNode(yaml)
         } catch (e: YamlException) {
@@ -42,8 +47,8 @@ object DataYaml {
             if (name !in DATA_ROOTS) throw TemplateException(name, "unknown root '$name' (${DATA_ROOTS.joinToString()}) (line ${k.location.line})")
             if (name == "item" && v.unwrap() is YamlList) {
                 val (type, value) = list(v.unwrap() as YamlList, name)
-                types[name] = (type as DataType.ListOf).of
-                items = (value as DataValue.ListOf).items
+                types[name] = (type as DataType.ListOf).of.withEnums(itemEnums, value as DataValue.ListOf)
+                items = value.items.map { row -> DataValue.Record(row.fields.mapValues { (f, v) -> if (f in itemEnums && v is DataValue.Str) DataValue.Enum(v.value) else v }) }
                 continue
             }
             val (type, value) = record(v, name)
@@ -55,7 +60,20 @@ object DataYaml {
 
     fun load(path: Path): DataContext = parse(Files.readString(path))
 
-    fun loadFile(path: Path): DataFile = parseFile(Files.readString(path))
+    fun loadFile(path: Path, itemEnums: Map<String, Collection<String>> = emptyMap()): DataFile =
+        parseFile(Files.readString(path), itemEnums)
+
+    // Fields named in `enums` become Enum(declared + seen values), when they are String / Enum in the rows.
+    private fun DataType.Record.withEnums(enums: Map<String, Collection<String>>, rows: DataValue.ListOf): DataType.Record =
+        DataType.Record(fields.mapValues { (name, type) ->
+            val declared = enums[name]
+            if (declared == null || (type != DataType.Str && type !is DataType.Enum)) type else {
+                val seen = rows.items.mapNotNull { r ->
+                    when (val v = r.fields[name]) { is DataValue.Str -> v.value; is DataValue.Enum -> v.name; else -> null }
+                }
+                DataType.Enum((declared + (type as? DataType.Enum)?.values.orEmpty() + seen).distinct())
+            }
+        })
 
     private fun record(node: YamlNode, path: String): Pair<DataType.Record, DataValue.Record> {
         val map = (node.unwrap() as? YamlMap) ?: fail(path, node, "expected a mapping")
@@ -85,8 +103,25 @@ object DataYaml {
             if (n.unwrap() !is YamlMap) fail("$path[$i]", n, "list items must be mappings (lists of scalars are not supported)")
             record(n, "$path[$i]")
         }
-        val schema = DataType.Record(rows.fold(emptyMap<String, DataType>()) { acc, r -> r.first.fields + acc })
-        return DataType.ListOf(schema) to DataValue.ListOf(rows.map { it.second }, schema)
+        val schema = DataType.Record(rows.fold(emptyMap<String, DataType>()) { acc, r ->
+            // earlier rows win, except 1 / 1.5 and enum values seen in different rows which merge
+            val merged = LinkedHashMap(acc)
+            r.first.fields.forEach { (k, t) -> merged[k] = acc[k]?.let { unify(it, t) } ?: t }
+            merged
+        })
+        val values = rows.map { (_, row) ->
+            DataValue.Record(row.fields.mapValues { (k, v) ->
+                if (v is DataValue.Integer && schema.fields[k] == DataType.Decimal) DataValue.Decimal(BigDecimal.valueOf(v.value)) else v
+            })
+        }
+        return DataType.ListOf(schema) to DataValue.ListOf(values, schema)
+    }
+
+    private fun unify(a: DataType, b: DataType): DataType = when {
+        a == b -> a
+        (a == DataType.Integer && b == DataType.Decimal) || (a == DataType.Decimal && b == DataType.Integer) -> DataType.Decimal
+        a is DataType.Enum && b is DataType.Enum -> DataType.Enum((a.values + b.values).distinct())
+        else -> a
     }
 
     private fun scalar(node: YamlScalar, tag: String?, path: String): Pair<DataType, DataValue> {
@@ -99,7 +134,8 @@ object DataYaml {
                 "decimal" -> DataValue.of(BigDecimal(text))
                 "date" -> DataValue.of(LocalDate.parse(text))
                 "bool", "boolean" -> DataValue.of(parseBool(text) ?: fail(path, node, "expected true|false"))
-                else -> fail(path, node, "unknown tag '$tag' (!str !int !decimal !date !bool)")
+                "enum" -> DataValue.Enum(text)
+                else -> fail(path, node, "unknown tag '$tag' (!str !int !decimal !date !bool !enum)")
             }
         } catch (e: NumberFormatException) {
             fail(path, node, "'$text' is not a valid ${tag?.trimStart('!')}")

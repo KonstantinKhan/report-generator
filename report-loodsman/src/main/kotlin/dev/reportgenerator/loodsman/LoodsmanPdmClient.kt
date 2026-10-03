@@ -104,7 +104,7 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
 
         // Get quantity from minQuantity/maxQuantity. Kept as Double: MATERIAL items can carry
         // fractional amounts (e.g. 1.5 м materials by their unit); other kinds are always whole
-        // counts in Loodsman and get rounded at display time (see SpecificationData.formattedQuantity).
+        // counts in Loodsman and get rounded at display time (see the `quantity` cell of the `body` table in gost-spec.yaml).
         val quantityByLinkId = HashMap<Int, Double>()
         val unitByLinkId = HashMap<Int, String?>()
         children.forEach { child ->

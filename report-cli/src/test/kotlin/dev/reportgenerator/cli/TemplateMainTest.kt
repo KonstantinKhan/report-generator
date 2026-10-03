@@ -4,6 +4,7 @@ import dev.reportgenerator.ir.Styles
 import dev.reportgenerator.template.DataYaml
 import dev.reportgenerator.template.TemplateException
 import dev.reportgenerator.template.TemplateLoader
+import dev.reportgenerator.template.declaredEnumValues
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -91,6 +92,39 @@ class TemplateMainTest {
             renderTemplate(TemplateLoader.load(flowTemplate, Styles.named.keys), data.context, 1, dir, data.items)
         }
         assertEquals(listOf("blocks[1].table.row.cells.name.bind"), e.errors.map { it.path })
+        dir.deleteRecursively()
+    }
+
+    private fun resource(name: String) = requireNotNull(javaClass.getResourceAsStream("/templates/$name")) { "missing $name" }.readBytes().toString(Charsets.UTF_8)
+
+    @Test
+    fun `sample template renders grouped, sorted and numbered rows from a data file`() {
+        val dir = Files.createTempDirectory("template-main").toFile()
+        val template = TemplateLoader.load(resource("purchased-list.yaml"), Styles.named.keys)
+        val spec = (template.blocks.single() as dev.reportgenerator.template.FlowBlock).table!!
+        val data = DataYaml.parseFile(resource("purchased-list-data.yaml"), mapOf("category" to spec.declaredEnumValues().getValue("category")))
+
+        val svg = renderTemplate(template, data.context, 1, dir, data.items).first { it.extension == "svg" }.readText()
+        val texts = Regex(">([^<]+)<").findAll(svg).map { it.groupValues[1] }.toList()
+
+        fun order(vararg xs: String) = xs.map { texts.indexOf(it) }.also { i -> assertTrue(i.all { it >= 0 }, "missing: ${xs.toList()}"); assertEquals(i.sorted(), i, "order of ${xs.toList()}") }
+        order("Крепёж", "Подшипники", "Электроизделия")
+        // natural order inside a group: Болт М6x8 < М6x20 < М6x100, then the rest by alphabet
+        order("Болт М6x8 ГОСТ 7798-70", "Болт М6x20 ГОСТ 7798-70", "Болт М6x100 ГОСТ 7798-70", "Смазка Литол-24", "Шайба 6 ГОСТ 11371-78")
+        assertTrue("по запросу" in texts && "12,5" in texts && "0,35" in texts && "3" in texts, "formats and the isNull case")
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun `a category the template does not list is a contract error, not a lost row`() {
+        val dir = Files.createTempDirectory("template-main").toFile()
+        val template = TemplateLoader.load(resource("purchased-list.yaml"), Styles.named.keys)
+        val data = DataYaml.parseFile(
+            "item:\n  - {category: PAINT, name: x, qty: 1, unit: шт}",
+            mapOf("category" to listOf("FASTENER", "BEARING", "ELECTRIC"))
+        )
+        val e = assertFailsWith<TemplateException> { renderTemplate(template, data.context, 1, dir, data.items) }
+        assertTrue("blocks[0].table.groupBy.order" in e.errors.map { it.path }, e.toString())
         dir.deleteRecursively()
     }
 }

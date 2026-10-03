@@ -6,7 +6,7 @@
 | Модуль | Пакет | Назначение | Зависит от (main) |
 |---|---|---|---|
 | `report-geometry` | `dev.reportgenerator.geometry` | `Length` (fixed-point Long, 1/100мм), `Point`, `Size`, `Rect`, `Insets`, `PageFormat`, `Corner`, `placeOrigin`, `resolveAnchor` | — |
-| `report-template` | `dev.reportgenerator.template` | Декларативный шаблон страницы: YAML → модель → валидация → абсолютная геометрия (`TemplateLoader`, `TemplateResolver`, `flowRegion`); описание таблицы потока (`FlowTableSpec`) | `report-geometry` |
+| `report-template` | `dev.reportgenerator.template` | Декларативный шаблон страницы: YAML → модель → валидация → абсолютная геометрия (`TemplateLoader`, `TemplateResolver`, `flowRegion`); описание таблицы потока (`FlowTableSpec`) и её правила данных (`where` / `sortBy` / `groupBy` / `computed` / `cases`, `FlowShaper`, `FlowContract`) | `report-geometry` |
 | `report-ir` | `dev.reportgenerator.ir` | Semantic IR: `IrDocument`, `IrTable`, `IrGroup`, `IrRow`, `IrCell`, `Styles`, `LayoutConstraints`, DSL (`document{}`), `FrameSpecs` + `gost-spec.yaml` (статические блоки ГОСТ и таблица потока из шаблона), `FlowTables` (YAML-описание таблицы + данные → `IrTable`) | `report-geometry`, `report-template` |
 | `report-layout-ir` | `dev.reportgenerator.layoutir` | Layout IR: `LaidOutDocument`, `Page`, `PositionedText`, `Line`, `Rectangle`, `FontRef`, `TextOrientation`, `BASELINE_RATIO` | `report-geometry` (НЕ `report-ir`) |
 | `report-layout` | `dev.reportgenerator.layout` | Layout Engine: `layOut()`, `TextMeasurer`/`PdfBoxTextMeasurer`, `FontRegistry`, пагинация, `LayoutOverflowException`; расстановка и резерв статических блоков из `PageSetup.staticTemplate` | `report-ir`, `report-layout-ir`, PDFBox |

@@ -15,9 +15,13 @@ import kotlin.test.assertTrue
 
 // YAML flow spec -> IrTable: styles resolution, defaults, optional binds, errors with YAML paths.
 class FlowTablesTest {
-    private val schema = dataSchema { item { integer("n"); string("name"); string("note") } }
+    private val schema = dataSchema { item { integer("n"); string("name"); string("note"); enum("kind", listOf("G")) } }
 
-    private fun spec(extra: String = "", cell: String = "{bind: \"\${item.name}\", style: data}", titleStyle: String = "groupTitle", rowStyle: String = "tableText") =
+    private fun groups(grouped: Boolean, titleStyle: String) = if (!grouped) "" else
+        "                  groupBy: {field: kind, order: [G], titles: {G: \"Детали\"}}\n" +
+            "                  groupTitle: {column: name, style: $titleStyle, spacerBefore: 1, spacerAfter: 0}"
+
+    private fun spec(extra: String = "", cell: String = "{bind: \"\${item.name}\", style: data}", titleStyle: String = "groupTitle", rowStyle: String = "tableText", grouped: Boolean = true) =
         (TemplateLoader.load(
             """
             sheet: {format: A4, margins: {left: 20, right: 5}}
@@ -31,7 +35,7 @@ class FlowTablesTest {
                     - {id: n, width: 15, align: center}
                     - {id: name, width: 170}
             $extra
-                  groupTitle: {column: name, style: $titleStyle, spacerBefore: 1, spacerAfter: 0}
+${groups(grouped, titleStyle)}
                   row:
                     cells:
                       n: {bind: "${'$'}{item.n}"}
@@ -41,12 +45,12 @@ class FlowTablesTest {
         ).blocks.single() as FlowBlock).table!!
 
     private fun item(n: Long, name: String, note: String? = null) = dataContext {
-        item { integer("n", n); string("name", name); string("note", note) }
+        item { integer("n", n); string("name", name); string("note", note); enum("kind", listOf("G"), "G") }
     }.get("item") as DataValue.Record
 
     @Test
     fun `builds columns, rows and group title from the spec`() {
-        val table = FlowTables.build(spec(), schema, listOf(FlowGroup("Детали", listOf(item(1, "Вал"), item(2, "Ось")))))
+        val table = FlowTables.build(spec(), schema, listOf(item(1, "Вал"), item(2, "Ось")))
 
         assertEquals(listOf(15.mm, 170.mm), table.columns.map { it.width })
         assertEquals(6.mm, table.rowHeight)
@@ -62,21 +66,21 @@ class FlowTablesTest {
     @Test
     fun `a missing optional value renders empty, a missing required one fails`() {
         val optional = spec(cell = "{bind: \"\${item.note}\", optional: true}")
-        val row = (FlowTables.build(optional, schema, listOf(FlowGroup("g", listOf(item(1, "a"))))).content.single() as IrGroup).rows.single()
+        val row = (FlowTables.build(optional, schema, listOf(item(1, "a"))).content.single() as IrGroup).rows.single()
         assertEquals("", row.cells[1].text)
 
         val required = spec(cell = "{bind: \"\${item.note}\"}")
-        assertFailsWith<IllegalStateException> { FlowTables.build(required, schema, listOf(FlowGroup("g", listOf(item(1, "a"))))) }
+        assertFailsWith<IllegalStateException> { FlowTables.build(required, schema, listOf(item(1, "a"))) }
     }
 
     @Test
     fun `style resolves through an alias or directly`() {
         val direct = spec(rowStyle = "heading", cell = "{bind: \"\${item.name}\", style: heading}")
-        val cell = (FlowTables.build(direct, schema, listOf(FlowGroup("g", listOf(item(1, "a"))))).content.single() as IrGroup).rows.single().cells[1]
+        val cell = (FlowTables.build(direct, schema, listOf(item(1, "a"))).content.single() as IrGroup).rows.single().cells[1]
         assertEquals(Styles.heading, cell.style)
 
         val aliased = spec(rowStyle = "designation")
-        val c2 = (FlowTables.build(aliased, schema, listOf(FlowGroup("g", listOf(item(1, "a"))))).content.single() as IrGroup).rows.single().cells[1]
+        val c2 = (FlowTables.build(aliased, schema, listOf(item(1, "a"))).content.single() as IrGroup).rows.single().cells[1]
         assertEquals(Styles.designation, c2.style)
     }
 
@@ -130,8 +134,8 @@ class FlowTablesTest {
     }
 
     @Test
-    fun `buildRows gives a flat row list`() {
-        val table = FlowTables.buildRows(spec(), schema, listOf(item(1, "a"), item(2, "b")))
+    fun `a table without groupBy is a flat row list`() {
+        val table = FlowTables.build(spec(grouped = false), schema, listOf(item(1, "a"), item(2, "b")))
         assertEquals(2, table.content.size)
         assertTrue(table.content.all { it is IrRow })
     }

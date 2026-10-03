@@ -183,12 +183,11 @@ blocks:
     attach: {self: bottomRight, to: sheet.bottomRight}
 
   # The main (flow) table: the paginated body of the specification, filling the flow region. YAML says WHAT is
-  # drawn (columns, header, row cells, group title, spacers, styles); how it is measured, wrapped and paginated
-  # is the layout engine's job. Group titles, their order, position numbers and the quantity text are supplied
-  # by the code (reports/specification), the row binds read that `item` record:
-  #   item.position Integer, item.designation String (absent = empty), item.name String,
-  #   item.quantityText String (TEMPORARY: computed by code until `format` / `sequence` move here),
-  #   item.unit String (materials only, otherwise absent), item.kind Enum.
+  # drawn (columns, header, row cells, group title, spacers, styles) and WHICH data goes where (group order and
+  # titles, numbering, how a value is shown); how it is measured, wrapped and paginated is the layout engine's
+  # job. The code (reports/specification) only supplies the typed row record `item` (raw values):
+  #   item.designation String (absent = empty), item.name String, item.kind Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL),
+  #   item.quantity Decimal, item.unit String (absent = empty); item.position is `computed` below.
   # Columns: 6+6+8+70+63+10+22 = 185 mm = the sheet's content width (checked, no tolerance).
   # `stick`: first / last = a single-line value sits on the first / last physical line of a wrapped row.
   - id: body
@@ -198,6 +197,20 @@ blocks:
       fill: blank                  # cover each page down to the frame with blank bordered rows
       keep: {titleChain: true}     # spacers + title + first data line are never split by a page break
       styles: {head: tableHeader, data: tableText, groupTitle: groupHeader}
+      # GOST R 2.106-2019 p.1 order. A kind without items makes no group (skipEmpty), no sortBy = source order.
+      groupBy:
+        field: kind
+        order: [ASSEMBLY, PART, STANDARD, OTHER, MATERIAL]
+        titles:
+          ASSEMBLY: "Сборочные единицы"
+          PART: "Детали"
+          STANDARD: "Стандартные изделия"
+          OTHER: "Прочие изделия"
+          MATERIAL: "Материалы"
+        skipEmpty: true
+      # one running number over all groups (scope: table), 1, 2, 3, ...
+      computed:
+        position: {sequence: {scope: table, start: 1, step: 1}}
       columns:
         - {id: format, width: 6, stick: first, align: center}
         - {id: zone, width: 6, stick: first, align: center}
@@ -225,5 +238,20 @@ blocks:
           position: {bind: "${item.position}", style: data}
           designation: {bind: "${item.designation}", optional: true, style: data}
           name: {bind: "${item.name}", style: data}
-          quantity: {bind: "${item.quantityText}", style: data}
-          note: {bind: "${item.unit}", optional: true, style: data}
+          # materials: up to 2 decimals, trailing zeros trimmed, decimal comma (1,5; 0,35; 3). Every other kind
+          # is a whole count (rounded half up): Loodsman counts them in pieces.
+          quantity:
+            style: data
+            cases:
+              - where: {field: kind, eq: MATERIAL}
+                bind: "${item.quantity}"
+                format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
+            bind: "${item.quantity}"
+            format: {pattern: "0", rounding: HALF_UP}
+          # the unit is shown for materials only (other kinds are pieces and get no unit)
+          note:
+            style: data
+            cases:
+              - where: {field: kind, eq: MATERIAL}
+                bind: "${item.unit}"
+                optional: true
