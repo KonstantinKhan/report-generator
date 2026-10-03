@@ -74,6 +74,15 @@ ${groups(grouped, titleStyle)}
     }
 
     @Test
+    fun `a missing required value names the source row and its fields`() {
+        val required = spec(cell = "{bind: \"\${item.note}\"}")
+        val rows = listOf(item(1, "a", "x"), item(2, "b"))
+        val e = assertFailsWith<IllegalStateException> { FlowTables.build(required, schema, rows) }
+        val message = e.message!!
+        assertTrue(message.startsWith("source row 2 {") && "name=b" in message && "no value for bind" in message && "item.note" in message, message)
+    }
+
+    @Test
     fun `style resolves through an alias or directly`() {
         val direct = spec(rowStyle = "heading", cell = "{bind: \"\${item.name}\", style: heading}")
         val cell = (FlowTables.build(direct, schema, listOf(item(1, "a"))).content.single() as IrGroup).rows.single().cells[1]

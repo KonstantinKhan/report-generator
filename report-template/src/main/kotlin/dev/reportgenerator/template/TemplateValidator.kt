@@ -234,6 +234,7 @@ object TemplateValidator {
             is RectBlock -> size(b.size)
             is TextBlock -> {
                 size(b.size)
+                if (b.rotate !in DRAWN_TEXT_ROTATIONS) errors += TemplateError("$p.rotate", "text rotation ${b.rotate} is not supported (expected 0|90)")
                 if ((b.text == null) == (b.bind == null)) errors += TemplateError(p, "text block needs exactly one of 'text' / 'bind'")
                 b.bind?.let { checkBind(it, "$p.bind", errors) }
                 checkBindOptions(b.bind, b.format != null, b.optional, p, errors)
@@ -292,7 +293,7 @@ object TemplateValidator {
             val rp = "$p.rows[$i]"
             when (r) {
                 is FixedRow -> {
-                    validateRow(r, rp, errors)
+                    validateRow(r, rp, t.rotate, errors)
                     paths += rp
                 }
                 is RepeatRows -> {
@@ -300,7 +301,7 @@ object TemplateValidator {
                         errors += TemplateError("$rp.repeat", "repeat needs exactly one of 'count' / 'from'")
                     }
                     if (r.count != null && r.count < 0) errors += TemplateError("$rp.repeat.count", "must be >= 0")
-                    validateRow(r.row, "$rp.repeat.row", errors)
+                    validateRow(r.row, "$rp.repeat.row", t.rotate, errors)
                     repeat(r.count ?: 0) { paths += "$rp.repeat.row" }
                     // data-driven rows are not expanded; they must still fill the columns on their own
                     if (r.from != null) {
@@ -487,11 +488,16 @@ object TemplateValidator {
         }
     }
 
-    private fun validateRow(row: FixedRow, p: String, errors: MutableList<TemplateError>) {
+    private fun validateRow(row: FixedRow, p: String, tableRotate: Int, errors: MutableList<TemplateError>) {
         if (row.height is Num.Lit && row.height.value <= 0.0) errors += TemplateError("$p.height", "must be > 0, got ${row.height.value}")
         row.cells.forEachIndexed { i, c ->
             val cp = "$p.cells[$i]"
             if (c.text != null && c.bind != null) errors += TemplateError(cp, "cell has both 'text' and 'bind'")
+            // the resolver draws a cell rotated by the table's rotation plus its own; the Layout IR has 0 and 90 only
+            val effective = (tableRotate + c.rotate) % 360
+            if (effective !in DRAWN_TEXT_ROTATIONS) {
+                errors += TemplateError("$cp.rotate", "text rotation $effective (table rotate $tableRotate + cell rotate ${c.rotate}) is not supported (expected 0|90)")
+            }
             if (c.span < 1) errors += TemplateError("$cp.span", "must be >= 1")
             if (c.rowSpan < 1) errors += TemplateError("$cp.rowSpan", "must be >= 1")
             c.bind?.let { checkBind(it, "$cp.bind", errors) }
@@ -499,6 +505,9 @@ object TemplateValidator {
         }
     }
 }
+
+// Text rotations the Layout IR can draw (horizontal, bottom to top). Anything else is rejected at validation.
+private val DRAWN_TEXT_ROTATIONS = setOf(0, 90)
 
 // Structural anchor existence (independent of numeric values / params).
 internal fun hasAnchor(block: BlockSpec, rawName: String, defs: Map<String, BlockSetDef>): Boolean {

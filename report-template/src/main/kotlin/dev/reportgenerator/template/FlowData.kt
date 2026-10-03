@@ -212,6 +212,16 @@ object FlowShaper {
 class FlowCellRenderer(private val cell: FlowRowCell, fields: Map<String, DataType>) {
     private val cases = cell.cases.map { compilePredicate(it.where, fields) to it }
 
+    // `source` = the item rows of the data file in source order: a failure (no value for a bind) then names the
+    // row ("source row N {fields}: ...", like the arithmetic errors); `item` is matched by its source fields.
+    fun render(item: DataValue.Record, data: DataContext, source: List<DataValue.Record> = emptyList()): String = try {
+        render(item, data)
+    } catch (e: IllegalStateException) {
+        val index = source.indexOfFirst { row -> row.fields.all { (k, v) -> item.fields[k] == v } }
+        if (index < 0) throw e
+        throw IllegalStateException("${FlowArithmetic.describe(source[index], index)}: ${e.message}", e)
+    }
+
     fun render(item: DataValue.Record, data: DataContext): String {
         val case = cases.firstOrNull { (matches, _) -> matches(item) }?.second
         val text = if (case != null) case.text else cell.text

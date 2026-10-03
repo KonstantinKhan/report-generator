@@ -19,7 +19,8 @@ import java.time.format.DateTimeParseException
 //   123 -> Integer, 1.5 -> Decimal, 2026-01-31 -> Date, true|false -> Boolean, anything else -> String.
 // A tag forces the type: `!str "007"`, `!int`, `!decimal`, `!date`, `!bool`, `!enum` (the field's domain is the
 // values seen in the file, see also `itemEnums`). Rows of a list may mix 1 and 1.5 in one field: it becomes Decimal.
-// `~` declares a String field
+// Any other mix of types in one field of the rows (5 in one, ok in another) is an error naming both rows: give
+// every row the same type, or tag the values (`!str 5`) so that they are the same. `~` declares a String field
 // without a value. A mapping is a Record, a sequence of mappings is a List of records (scalar lists are
 // not supported yet). Error paths look like `doc.mass`.
 // The `item` root may also be a sequence of mappings: the rows of the flow table (DataFile.items); the
@@ -103,12 +104,7 @@ object DataYaml {
             if (n.unwrap() !is YamlMap) fail("$path[$i]", n, "list items must be mappings (lists of scalars are not supported)")
             record(n, "$path[$i]")
         }
-        val schema = DataType.Record(rows.fold(emptyMap<String, DataType>()) { acc, r ->
-            // earlier rows win, except 1 / 1.5 and enum values seen in different rows which merge
-            val merged = LinkedHashMap(acc)
-            r.first.fields.forEach { (k, t) -> merged[k] = acc[k]?.let { unify(it, t) } ?: t }
-            merged
-        })
+        val schema = DataType.Record(inferFields(rows, path))
         val values = rows.map { (_, row) ->
             DataValue.Record(row.fields.mapValues { (k, v) ->
                 if (v is DataValue.Integer && schema.fields[k] == DataType.Decimal) DataValue.Decimal(BigDecimal.valueOf(v.value)) else v
@@ -117,11 +113,37 @@ object DataYaml {
         return DataType.ListOf(schema) to DataValue.ListOf(values, schema)
     }
 
-    private fun unify(a: DataType, b: DataType): DataType = when {
+    // Field types of the rows' union. A field with a value in several rows must have one type there: the first
+    // row's wins and a different one is an error naming both rows; the exceptions are 1 / 1.5 (merged to Decimal)
+    // and enum values seen in different rows (merged domain). A `~` row (no value) takes no part in it; a field
+    // that has no value anywhere is a String.
+    private fun inferFields(rows: List<Pair<DataType.Record, DataValue.Record>>, path: String): Map<String, DataType> {
+        val merged = LinkedHashMap<String, DataType>()
+        val firstRow = HashMap<String, Int>()
+        rows.forEachIndexed { i, (type, value) ->
+            type.fields.forEach { (k, t) ->
+                val known = merged[k]
+                when {
+                    known == null -> { merged[k] = t; if (k in value.fields) firstRow[k] = i }
+                    k !in value.fields -> {}
+                    k !in firstRow -> { merged[k] = t; firstRow[k] = i }
+                    else -> merged[k] = unify(known, t) ?: throw TemplateException(
+                        "$path[$i].$k",
+                        "mixed types in one field: ${t.typeName} here, ${known.typeName} in $path[${firstRow.getValue(k)}].$k " +
+                            "(row ${i + 1} and row ${firstRow.getValue(k) + 1}); use one type or tag the values (!str, !int, ...)"
+                    )
+                }
+            }
+        }
+        return merged
+    }
+
+    private fun unify(a: DataType, b: DataType): DataType? = when {
         a == b -> a
         (a == DataType.Integer && b == DataType.Decimal) || (a == DataType.Decimal && b == DataType.Integer) -> DataType.Decimal
         a is DataType.Enum && b is DataType.Enum -> DataType.Enum((a.values + b.values).distinct())
-        else -> a
+        (a is DataType.Enum && b == DataType.Str) || (a == DataType.Str && b is DataType.Enum) -> if (a is DataType.Enum) a else b
+        else -> null
     }
 
     private fun scalar(node: YamlScalar, tag: String?, path: String): Pair<DataType, DataValue> {

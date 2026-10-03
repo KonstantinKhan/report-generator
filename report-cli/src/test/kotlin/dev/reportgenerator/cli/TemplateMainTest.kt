@@ -85,6 +85,21 @@ class TemplateMainTest {
     }
 
     @Test
+    fun `a block named like a static slot still reserves space under the flow table`() {
+        val dir = Files.createTempDirectory("template-main").toFile()
+        val rows = (1..5).joinToString("\n") { "  - {n: $it, name: Деталь $it}" }
+        val data = DataYaml.parseFile("doc: {designation: X}\nitem:\n$rows")
+        fun render(id: String) = renderTemplate(
+            TemplateLoader.load(flowTemplate.replace("id: num", "id: $id"), Styles.named.keys), data.context, 1, dir, data.items
+        ).first { it.extension == "svg" }.readText()
+
+        // ids are free outside the spec engine: `stamp` is the same block as `num`, so the same flow region
+        assertEquals(render("num"), render("stamp"))
+        assertEquals(render("num"), render("belowFrame"))
+        dir.deleteRecursively()
+    }
+
+    @Test
     fun `flow row bind missing in the data fails the contract before layout`() {
         val dir = Files.createTempDirectory("template-main").toFile()
         val data = DataYaml.parseFile("item:\n  - {n: 1}")

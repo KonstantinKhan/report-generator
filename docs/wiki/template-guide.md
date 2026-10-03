@@ -241,8 +241,7 @@ expected ',' or '}', but got [
 **Что увидеть:** блок x 8..20, y 157..292; ряд 0 (5 мм) занимает x 8..13, ряд 1 (7 мм) x 13..20; колонка 0 (60 мм) внизу y 232..292, колонка 1
 y 192..232, колонка 2 y 157..192. Текст: `transform="translate(11.76, 271.57) rotate(-90)"`.
 
-**Типичные ошибки:** ждать, что колонки пойдут сверху вниз (идут снизу вверх); поворот 270 для таблицы разрешён, но для **текста** в CLI
-нет (шаг 11); `rotate` у `text`-блока крутит только глифы, а не размер блока.
+**Типичные ошибки:** ждать, что колонки пойдут сверху вниз (идут снизу вверх); поворот 270 для таблицы разрешён, но только если у каждой ячейки `rotate: 90` (итог 0 или 90), а для **текста** нет (шаг 11); `rotate` у `text`-блока крутит только глифы, а не размер блока.
 
 ## Шаг 6. Повторное использование: blockset
 
@@ -494,11 +493,11 @@ RUN $T/09-flow.yaml output --data $T/09-flow-data.yaml
 - Ширины колонок должны сойтись с шириной области контента (шаг 11, ошибка с числами). `width`, `rowHeight` числами, `${param.x}` в потоке не поддерживается.
 - `stick: first|last` у колонки привязывает одностроковое значение к первой/последней физической строке, если соседняя колонка растянула строку.
 - `align`: только `left` (умолчание) и `center`. Правого выравнивания чисел нет.
-- Шапка: `rotate` 0 или 90 (270 ошибка), `lines` нельзя вместе с `rotate`. `repeat: false` оставляет шапку только на первой странице.
+- Шапка: `rotate` 0 или 90 (270 ошибка при загрузке), `lines` нельзя вместе с `rotate`. `repeat: false` оставляет шапку только на первой странице.
 - Шапка и данные берут стили из закрытого списка (`tableHeader`, `tableText`, `groupHeader`, `totalText`, ...), `styles:` задаёт псевдонимы. Поле `style` в блоках вне потока в CLI игнорируется.
 - Один шрифт (GOST Type B).
-- **Не называйте блоки как слоты** `gost-spec.yaml` (`stamp`, `continuationStamp`, `leftMargin`, `belowFrame`, `specLeft`, `mainTitleRight`). Движок считает такие id своими, не учитывает их `reserves`
-  и **молча** отдаёт поток под штамп. Проверено: тот же файл с блоком `id: stamp` дал таблицу до y=292 с линиями под штампом (линии на 284 и 292), после переименования в `titleBlock` таблица кончилась на y=277.
+- id блоков в CLI свободны: `stamp`, `leftMargin` и другие id слотов `gost-spec.yaml` в `TemplateMain` ничего не значат, `reserves` работает (раньше такой блок молча терял `reserves`,
+  исправлено: привязка к слотам включена только у основного движка спецификации). Проверено: `09-flow.yaml` с `id: stamp` и `id: titleBlock` даёт побайтно один и тот же SVG.
 - Блок шаблона в CLI рисует `layOutTemplate` поверх движка; рамка из шаблона ляжет поверх рамки движка. Проверено: с блоком `frame` в шаблоне с потоком в SVG два одинаковых `<rect x="20.0" y="5.0" width="185.0" ...>`: безвредно, но лишнее.
 - Такой же поток без `--data` даёт каскад ошибок контракта (`item has: pos`, схема `item` пуста). Файл данных нужен всегда.
 
@@ -696,7 +695,8 @@ RUN $T/10-complete.yaml output --data $T/10-complete-data.yaml
 | `format` не для типа | `02-bind-format` | `blocks[0].format: format is not supported for String (only Decimal and Date)` |
 | цикл привязок | `03-cycle` | `blocks[0].attach.to: attach cycle: a -> b -> a` |
 | `all` привязан к `first` | `04-visibility` | `blocks[1].attach.to: block 'always' (when: all) attaches to 'first' which exists only on first pages` |
-| поворот текста 270 | `05-rotate270` | `error: block 't': text rotation 270 is not supported (0 or 90)` (прошёл валидацию, упал в раскладке) |
+| поворот текста 270 | `05-rotate270` | `blocks[0].rotate: text rotation 270 is not supported (expected 0\|90)` |
+| таблица 270, ячейка без `rotate` | `21-table-rotate270` | `blocks[0].rows[0].cells[0].rotate: text rotation 270 (table rotate 270 + cell rotate 0) is not supported (expected 0\|90)` |
 | ряд не покрывает колонки | `06-row-cover` | `blocks[0].rows[0].cells: cell spans add up to 2, table has 3 columns` |
 | неизвестный якорь / блок | `07-unknown-anchor` | `blocks[0].attach.to: unknown anchor 'sheet.contentTopMiddle'` и `blocks[1].attach.to: unknown block 'nope' in 'nope.topLeft'` |
 | опечатка в ключе | `08-unknown-key` | `blocks[0].sise: unknown field 'sise' (allowed: anchors, attach, id, reserves, size, thickness, type, when) (line 8)` |
@@ -711,10 +711,11 @@ RUN $T/10-complete.yaml output --data $T/10-complete-data.yaml
 | `where` читает computed | `17-flow-where-computed` | `blocks[0].table.where.field: computed field 'pos' is not available here (where / groupBy read the record's own fields, ...)` |
 | `size` у потока | `18-flow-size` | `blocks[0].size: flow table fills the flow region, remove 'size'` |
 | два потока | (проверено в scratch) | `blocks[2].table: only one flow table per template (the engine lays out a single main table)` |
-| у строки данных нет поля | (09b, убрали `unit` из строки) | `error: no value for bind '${item.unit}' (mark the cell 'optional: true' to render it empty)` (номер строки не сообщается) |
-| файла `--data` нет | (scratch) | `error: template file not found: /путь/nofile.yaml` (сообщение про «template file», хотя нет файла данных) |
+| у строки данных нет поля | `19-row-missing-data` (данные к `09-flow.yaml`) | `error: source row 2 {n=2, name=Гайка М6, qty=24}: no value for bind '${item.unit}' (mark the cell 'optional: true' to render it empty)` |
+| в поле строк разные типы | `20-mixed-types-data` (данные к `09-flow.yaml`) | `item[2].qty: mixed types in one field: String here, Integer in item[0].qty (row 3 and row 1); use one type or tag the values (!str, !int, ...)` |
+| файла `--data` нет | (scratch) | `error: data file not found: /путь/nofile.yaml` |
 
-Запуск любого из них: `RUN $T/errors/12-flow-width.yaml output --data $T/09b-groups-data.yaml` (для плоских файлов `--data` не нужен).
+Запуск любого из них: `RUN $T/errors/12-flow-width.yaml output --data $T/09b-groups-data.yaml` (для плоских файлов `--data` не нужен). Файлы `19`, `20` это данные: `RUN $T/09-flow.yaml output --data $T/errors/19-row-missing-data.yaml`.
 
 **Куда смотреть при ошибке**
 
@@ -733,7 +734,7 @@ RUN $T/10-complete.yaml output --data $T/10-complete-data.yaml
 5. `[`, `{`, `,` в привязках на одной строке в кавычках (`"t.cell[0,1].topLeft"`).
 6. `when` у цели не уже, чем у блока; блоки штампов с `reserves: true`.
 7. Все bind: пути есть в схеме данных (или в файле `--data`), необязательные с `optional: true`, `format` под тип.
-8. Поток: один на шаблон, ширины колонок = ширина области контента, шапка покрывает все колонки, id блоков не совпадают со слотами движка.
+8. Поток: один на шаблон, ширины колонок = ширина области контента, шапка покрывает все колонки, id блоков любые.
 9. Для enum-группировки: `order` + `omit` покрывают все значения, `titles` для каждого значения из `order`.
 10. Запустить на **реальных** объёмах данных (больше одной страницы) и осмотреть SVG.
 
@@ -741,7 +742,7 @@ RUN $T/10-complete.yaml output --data $T/10-complete-data.yaml
 
 - Golden-тесты для CLI-шаблонов не нужны: CLI рисует любой YAML без эталонов. Эталоны есть только у шаблона боевого движка (`StaticBlocksGoldenTest` и др.).
 - Боевой движок спецификации читает один шаблон: `report-ir/src/main/resources/templates/gost-spec.yaml`. Его блоки `stamp`, `continuationStamp`, `leftMargin`, `belowFrame`,
-  `specLeft`, `mainTitleRight` жёстко сопоставлены полям `PageSetup` кодом (`StaticSlot`); тело спецификации это блок `body`. Править осторожно: golden сравнивает вывод побайтно.
+  `specLeft`, `mainTitleRight` сопоставлены полям `PageSetup` кодом (`StaticSlot`) только на этом пути (`bindStaticSlots`); тело спецификации это блок `body`. Править осторожно: golden сравнивает вывод побайтно.
   Шаблоны из `report-cli/.../templates/` боевой движок не читает: их нельзя «подложить» вместо `gost-spec.yaml` без кода.
 - Тест `TemplateMainTest` не перечисляет ресурсы CLI-шаблонов, поэтому добавление файлов в `templates/` или `templates/tutorial/` его не ломает (проверено `./gradlew :report-cli:test`).
 - **Остаётся кодом:** алгоритм раскладки потока (измерение, перенос слов, пагинация, дозаполнение, цепочки `keep`), стили (закрытый набор `Styles.named`), шрифт, адаптеры данных (из Loodsman и т.п.),
@@ -749,7 +750,8 @@ RUN $T/10-complete.yaml output --data $T/10-complete-data.yaml
 
 **Ограничения (проверено запусками и справкой)**
 
-- Текст в `TemplateMain` поворачивается только на 0 и 90; YAML принимает 270 для текста, но раскладка падает (шаг 11).
+- Текст поворачивается только на 0 и 90. 270 у `text`-блока и итоговый поворот ячейки таблицы (блок + ячейка) не 0 и не 90 дают ошибку при загрузке с путём (шаг 11); таблица 270 читается, только если у каждой ячейки `rotate: 90`.
+- В строках `item:` одно поле одного типа: `5` и `ok` в одном поле это ошибка (`!str` у каждого значения лечит); `1` и `1.5` сливаются в Decimal.
 - Один шрифт (GOST Type B), поле `style` вне потока в CLI игнорируется.
 - В шаблоне один `flow`, в наборе `flow` недопустим, `${param.x}` в потоке не работает, правого выравнивания чисел нет.
 - Шаблон с потоком в CLI рисует и блоки шаблона (на каждой странице), и рамку листа от движка; `--pages` игнорируется.

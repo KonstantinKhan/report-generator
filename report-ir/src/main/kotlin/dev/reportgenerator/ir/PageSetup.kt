@@ -20,7 +20,11 @@ data class PageSetup(
     val specLeftTable: FrameSpec? = null,
     val mainTitleRightTable: FrameSpec? = null,
     // Declares where each static block (slot above) is anchored, on which pages, and what it reserves.
-    val staticTemplate: Template = GostSpecTemplate.template
+    val staticTemplate: Template = GostSpecTemplate.template,
+    // true (spec engine): blocks of staticTemplate whose id is a StaticSlot block id are bound to that slot
+    // (sized by its FrameSpec, left out when the slot is inactive). false (standalone template path): ids are
+    // free, every block of staticTemplate keeps its own size and `reserves`.
+    val bindStaticSlots: Boolean = true
 ) {
     fun frameSpecOf(slot: StaticSlot): FrameSpec? = when (slot) {
         StaticSlot.FRAME -> frame

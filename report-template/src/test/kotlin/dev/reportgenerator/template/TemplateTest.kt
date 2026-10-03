@@ -404,7 +404,8 @@ class TemplateTest {
     // ---- table rotation ----
 
     // 30 x 12 table (cols 10+20, rows 5+7) placed at (100, 50)
-    private fun rotatedTable(rotate: Int, cellRotate: Int = 0) = resolve(
+    // `restRotate`: rotate of every cell but `a` (a 270 table needs 90 everywhere to be drawable)
+    private fun rotatedTable(rotate: Int, cellRotate: Int = 0, restRotate: Int = 0) = resolve(
         """
         blocks:
           - id: t
@@ -413,9 +414,9 @@ class TemplateTest {
             columns: [10, 20]
             rows:
               - height: 5
-                cells: [{text: a, rotate: $cellRotate}, b]
+                cells: [{text: a, rotate: $cellRotate}, {text: b, rotate: $restRotate}]
               - height: 7
-                cells: [c, d]
+                cells: [{text: c, rotate: $restRotate}, {text: d, rotate: $restRotate}]
             anchors: {mark: {x: 4, y: 1}}
             attach: {to: sheet.topLeft, offset: {x: 100, y: 50}}
           - id: probe
@@ -444,7 +445,7 @@ class TemplateTest {
 
     @Test
     fun `table rotated 270 clockwise`() {
-        val table = rotatedTable(270).block("t")!!
+        val table = rotatedTable(270, 90, 90).block("t")!!
         assertEquals(Rect(100.mm, 50.mm, 12.mm, 30.mm), table.rect)
         assertEquals(Rect(107.mm, 50.mm, 5.mm, 10.mm), table.cells.first { it.row == 0 && it.col == 0 }.rect)
         assertEquals(p(112.0, 60.0), table.anchors["col[1].left"])
@@ -460,12 +461,27 @@ class TemplateTest {
 
     @Test
     fun `cell text rotation composes with block rotation`() {
-        fun rot(block: Int, cell: Int) = rotatedTable(block, cell).block("t")!!.cells.first { it.text == "a" }.rotate
+        fun rot(block: Int, cell: Int) = rotatedTable(block, cell, if (block == 270) 90 else 0).block("t")!!.cells.first { it.text == "a" }.rotate
         assertEquals(0, rot(0, 0))
         assertEquals(90, rot(90, 0))
-        assertEquals(180, rot(90, 90))
         assertEquals(0, rot(270, 90))
-        assertEquals(270, rot(270, 0))
+    }
+
+    @Test
+    fun `text rotation the Layout IR cannot draw is a validation error with a yaml path`() {
+        val text = errorOf("blocks:\n  - {id: t, type: text, text: x, rotate: 270, size: {width: 10, height: 10}}")
+        assertTrue("blocks[0].rotate: text rotation 270 is not supported (expected 0|90)" in text, text)
+
+        // the cell is drawn rotated by the table rotation plus its own: 270 + 0 and 90 + 90 cannot be drawn
+        val tableOf = { block: Int, cell: Int ->
+            "blocks:\n  - {id: t, type: table, rotate: $block, columns: [10], rows: [{height: 5, cells: [{text: a, rotate: $cell}]}]}"
+        }
+        val a = errorOf(tableOf(270, 0))
+        assertTrue("blocks[0].rows[0].cells[0].rotate: text rotation 270 (table rotate 270 + cell rotate 0) is not supported" in a, a)
+        val b = errorOf(tableOf(90, 90))
+        assertTrue("text rotation 180 (table rotate 90 + cell rotate 90) is not supported" in b, b)
+        TemplateLoader.load(tableOf(270, 90))
+        TemplateLoader.load(tableOf(90, 0))
     }
 
     @Test

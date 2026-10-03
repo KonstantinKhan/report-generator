@@ -78,7 +78,7 @@ object FlowTables {
                 spec.columns.map { column ->
                     val cell = spec.rowCells.getValue(column.id)
                     IrCell(
-                        renderers.getValue(column.id).render(item, data),
+                        renderers.getValue(column.id).render(item, data, rows),
                         style = rowStyles.getValue(column.id), align = (cell.align ?: column.align).toIr()
                     )
                 }

@@ -1,0 +1,13 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: таблица 270 с ячейкой без rotate (итог 270)
+name: e21
+sheet:
+  format: A4
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: side
+    type: table
+    rotate: 270
+    columns: [30]
+    rows:
+      - {height: 8, cells: [{text: "x"}]}

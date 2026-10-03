@@ -187,4 +187,24 @@ class DataTest {
         // `item` as a plain mapping still works and yields no rows
         assertEquals(0, DataYaml.parseFile("item: {n: 1}").items.size)
     }
+
+    @Test
+    fun `mixed types in one item field are an error naming both rows, widening and tags are fine`() {
+        val e = assertFailsWith<TemplateException> {
+            DataYaml.parseFile("item:\n  - {n: 1, status: 5}\n  - {n: 2, status: 7}\n  - {n: 3, status: ok}")
+        }
+        val error = e.errors.single()
+        assertEquals("item[2].status", error.path)
+        assertTrue("String here, Integer in item[0].status (row 3 and row 1)" in error.message, error.message)
+
+        // 1 and 1.5 widen to Decimal; a tag makes every row one type; a `~` row takes no part
+        val widened = DataYaml.parseFile("item:\n  - {q: 1}\n  - {q: 1.5}")
+        assertEquals(DataType.Decimal, widened.context.schema.typeOf("item.q"))
+        val tagged = DataYaml.parseFile("item:\n  - {s: !str 5}\n  - {s: ok}")
+        assertEquals(DataType.Str, tagged.context.schema.typeOf("item.s"))
+        val empty = DataYaml.parseFile("item:\n  - {s: ~}\n  - {s: 5}")
+        assertEquals(DataType.Integer, empty.context.schema.typeOf("item.s"))
+        // the same rule inside a nested list of `doc`
+        assertFailsWith<TemplateException> { DataYaml.parseFile("doc:\n  rows:\n    - {a: 1}\n    - {a: x}") }
+    }
 }

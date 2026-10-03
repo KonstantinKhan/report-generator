@@ -94,8 +94,9 @@ fun main(args: Array<String>) {
         e.errors.forEach { System.err.println("  $it") }
         exitProcess(1)
     } catch (e: java.nio.file.NoSuchFileException) {
-        // Указанный файл шаблона не существует.
-        fail("template file not found: ${e.file}")
+        // Указанный файл не существует: файл данных (--data) или файл шаблона.
+        val isData = dataFile != null && File(e.file).absoluteFile == dataFile.absoluteFile
+        fail("${if (isData) "data" else "template"} file not found: ${e.file}")
     } catch (e: IllegalStateException) {
         // Нет значения для обязательного bind-а (путь есть в схеме, а значения в данных нет).
         fail(e.message ?: e.toString())
@@ -147,8 +148,8 @@ internal fun renderTemplate(template: Template, data: DataContext, pages: Int, o
 // Шаблон с таблицей потока: таблица (IrTable из YAML-описания и строк данных) идёт через настоящий движок
 // (измерение, перенос, пагинация, заполнение пустыми строками), блоки шаблона (рамка, надписи, таблицы) дорисовываются
 // на каждую получившуюся страницу, page.total известен после пагинации. Блоки шаблона в раскладке движка только
-// резервируют место (reserves), рисует их layOutTemplate; блоки с id слотов (stamp, leftMargin, ...) движок
-// считает своими и здесь не учитывает, их в таком шаблоне лучше не называть. Рамку листа движок рисует сам
+// резервируют место (reserves), рисует их layOutTemplate; привязка id к слотам движка (stamp, leftMargin, ...)
+// выключена (bindStaticSlots = false): id свободны, reserves работает для любого. Рамку листа движок рисует сам
 // (по полям листа), рамка из шаблона ляжет поверх неё.
 private fun layOutWithFlow(
     template: Template,
@@ -165,7 +166,8 @@ private fun layOutWithFlow(
         format = first.sheet.format,
         margins = Insets(m.top.mm, m.right.mm, m.bottom.mm, m.left.mm),
         dataContext = data,
-        staticTemplate = template
+        staticTemplate = template,
+        bindStaticSlots = false
     )
     val table = FlowTables.build(spec, data.schema, items, specPath)
     val flowPages = layOut(IrDocument(setup, listOf(table)), textMeasurer, fonts::resolve).pages

@@ -38,8 +38,11 @@ internal class StaticLayout(
 internal fun layOutStaticBlocks(setup: PageSetup): StaticLayout {
     val specs = StaticSlot.entries.mapNotNull { slot -> setup.frameSpecOf(slot)?.let { slot to it } }.toMap()
     val declared = setup.staticTemplate
+    // Slot ids are reserved only when the template is the engine's static template; a standalone template
+    // (PageSetup.bindStaticSlots = false) may name its blocks anything and keeps their `reserves`.
+    fun slotOf(id: String): StaticSlot? = if (setup.bindStaticSlots) StaticSlot.byBlockId(id) else null
     val blocks = declared.blocks.mapNotNull { block ->
-        val slot = StaticSlot.byBlockId(block.id)
+        val slot = slotOf(block.id)
         when {
             // the flow table spec is validated against the template's own sheet; at layout time the sheet is the
             // document's, and the table is built into the IrTable by the caller, so it does not take part here
@@ -54,7 +57,7 @@ internal fun layOutStaticBlocks(setup: PageSetup): StaticLayout {
     fun place(kind: PageKind): Pair<List<PlacedStaticBlock>, List<Rect>> {
         val resolved = TemplateResolver.resolve(template, kind)
         val placed = resolved.blocks.mapNotNull { block ->
-            StaticSlot.byBlockId(block.id)?.let { PlacedStaticBlock(it, specs.getValue(it), block.rect) }
+            slotOf(block.id)?.let { PlacedStaticBlock(it, specs.getValue(it), block.rect) }
         }
         return placed to resolved.blocks.filter { it.reserves }.map { it.rect }
     }
