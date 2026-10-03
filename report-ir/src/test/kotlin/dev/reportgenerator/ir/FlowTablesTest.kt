@@ -64,6 +64,15 @@ ${groups(grouped, titleStyle)}
     }
 
     @Test
+    fun `remainder maps to fillRemainder, stretch by default`() {
+        fun fillRemainder(extra: String) = FlowTables.build(spec(extra), schema, listOf(item(1, "Вал"))).fillRemainder
+
+        assertEquals(IrFillRemainder.STRETCH, fillRemainder(""))
+        assertEquals(IrFillRemainder.STRETCH, fillRemainder("                  fill: blank\n                  remainder: stretch"))
+        assertEquals(IrFillRemainder.GAP, fillRemainder("                  fill: blank\n                  remainder: gap"))
+    }
+
+    @Test
     fun `a missing optional value renders empty, a missing required one fails`() {
         val optional = spec(cell = "{bind: \"\${item.note}\", optional: true}")
         val row = (FlowTables.build(optional, schema, listOf(item(1, "a"))).content.single() as IrGroup).rows.single()

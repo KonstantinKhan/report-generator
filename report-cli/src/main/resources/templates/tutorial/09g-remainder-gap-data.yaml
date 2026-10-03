@@ -1,0 +1,9 @@
+# Данные для 09g-remainder-gap.yaml и 09g-remainder-stretch.yaml.
+doc: {designation: "ТЕСТ.01.000"}
+item:
+  - {name: "Вал", material: "Сталь 45", qty: 2}
+  - {name: "Втулка", material: "Бронза БрАЖ9-4", qty: 10}
+  - {name: "Болт М6x20", material: "Сталь 20", qty: 24}
+  - {name: "Гайка М6", material: "Сталь 20", qty: 24}
+  - {name: "Шайба 6", material: "Сталь 08", qty: 48}
+  - {name: "Прокладка", material: "Паронит", qty: 4}

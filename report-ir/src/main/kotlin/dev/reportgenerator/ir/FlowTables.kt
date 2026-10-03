@@ -5,6 +5,7 @@ import dev.reportgenerator.template.DataSchema
 import dev.reportgenerator.template.DataValue
 import dev.reportgenerator.template.FlowCellRenderer
 import dev.reportgenerator.template.FlowFill
+import dev.reportgenerator.template.FlowRemainder
 import dev.reportgenerator.template.FlowHeaderCell
 import dev.reportgenerator.template.placeCells
 import dev.reportgenerator.template.FlowShaper
@@ -131,6 +132,7 @@ object FlowTables {
             rowHeight = spec.rowHeight.mm,
             groupTitle = groupTitle,
             fillBlank = spec.fill == FlowFill.BLANK,
+            fillRemainder = if (spec.remainder == FlowRemainder.GAP) IrFillRemainder.GAP else IrFillRemainder.STRETCH,
             footer = shaped.totals.map(::totalRow),
             lineNumbers = lineColumn?.let { id ->
                 val lines = spec.lines ?: FlowLines()

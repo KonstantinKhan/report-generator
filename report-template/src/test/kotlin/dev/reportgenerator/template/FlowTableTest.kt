@@ -92,6 +92,29 @@ class FlowTableTest {
     }
 
     @Test
+    fun `remainder loads as stretch or gap, absent is null and the stretch default applies`() {
+        fun remainder(extra: String) = (TemplateLoader.load(yaml(ok.replace("fill: blank", "fill: blank$extra")), setOf("tableHeader", "tableText")).blocks.single() as FlowBlock).table!!.remainder
+
+        assertEquals(null, remainder(""))
+        assertEquals(FlowRemainder.GAP, remainder("\n        remainder: gap"))
+        assertEquals(FlowRemainder.STRETCH, remainder("\n        remainder: Stretch"))
+    }
+
+    @Test
+    fun `remainder rejects an unknown value and needs fill blank`() {
+        assertEquals("blocks[0].table.remainder", parseError(ok.replace("fill: blank", "fill: blank\n        remainder: spread")).path)
+        assertEquals(
+            "'remainder' needs 'fill: blank'",
+            errors(ok.replace("fill: blank", "remainder: gap")).getValue("blocks[0].table.remainder")
+        )
+        assertEquals(
+            "'remainder' needs 'fill: blank'",
+            errors(ok.replace("fill: blank", "fill: none\n        remainder: stretch")).getValue("blocks[0].table.remainder")
+        )
+        assertEquals(emptyMap(), errors(ok.replace("fill: blank", "fill: blank\n        remainder: gap"), styles = setOf("tableHeader", "tableText")))
+    }
+
+    @Test
     fun `unknown keys are rejected with a path`() {
         assertEquals("blocks[0].table.bogus", parseError("rowHeight: 8\nbogus: 1\ncolumns: []\nrow: {cells: {}}").path)
         assertEquals("blocks[0].table.columns[0].bogus", parseError("rowHeight: 8\ncolumns: [{id: a, width: 5, bogus: 1}]\nrow: {cells: {}}").path)

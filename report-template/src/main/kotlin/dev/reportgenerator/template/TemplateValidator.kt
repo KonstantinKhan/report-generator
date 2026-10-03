@@ -321,6 +321,7 @@ object TemplateValidator {
         if (b.visibleOn != PageSelector.ALL) errors += TemplateError("${p.removeSuffix(".table")}.when", "flow table is drawn on every page, 'when' must be all")
         if (!scope.topLevel) errors += TemplateError(p, "flow table is allowed only at the top level, not inside a blockset")
         if (t.rowHeight <= 0.0) errors += TemplateError("$p.rowHeight", "must be > 0, got ${t.rowHeight}")
+        if (t.remainder != null && t.fill != FlowFill.BLANK) errors += TemplateError("$p.remainder", "'remainder' needs 'fill: blank'")
 
         if (t.columns.isEmpty()) errors += TemplateError("$p.columns", "flow table needs at least one column")
         val ids = LinkedHashSet<String>()

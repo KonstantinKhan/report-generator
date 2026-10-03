@@ -291,6 +291,11 @@ data class FlowRowCell(
 
 enum class FlowFill { NONE, BLANK }
 
+// `remainder:` of a `fill: blank` table: what happens with the page height left over after the last whole filler row
+// (not a multiple of rowHeight). STRETCH = the last filler row grows by it (the full-page form); GAP = every filler
+// row is exactly rowHeight and the leftover stays empty between the last row and whatever lies below.
+enum class FlowRemainder { STRETCH, GAP }
+
 // Bind of the row cell that shows the number of the physical line (layout-derived, see FlowLines).
 const val LINE_NUMBER_BIND = "\${line.number}"
 
@@ -365,6 +370,8 @@ data class FlowTableSpec(
     val groupTitle: FlowGroupTitle? = null,
     val rowCells: Map<String, FlowRowCell>,
     val fill: FlowFill = FlowFill.NONE,
+    // null = not written (STRETCH applies); written only together with `fill: blank` (validator)
+    val remainder: FlowRemainder? = null,
     val keep: FlowKeep = FlowKeep(),
     val styles: Map<String, FlowStyle> = emptyMap(),
     val where: Predicate? = null,

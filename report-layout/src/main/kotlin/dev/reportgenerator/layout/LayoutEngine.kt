@@ -11,6 +11,7 @@ import dev.reportgenerator.ir.FrameSpec
 import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrColumn
 import dev.reportgenerator.ir.IrDocument
+import dev.reportgenerator.ir.IrFillRemainder
 import dev.reportgenerator.ir.IrLineScope
 import dev.reportgenerator.ir.IrRow
 import dev.reportgenerator.ir.IrTable
@@ -225,7 +226,6 @@ private fun renderPages(
         // elements at all) — not just as far as content happened to reach.
         val rowHeight = table.rowHeight
         if (rowHeight != null && table.fillBlank) {
-            val pageNumber = index + 1
             val bottom = metrics.contentBottom(index == 0)
             val contentStart = pageFinalY[index]
             val available = bottom - contentStart
@@ -234,14 +234,11 @@ private fun renderPages(
             val fullRowsCount = (available.raw / rowHeight.raw).toInt()
             val remainderHeight = available - (rowHeight * fullRowsCount)
 
-            // Determine if this page has a bottom frame
-            val hasBottomFrame = if (pageNumber == 1) setup.frame != null else setup.continuationFrame != null
-
             var fillY = contentStart
             repeat(fullRowsCount) { rowIndex ->
                 val isLastRow = rowIndex == fullRowsCount - 1
-                // Last row includes the remainder height
-                val currentRowHeight = if (isLastRow && remainderHeight > Length.ZERO) {
+                // STRETCH: the last row includes the remainder height; GAP: it stays below the last row
+                val currentRowHeight = if (isLastRow && remainderHeight > Length.ZERO && table.fillRemainder == IrFillRemainder.STRETCH) {
                     rowHeight + remainderHeight
                 } else {
                     rowHeight
@@ -251,13 +248,7 @@ private fun renderPages(
                 } else {
                     blankBorderedRow(table.columns, offsets, currentRowHeight, "Document/Table/Filler")
                 }
-                content += drawBorderedRow(
-                    filler,
-                    fillY,
-                    textMeasurer,
-                    fontResolver,
-                    removeBottomBorder = isLastRow && hasBottomFrame
-                )
+                content += drawBorderedRow(filler, fillY, textMeasurer, fontResolver)
                 fillY += currentRowHeight
             }
         }
@@ -309,8 +300,7 @@ private fun drawBorderedRow(
     block: BorderedRowBlock,
     top: Length,
     textMeasurer: TextMeasurer,
-    fontResolver: (TextStyle) -> FontRef,
-    removeBottomBorder: Boolean = false
+    fontResolver: (TextStyle) -> FontRef
 ): List<PageElement> = block.cells.mapIndexed { index, cell ->
     val x = block.offsets[index]
     val width = block.columns[index].width
@@ -324,10 +314,8 @@ private fun drawBorderedRow(
         add(Line(Point(x, top), Point(x + width, top), lineStyle))
         // Right border
         add(Line(Point(x + width, top), Point(x + width, top + block.rowHeight), lineStyle))
-        // Bottom border (unless removeBottomBorder is true)
-        if (!removeBottomBorder) {
-            add(Line(Point(x, top + block.rowHeight), Point(x + width, top + block.rowHeight), lineStyle))
-        }
+        // Bottom border
+        add(Line(Point(x, top + block.rowHeight), Point(x + width, top + block.rowHeight), lineStyle))
         // Left border
         add(Line(Point(x, top), Point(x, top + block.rowHeight), lineStyle))
     }

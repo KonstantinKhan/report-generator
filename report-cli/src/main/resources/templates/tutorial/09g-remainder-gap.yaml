@@ -1,0 +1,50 @@
+# Шаг 9ж: остаток высоты под дозаполнением, `remainder: gap`. Лист А3 альбомный: область контента 420 - 20 - 5 = 395 мм по ширине,
+# 297 - 5 - 5 = 287 мм по высоте (y = 5..292). Колонки: 10+200+125+60 = 395 мм. Шапка 15 мм (y 5..20), строки по 8 мм.
+# Штамп 185 x 33 мм справа внизу резервирует высоту: область потока кончается на y = 292 - 33 = 259 мм.
+# 6 записей кончаются на y = 20 + 6 * 8 = 68 мм; 259 - 68 = 191 = 23 * 8 + 7: 23 пустые строки и остаток 7 мм.
+#   gap     (этот файл): все строки ровно по 8 мм, последняя заканчивается на y = 68 + 184 = 252 мм, 7 мм остаются зазором над штампом.
+#   stretch (09g-remainder-stretch.yaml, то же самое, кроме ключа): последняя пустая строка 8 + 7 = 15 мм, заканчивается на штампе, y = 259 мм.
+# Нижняя граница последней строки рисуется в обоих режимах.
+name: t09g-remainder-gap
+
+sheet:
+  format: A3
+  orientation: landscape
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: titleBlock
+    type: table
+    reserves: true
+    columns: [185]
+    rows:
+      - {height: 11, cells: [{bind: "${doc.designation}", align: center, fontSize: 14}]}
+      - {height: 11, cells: [{text: "Штамп (над ним остаётся зазор)", align: center}]}
+      - {height: 11, cells: [{text: "Лист 1", align: center}]}
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  - id: body
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank                       # дозаполнить страницу пустыми строками
+      remainder: gap                    # stretch (по умолчанию): остаток достаётся последней строке; gap: все строки ровно rowHeight, остаток зазором над штампом
+      styles: {head: tableHeader, data: tableText}
+      columns:
+        - {id: n, width: 10, align: center}
+        - {id: name, width: 200}
+        - {id: material, width: 125}
+        - {id: qty, width: 60, align: center}
+      header:
+        height: 15
+        cells:
+          n: {text: "№", style: head}
+          name: {text: "Наименование", style: head}
+          material: {text: "Материал", style: head}
+          qty: {text: "Количество", style: head}
+      row:
+        cells:
+          n: {bind: "${line.number}", style: data}
+          name: {bind: "${item.name}", style: data}
+          material: {bind: "${item.material}", style: data}
+          qty: {bind: "${item.qty}", style: data}

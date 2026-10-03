@@ -1,0 +1,45 @@
+# Шаг 9ж: то же, что 09g-remainder-gap.yaml, но remainder: stretch (по умолчанию). Остаток 7 мм (191 = 23 * 8 + 7) достаётся последней пустой строке:
+# она 15 мм высотой, заканчивается на штампе, y = 259 мм. Данные те же (09g-remainder-gap-data.yaml, ключ --data).
+name: t09g-remainder-stretch
+
+sheet:
+  format: A3
+  orientation: landscape
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: titleBlock
+    type: table
+    reserves: true
+    columns: [185]
+    rows:
+      - {height: 11, cells: [{bind: "${doc.designation}", align: center, fontSize: 14}]}
+      - {height: 11, cells: [{text: "Штамп (над ним остаётся зазор)", align: center}]}
+      - {height: 11, cells: [{text: "Лист 1", align: center}]}
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  - id: body
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank                       # дозаполнить страницу пустыми строками
+      remainder: stretch                # остаток 7 мм достаётся последней пустой строке
+      styles: {head: tableHeader, data: tableText}
+      columns:
+        - {id: n, width: 10, align: center}
+        - {id: name, width: 200}
+        - {id: material, width: 125}
+        - {id: qty, width: 60, align: center}
+      header:
+        height: 15
+        cells:
+          n: {text: "№", style: head}
+          name: {text: "Наименование", style: head}
+          material: {text: "Материал", style: head}
+          qty: {text: "Количество", style: head}
+      row:
+        cells:
+          n: {bind: "${line.number}", style: data}
+          name: {bind: "${item.name}", style: data}
+          material: {bind: "${item.material}", style: data}
+          qty: {bind: "${item.qty}", style: data}

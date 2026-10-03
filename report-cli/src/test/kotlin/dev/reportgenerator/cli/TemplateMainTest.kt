@@ -254,4 +254,29 @@ class TemplateMainTest {
         assertEquals(7, header.count { it[1] == 5.0 && it[3] == 27.0 })
         dir.deleteRecursively()
     }
+
+    // tutorial/09g: A3 landscape, header 15 mm (y 5..20), 6 records end at y = 20 + 6 * 8 = 68, the 185 x 33 mm stamp starts at
+    // y = 292 - 33 = 259: 259 - 68 = 191 = 23 * 8 + 7. gap: 29 rows of 8 mm (boundaries 20, 28, ..., 252), the last boundary is 68 + 184 = 252 (7 mm above the
+    // stamp); stretch: the last filler row is 15 mm, the last boundary is 259.
+    private fun rowBoundaries(template: String, mm: Double): List<Double> {
+        val dir = Files.createTempDirectory("template-main").toFile()
+        val data = DataYaml.parseFile(resource("tutorial/09g-remainder-gap-data.yaml"))
+        val svg = renderTemplate(TemplateLoader.load(resource("tutorial/$template"), Styles.named.keys), data.context, 1, dir, data.items)
+            .filter { it.extension == "svg" }.single().readText()
+        dir.deleteRecursively()
+        return Regex("""<line x1="20.0" y1="([\d.]+)" x2="30.0" y2="([\d.]+)"""").findAll(svg)
+            .filter { it.groupValues[1] == it.groupValues[2] }.map { it.groupValues[1].toDouble() }.distinct().sorted().toList()
+            .also { assertEquals(mm, it.last()) }
+    }
+
+    @Test
+    fun `tutorial 09g gap keeps every row at rowHeight, stretch grows the last one to the stamp`() {
+        val gap = rowBoundaries("09g-remainder-gap.yaml", 252.0)
+        val stretch = rowBoundaries("09g-remainder-stretch.yaml", 259.0)
+
+        assertEquals((0..29).map { 20.0 + 8 * it }, gap)
+        assertEquals(30, gap.size)
+        assertEquals(30, stretch.size)
+        assertEquals(244.0, stretch[stretch.size - 2])
+    }
 }

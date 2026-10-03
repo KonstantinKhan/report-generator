@@ -14,6 +14,10 @@ data class IrText(
     val style: TextStyle = Styles.mainText
 ) : IrElement
 
+// STRETCH: the last filler row grows by the leftover (the page is covered down to the frame / margin). GAP: every
+// filler row is exactly IrTable.rowHeight, the leftover stays empty below the last one.
+enum class IrFillRemainder { STRETCH, GAP }
+
 data class IrTable(
     val columns: List<IrColumn>,
     val header: IrTableHeader?,
@@ -24,6 +28,8 @@ data class IrTable(
     val groupTitle: IrGroupTitle = IrGroupTitle(),
     // rowHeight != null only: cover each page down to the frame with blank bordered rows.
     val fillBlank: Boolean = true,
+    // fillBlank only: what becomes of the page height left after the last whole filler row (see IrFillRemainder).
+    val fillRemainder: IrFillRemainder = IrFillRemainder.STRETCH,
     // rowHeight != null only: total rows after the last group / row, before the blank fill (see IrTotalRow).
     val footer: List<IrTotalRow> = emptyList(),
     // rowHeight != null only: number the physical rows of the data records (see IrLineNumbers).

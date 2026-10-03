@@ -247,7 +247,7 @@ private class Reader {
 
     private fun flowTable(node: YamlNode, path: String): FlowTableSpec {
         val m = node.asMap(path)
-        m.allow(path, "rowHeight", "columns", "header", "groupTitle", "row", "fill", "keep", "styles", "where", "sortBy", "groupBy", "computed", "totals", "lines")
+        m.allow(path, "rowHeight", "columns", "header", "groupTitle", "row", "fill", "remainder", "keep", "styles", "where", "sortBy", "groupBy", "computed", "totals", "lines")
         val rowPath = "$path.row"
         val row = m.required("row", path).asMap(rowPath)
         row.allow(rowPath, "cells")
@@ -264,6 +264,13 @@ private class Reader {
                     else -> fail("$path.fill", n, "expected blank|none")
                 }
             } ?: FlowFill.NONE,
+            remainder = m.optional("remainder")?.let { n ->
+                when (n.scalar("$path.remainder").lowercase()) {
+                    "stretch" -> FlowRemainder.STRETCH
+                    "gap" -> FlowRemainder.GAP
+                    else -> fail("$path.remainder", n, "expected stretch|gap")
+                }
+            },
             keep = m.optional("keep")?.let { n ->
                 val k = n.asMap("$path.keep")
                 k.allow("$path.keep", "titleChain")
