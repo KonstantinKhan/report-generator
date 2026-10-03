@@ -65,7 +65,7 @@ class FlowTableTest {
         assertEquals(FlowGroupTitle("name", "head", TextAlign.CENTER, 2, 1), t.groupTitle)
         assertEquals(FlowGroupBy("kind", listOf("A", "B"), mapOf("A" to "Группа А", "B" to "Группа Б")), t.groupBy)
         assertEquals(FlowRowCell(bind = "\${item.name}", optional = true, align = TextAlign.CENTER), t.rowCells["name"])
-        assertEquals(mapOf("head" to "tableHeader", "data" to "tableText"), t.styles)
+        assertEquals(mapOf("head" to FlowStyle("tableHeader"), "data" to FlowStyle("tableText")), t.styles)
     }
 
     @Test
@@ -199,6 +199,57 @@ class FlowTableTest {
         assertTrue("shadows a built-in style" in shadow.getValue("blocks[0].table.styles.tableText"))
         // without a known set the keys stay opaque
         assertEquals(emptyMap(), errors(ok.replace("style: data", "style: nope")))
+    }
+
+    private val known = setOf("tableHeader", "tableText")
+
+    @Test
+    fun `style object form is parsed, unspecified fields stay null (inherit)`() {
+        val t = (TemplateLoader.parse(
+            yaml(ok.replace("styles: {head: tableHeader, data: tableText}",
+                "styles: {head: {base: tableHeader, size: 4.5, bold: true}, data: tableText, tiny: {base: tableText, size: 2, italic: false, underline: true}}"))
+        ).blocks.single() as FlowBlock).table!!
+        assertEquals(FlowStyle("tableHeader", size = 4.5, bold = true, asObject = true), t.styles["head"])
+        assertEquals(FlowStyle("tableText"), t.styles["data"])
+        assertEquals(FlowStyle("tableText", size = 2.0, italic = false, underline = true, asObject = true), t.styles["tiny"])
+    }
+
+    @Test
+    fun `style object form errors carry the path of the field`() {
+        fun withStyles(styles: String) = ok.replace("styles: {head: tableHeader, data: tableText}", "styles: $styles")
+        val key = parseError(withStyles("{head: {base: tableHeader, sizes: 4}, data: tableText}"))
+        assertEquals("blocks[0].table.styles.head.sizes", key.path)
+        assertTrue("unknown field 'sizes'" in key.message)
+
+        val noBase = parseError(withStyles("{head: {size: 4}, data: tableText}"))
+        assertEquals("blocks[0].table.styles.head", noBase.path)
+        assertTrue("missing required field 'base'" in noBase.message)
+
+        val size = parseError(withStyles("{head: {base: tableHeader, size: big}, data: tableText}"))
+        assertEquals("blocks[0].table.styles.head.size", size.path)
+
+        val bold = parseError(withStyles("{head: {base: tableHeader, bold: yes}, data: tableText}"))
+        assertEquals("blocks[0].table.styles.head.bold", bold.path)
+        assertTrue("true|false" in bold.message)
+    }
+
+    @Test
+    fun `style object form is validated, base against the known names, size above zero`() {
+        fun withStyles(styles: String) = errors(ok.replace("styles: {head: tableHeader, data: tableText}", "styles: $styles"), styles = known)
+        assertEquals(emptyMap(), withStyles("{head: {base: tableHeader, size: 4.5}, data: tableText}"))
+
+        val base = withStyles("{head: {base: nope, size: 4}, data: tableText}")
+        assertTrue("unknown style 'nope'" in base.getValue("blocks[0].table.styles.head.base"))
+
+        assertTrue("must be > 0, got 0.0" in withStyles("{head: {base: tableHeader, size: 0}, data: tableText}").getValue("blocks[0].table.styles.head.size"))
+        assertTrue("must be > 0, got -3.0" in withStyles("{head: {base: tableHeader, size: -3}, data: tableText}").getValue("blocks[0].table.styles.head.size"))
+
+        // an alias never takes the name of a built-in style, with an object value either (also: same base)
+        val shadow = withStyles("{head: tableHeader, data: tableText, tableText: {base: tableText, size: 5}}")
+        assertTrue("shadows a built-in style" in shadow.getValue("blocks[0].table.styles.tableText"))
+
+        // a style name of a cell resolves through an object alias
+        assertEquals(emptyMap(), withStyles("{head: {base: tableHeader, size: 4.5}, data: tableText}"))
     }
 
     @Test

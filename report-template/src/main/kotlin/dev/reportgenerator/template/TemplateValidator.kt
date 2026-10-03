@@ -346,13 +346,16 @@ object TemplateValidator {
 
         val aliasKeys = t.styles.keys
         val known = scope.styleNames
-        t.styles.forEach { (alias, target) ->
+        t.styles.forEach { (alias, style) ->
             val sp = "$p.styles.$alias"
+            // object form: errors of `base` are at `.base`; the string form (no overrides) keeps the path of the alias
+            val bp = if (style.asObject) "$sp.base" else sp
             if (!ID_PATTERN.matches(alias)) errors += TemplateError(sp, "invalid style alias '$alias' (letters, digits, _ and -)")
             if (known != null) {
                 if (alias in known) errors += TemplateError(sp, "alias '$alias' shadows a built-in style")
-                if (target !in known) errors += TemplateError(sp, "unknown style '$target' (${known.sorted().joinToString()})")
+                if (style.base !in known) errors += TemplateError(bp, "unknown style '${style.base}' (${known.sorted().joinToString()})")
             }
+            if (style.size != null && !(style.size > 0.0 && style.size.isFinite())) errors += TemplateError("$sp.size", "must be > 0, got ${style.size}")
         }
         fun style(name: String?, path: String) {
             if (name == null || known == null || name in aliasKeys || name in known) return

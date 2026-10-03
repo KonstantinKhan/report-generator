@@ -190,4 +190,16 @@ class LineNumberLayoutTest {
         val unknown = table(listOf(row("a")), numbers = IrLineNumbers("zz"))
         assertTrue(assertFailsWith<IllegalArgumentException> { layOut(unknown) }.message!!.contains("'zz'"))
     }
+
+    @Test
+    fun `lines of a newline record are numbered and the record may break across pages`() {
+        // 9 single lines, then a record of 4 lines (a forced break, an empty segment): lines 10, 11 on page 1 (rows 10, 11), 12, 13 on page 2
+        val doc = layOut(table((1..9).map { row("a$it") } + row("Вал\nОсь\n\nВтулка") + row("b")))
+
+        assertEquals((1..11).map(Int::toString), numbers(doc, 1))
+        assertEquals(listOf("12", "13", "14"), numbers(doc, 2))
+        assertEquals(listOf("Вал", "Ось"), names(doc, 1).takeLast(2))
+        // the empty line is a numbered row without text, its text is not drawn
+        assertEquals(listOf("Втулка", "b"), names(doc, 2))
+    }
 }

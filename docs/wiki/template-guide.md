@@ -653,6 +653,55 @@ RUN $T/09b-groups.yaml output --data $T/09b-groups-data.yaml
 - Пустые строки дозаполнения по умолчанию остаются без номера (`fill: false`): нумеровать ли их, решает ключ.
 - Чтобы перевести колонку «№ строки» с `${item.pos}` на номер строки, замените bind ячейки на `"${line.number}"` (`computed.pos` можно оставить, если `pos` нужен в другой колонке).
 
+### 9д. Параметризованные стили и принудительный перенос `\n`
+
+Файлы `tutorial/09e-styles-and-breaks.yaml` + `tutorial/09e-styles-and-breaks-data.yaml`. Колонки 10+10+105+20+40 = 185 мм.
+
+**Стили с параметрами.** Раньше псевдоним в `styles` был только именем встроенного стиля. Теперь можно взять встроенный стиль за основу и поменять кегль и флаги:
+
+```yaml
+      styles:
+        data: tableText                                   # строка: просто имя встроенного стиля
+        head: {base: tableHeader, size: 4.5}              # объект: копия tableHeader, кегль 4,5 мм
+        note: {base: tableText, size: 3, italic: true}    # неуказанное (гарнитура, bold, underline) берётся из base
+```
+
+`base` обязателен (имя из набора встроенных), `size` это кегль в мм (> 0), `bold` / `italic` / `underline` это `true` / `false`. Использование то же: `style: head` в ячейке шапки,
+`style: note` в ячейке строки (так же в `groupTitle.style` и `totals[].style`). Псевдоним нельзя называть именем встроенного стиля (`tableText: {...}` ошибка): назовите `big`, `note`.
+
+**Принудительный перенос.** `\n` в значении ячейки строки это жёсткий перенос. В данных он пишется в двойных кавычках:
+
+```yaml
+  - {name: "Гайка М6", qty: 24, note: "оцинкованная\nкласс прочности 8.8\nГОСТ 9.307"}
+  - {name: "Шайба 6", qty: 48, note: "нержавеющая сталь, покрытие по ГОСТ 9.307\n\nпоставка россыпью"}
+  - {name: "Кабель ВВГ 3x1,5", qty: 12.5, note: "бухта\n"}
+```
+
+Каждый сегмент между `\n` переносится по словам отдельно; пустой сегмент (`\n\n`) пустая строка; `\n` в конце текста отбрасывается; `\n` в начале даёт пустую первую строку.
+
+Запуск: `RUN $T/09e-styles-and-breaks.yaml output --data $T/09e-styles-and-breaks-data.yaml`.
+
+**Что увидеть** (из SVG, кегль в `font-size`; колонки «№ строки» / «№ п/п» / примечание):
+
+| Строка таблицы | № строки | № п/п | Примечание |
+|---|---|---|---|
+| 1 | 1 | 1 | Болт М6x20, примечания нет |
+| 2 | 2 | 2 | `оцинкованная` (Гайка М6) |
+| 3 | 3 | пусто | `класс прочности 8.8` |
+| 4 | 4 | пусто | `ГОСТ 9.307` |
+| 5 | 5 | 3 | `нержавеющая сталь,` (Шайба 6; первый сегмент не влез в 38 мм и перенёсся по словам) |
+| 6 | 6 | пусто | `покрытие по ГОСТ 9.307` |
+| 7 | 7 | пусто | пустая строка (`\n\n`): номер есть, текста нет |
+| 8 | 8 | пусто | `поставка россыпью` |
+| 9 | 9 | 4 | `бухта` (Кабель ВВГ 3x1,5; конечный `\n` лишней строки не даёт) |
+| 10 | 10 | 5 | Смазка, примечания нет |
+
+- Шапка нарисована кеглем `4.5` (`font-size="4.5"` в `<text>`), примечания кеглем `3.0` курсивом, остальное `3.5` (в SVG `3.4999999999999996`: мм в пункты и обратно).
+- Номер строки идёт по физическим строкам (10 строк у 5 записей), `pos` стоит только на первой строке записи.
+- Кегль крупнее 3,5 мм меняет перенос. Колонка «№ строки» с `rotate: 90` и кеглем 4,5 мм не помещается в шапку 15 мм («№ строки» длиннее), поэтому в примере `header.height: 20`: повёрнутый текст
+  рисуется одной строкой и при нехватке высоты обрезается до первого куска. Неповёрнутую шапку без `lines` кегль переносит по ширине колонки на несколько строк, и высоту `header.height` нужно увеличить.
+- Стили и переносы проверены тестами (`FlowTableTest`, `FlowTablesTest`, `TableMeasurementTest`, `StylesAndBreaksGoldenTest`, `TemplateMainTest`).
+
 ## Шаг 10. Сквозной пример
 
 **Цель:** собрать с нуля законченный документ «Ведомость покупных изделий»: лист, штамп первой и следующих страниц, боковая надпись, поток с группами и итогами.
@@ -749,6 +798,10 @@ RUN $T/10-complete.yaml output --data $T/10-complete-data.yaml
 | ширина колонок | `12-flow-width` | `blocks[0].table.columns: column widths sum to 180.0 mm, flow region is 185.0 mm wide (sheet content width, compared to 0.01 mm, no tolerance)` |
 | значение enum вне `order`/`omit` | `13-flow-enum` | `blocks[0].table.groupBy.order: 'kind' can also be DISCONTINUED: list it in 'order' (a group) or 'omit' (dropped on purpose), rows must not be lost silently` |
 | неизвестный стиль | `14-flow-style` | `blocks[0].table.row.cells.pos.style: unknown style 'dataa' (aliases: head, data, title; built-in: designation, frameText, frameTextLarge, groupHeader, heading, mainText, tableHeader, tableText, totalText)` |
+| размер шрифта 0 в стиле | `22-flow-style-size` | `blocks[1].table.styles.head.size: must be > 0, got 0.0` |
+| неизвестный `base` стиля | `23-flow-style-base` | `blocks[1].table.styles.head.base: unknown style 'tableHeadr' (designation, frameText, frameTextLarge, groupHeader, heading, mainText, tableHeader, tableText, totalText)` |
+| опечатка в ключе стиля | `24-flow-style-key` | `blocks[1].table.styles.head.sise: unknown field 'sise' (allowed: base, bold, italic, size, underline) (line 25)` |
+| псевдоним = имя встроенного стиля | `25-flow-style-shadow` | `blocks[1].table.styles.tableText: alias 'tableText' shadows a built-in style` |
 | неизвестное поле item | `15-flow-bind` | `blocks[0].table.row.cells.name.bind: unknown field 'item.nme' (item has: kind, name, qty, unit, status, note, pos), did you mean 'item.name'?` |
 | поворот шапки 270 | `16-flow-rotate270` | `blocks[0].table.header.cells.pos.rotate: expected 0\|90, got 270` |
 | `where` читает computed | `17-flow-where-computed` | `blocks[0].table.where.field: computed field 'pos' is not available here (where / groupBy read the record's own fields, ...)` |
@@ -758,7 +811,7 @@ RUN $T/10-complete.yaml output --data $T/10-complete-data.yaml
 | в поле строк разные типы | `20-mixed-types-data` (данные к `09-flow.yaml`) | `item[2].qty: mixed types in one field: String here, Integer in item[0].qty (row 3 and row 1); use one type or tag the values (!str, !int, ...)` |
 | файла `--data` нет | (scratch) | `error: data file not found: /путь/nofile.yaml` |
 
-Запуск любого из них: `RUN $T/errors/12-flow-width.yaml output --data $T/09b-groups-data.yaml` (для плоских файлов `--data` не нужен). Файлы `19`, `20` это данные: `RUN $T/09-flow.yaml output --data $T/errors/19-row-missing-data.yaml`.
+Запуск любого из них: `RUN $T/errors/12-flow-width.yaml output --data $T/09b-groups-data.yaml` (для плоских файлов `--data` не нужен). Файлы `22`-`25` запускаются с `--data $T/09e-styles-and-breaks-data.yaml`. Файлы `19`, `20` это данные: `RUN $T/09-flow.yaml output --data $T/errors/19-row-missing-data.yaml`.
 
 **Куда смотреть при ошибке**
 

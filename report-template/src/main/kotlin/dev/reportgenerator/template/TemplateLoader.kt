@@ -270,7 +270,7 @@ private class Reader {
                 FlowKeep(k.optional("titleChain")?.let { bool(it, "$path.keep.titleChain") } ?: true)
             } ?: FlowKeep(),
             styles = m.optional("styles")?.asMap("$path.styles")?.entries?.entries?.associate { (k, v) ->
-                k.content to v.scalar("$path.styles.${k.content}")
+                k.content to flowStyle(v, "$path.styles.${k.content}")
             } ?: emptyMap(),
             where = m.optional("where")?.let { predicate(it, "$path.where") },
             sortBy = m.optional("sortBy")?.let { n ->
@@ -282,6 +282,24 @@ private class Reader {
             } ?: emptyMap(),
             totals = m.optional("totals")?.asList("$path.totals")?.items?.mapIndexed { i, n -> flowTotal(n, "$path.totals[$i]") } ?: emptyList(),
             lines = m.optional("lines")?.let { flowLines(it, "$path.lines") }
+        )
+    }
+
+    // `alias: baseName` or `alias: {base, size, bold, italic, underline}`, see FlowStyle. Values are checked by the
+    // validator (base is a known style, size > 0).
+    private fun flowStyle(node: YamlNode, path: String): FlowStyle {
+        if (node.unwrap() !is YamlMap) return FlowStyle(node.scalar(path))
+        val m = node.asMap(path)
+        m.allow(path, "base", "size", "bold", "italic", "underline")
+        return FlowStyle(
+            base = m.required("base", path).scalar("$path.base"),
+            size = m.optional("size")?.let { n ->
+                n.scalar("$path.size").toDoubleOrNull() ?: fail("$path.size", n, "expected number (font size, mm)")
+            },
+            bold = m.optional("bold")?.let { bool(it, "$path.bold") },
+            italic = m.optional("italic")?.let { bool(it, "$path.italic") },
+            underline = m.optional("underline")?.let { bool(it, "$path.underline") },
+            asObject = true
         )
     }
 

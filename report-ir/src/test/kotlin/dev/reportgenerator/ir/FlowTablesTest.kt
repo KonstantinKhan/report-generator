@@ -94,6 +94,64 @@ ${groups(grouped, titleStyle)}
     }
 
     @Test
+    fun `an object alias copies the base style and overrides only what it sets`() {
+        val object_ = spec(rowStyle = "{base: designation, size: 4.5, bold: true}")
+        val cell = (FlowTables.build(object_, schema, listOf(item(1, "a"))).content.single() as IrGroup).rows.single().cells[1]
+        assertEquals(Styles.designation.copy(fontSizeMm = 4.5, bold = true), cell.style)
+
+        // flags overridden to false win over the base (groupHeader is italic + underline)
+        val off = spec(rowStyle = "{base: groupHeader, italic: false}")
+        val c2 = (FlowTables.build(off, schema, listOf(item(1, "a"))).content.single() as IrGroup).rows.single().cells[1]
+        assertEquals(Styles.groupHeader.copy(italic = false), c2.style)
+        assertEquals(true, c2.style.underline)
+        // the built-in style itself is untouched
+        assertEquals(3.5, Styles.groupHeader.fontSizeMm)
+    }
+
+    @Test
+    fun `object aliases reach header cells, group title, row cells and totals`() {
+        val table = (TemplateLoader.load(
+            """
+            sheet: {format: A4, margins: {left: 20, right: 5}}
+            blocks:
+              - id: body
+                type: flow
+                table:
+                  rowHeight: 6
+                  styles:
+                    head: {base: tableHeader, size: 4.5}
+                    title: {base: groupHeader, size: 5}
+                    data: {base: tableText, size: 3}
+                    sum: {base: totalText, size: 4, bold: false}
+                  columns:
+                    - {id: n, width: 15, align: center}
+                    - {id: name, width: 170}
+                  header:
+                    height: 10
+                    cells: {n: {text: "N", style: head}, name: {text: "Name"}}
+                  groupBy: {field: kind, order: [G], titles: {G: "Детали"}}
+                  groupTitle: {column: name, style: title}
+                  totals:
+                    - {id: cnt, scope: table, agg: count, label: "Всего", labelColumn: name, valueColumn: n, style: sum}
+                  row:
+                    cells:
+                      n: {bind: "${'$'}{item.n}", style: data}
+                      name: {bind: "${'$'}{item.name}", style: data}
+            """.trimIndent(),
+            Styles.named.keys
+        ).blocks.single() as FlowBlock).table!!
+
+        val ir = FlowTables.build(table, schema, listOf(item(1, "a")))
+
+        assertEquals(Styles.tableHeader.copy(fontSizeMm = 4.5), ir.header!!.cells[0].style)
+        assertEquals(Styles.tableHeader, ir.header!!.cells[1].style) // no style: = the default, not an alias
+        assertEquals(Styles.groupHeader.copy(fontSizeMm = 5.0), ir.groupTitle.style)
+        val rows = (ir.content.single() as IrGroup).rows
+        assertEquals(listOf(Styles.tableText.copy(fontSizeMm = 3.0), Styles.tableText.copy(fontSizeMm = 3.0)), rows.single().cells.map { it.style })
+        assertEquals(Styles.totalText.copy(fontSizeMm = 4.0, bold = false), ir.footer.single().cells[1].style)
+    }
+
+    @Test
     fun `an unknown style fails with the yaml path`() {
         // not caught by the loader when no known set is given
         val loose = (TemplateLoader.load(

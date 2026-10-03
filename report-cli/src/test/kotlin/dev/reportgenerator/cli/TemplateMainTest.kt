@@ -207,4 +207,31 @@ class TemplateMainTest {
         assertEquals((1..8).map(Int::toString), lineNumberTexts(svg, 20))
         dir.deleteRecursively()
     }
+
+    // tutorial/09e: parametrized styles (the header 4.5 mm, the note 3 mm italic) and `\n` in the notes (data in double quotes).
+    // Physical lines: Болт 1; Гайка 3 (3 segments); Шайба 2 (wrapped first segment) + 1 (empty) + 1; Кабель 1 (the trailing \n
+    // adds nothing); Смазка 1 = 10 lines, numbered 1 .. 10 (fill: true goes on with the filler rows).
+    @Test
+    fun `tutorial 09e applies the object styles and breaks the notes at newline`() {
+        val dir = Files.createTempDirectory("template-main").toFile()
+        val template = TemplateLoader.load(resource("tutorial/09e-styles-and-breaks.yaml"), Styles.named.keys)
+        val data = DataYaml.parseFile(resource("tutorial/09e-styles-and-breaks-data.yaml"))
+
+        val svg = renderTemplate(template, data.context, 1, dir, data.items).filter { it.extension == "svg" }.single().readText()
+
+        val texts = Regex("""<text x="([\d.]+)" y="([\d.]+)"([^>]*)>([^<]+)</text>""").findAll(svg)
+            .map { listOf(it.groupValues[1], it.groupValues[2], it.groupValues[3], it.groupValues[4]) }.toList()
+        // the header (4.5 mm) and the notes (3 mm, italic); everything else stays 3.5 mm
+        assertEquals(setOf("4.5"), texts.filter { it[3] in setOf("Наименование", "Кол.", "Примечание") }.map { Regex("""font-size="([\d.]+)"""").find(it[2])!!.groupValues[1] }.toSet())
+        val notes = texts.filter { it[0].toDouble() >= 165 && it[1].toDouble() > 27 }.sortedBy { it[1].toDouble() }
+        assertEquals(
+            listOf("оцинкованная", "класс прочности 8.8", "ГОСТ 9.307", "нержавеющая сталь,", "покрытие по ГОСТ 9.307", "поставка россыпью", "бухта"),
+            notes.map { it[3] }
+        )
+        notes.forEach { assertTrue("font-size=\"3.0\"" in it[2] && "italic" in it[2], it.toString()) }
+        // 10 physical lines, the empty line (row 7) is numbered but draws no note
+        assertEquals((1..10).toList(), lineNumberTexts(svg, 20).filter { it.toInt() <= 10 }.map { it.toInt() }.take(10))
+        assertEquals((1..5).map(Int::toString), lineNumberTexts(svg, 30).filter { it.length == 1 }.take(5))
+        dir.deleteRecursively()
+    }
 }

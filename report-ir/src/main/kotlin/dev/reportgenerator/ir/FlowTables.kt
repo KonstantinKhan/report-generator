@@ -129,12 +129,20 @@ object FlowTables {
         )
     }
 
-    // alias (FlowTableSpec.styles) first, then a built-in style name.
+    // alias (FlowTableSpec.styles) first, then a built-in style name. An alias is its base style, a field the alias
+    // sets (size, bold, italic, underline) replaces the base's (TextStyle.copy), the others stay the base's.
     private class StyleResolver(private val spec: FlowTableSpec) {
         fun resolve(name: String, at: String): TextStyle {
-            val target = spec.styles[name] ?: name
-            return Styles.named[target] ?: throw TemplateException(
+            val alias = spec.styles[name]
+            val target = alias?.base ?: name
+            val base = Styles.named[target] ?: throw TemplateException(
                 listOf(TemplateError(at, "unknown style '$target' (${Styles.named.keys.joinToString()})"))
+            )
+            return if (alias == null) base else base.copy(
+                fontSizeMm = alias.size ?: base.fontSizeMm,
+                bold = alias.bold ?: base.bold,
+                italic = alias.italic ?: base.italic,
+                underline = alias.underline ?: base.underline
             )
         }
     }

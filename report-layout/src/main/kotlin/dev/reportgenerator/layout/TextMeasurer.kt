@@ -29,15 +29,26 @@ class PdfBoxTextMeasurer(
     private val measurementDocument = PDDocument()
 
     override fun measure(text: String, style: TextStyle, maxWidth: Length, breakLongWords: Boolean): TextMeasurement {
-        if (text.isEmpty()) return TextMeasurement(Length.ZERO, Length.ZERO, 0, emptyList())
+        // '\n' is a hard line break: every segment is wrapped on its own; trailing breaks are dropped, see hardBreakSegments
+        val segments = hardBreakSegments(text)
+        if (segments.isEmpty()) return TextMeasurement(Length.ZERO, Length.ZERO, 0, emptyList())
 
         val font = fontRegistry.loadInto(measurementDocument, fontResolver(style))
         val sizePt = style.fontSizeMm / PT_TO_MM
-        val lines = wrapIntoLines(text, font, sizePt, maxWidth, breakLongWords)
+        val lines = segments.flatMap { wrapIntoLines(it, font, sizePt, maxWidth, breakLongWords) }
         val width = lines.maxOf { lineWidth(it, font, sizePt) }
         val lineHeight = Length.ofMillimeters(style.fontSizeMm * LINE_HEIGHT_FACTOR)
 
         return TextMeasurement(width, lineHeight * lines.size, lines.size, lines)
+    }
+
+    // The segments of `text` between hard breaks (\n, \r\n and \r all count). An empty segment (a\n\nb) is an empty
+    // line, leading breaks give leading empty lines, trailing breaks are dropped (a YAML block scalar ends with one).
+    // No text, or only breaks = no segments = no lines (like an empty text).
+    private fun hardBreakSegments(text: String): List<String> {
+        if (text.indexOf('\n') < 0 && text.indexOf('\r') < 0) return if (text.isEmpty()) emptyList() else listOf(text)
+        val trimmed = text.replace("\r\n", "\n").replace('\r', '\n').trimEnd('\n')
+        return if (trimmed.isEmpty()) emptyList() else trimmed.split('\n')
     }
 
     private fun lineWidth(line: String, font: PDFont, sizePt: Double): Length {

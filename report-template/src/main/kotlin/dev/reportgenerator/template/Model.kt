@@ -324,7 +324,21 @@ data class FlowTotal(
     val rounding: RoundingMode? = null
 )
 
-// `styles`: alias -> style name the consumer knows (cells may use either).
+// `styles:` entry of a flow table: `base` = a style name the consumer knows (required), the other fields override it
+// (null = inherit from `base`). `size` = font size in mm. YAML: `alias: baseName` (= FlowStyle(baseName)) or
+// `alias: {base: baseName, size: 4.5, bold: true, italic: false, underline: false}`.
+data class FlowStyle(
+    val base: String,
+    val size: Double? = null,
+    val bold: Boolean? = null,
+    val italic: Boolean? = null,
+    val underline: Boolean? = null,
+    // only records which YAML form was written (it selects the error path of `base`)
+    val asObject: Boolean = false
+)
+
+// `styles`: alias -> style (a built-in name or an overridden copy of one, see FlowStyle); cells may use either an alias
+// or a built-in name.
 // Data shaping, in this order: `where` (filter rows) -> `sortBy` (stable; none = source order) -> `groupBy`
 // (none = a flat table; groups follow `order`, rows keep their order inside) -> `computed` (numbers over the
 // final order, so `scope: table` runs through the groups in table order). `where`, `groupBy` read the record's own
@@ -338,7 +352,7 @@ data class FlowTableSpec(
     val rowCells: Map<String, FlowRowCell>,
     val fill: FlowFill = FlowFill.NONE,
     val keep: FlowKeep = FlowKeep(),
-    val styles: Map<String, String> = emptyMap(),
+    val styles: Map<String, FlowStyle> = emptyMap(),
     val where: Predicate? = null,
     val sortBy: List<FlowSort> = emptyList(),
     val groupBy: FlowGroupBy? = null,
