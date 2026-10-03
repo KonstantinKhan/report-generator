@@ -13,8 +13,11 @@ import dev.reportgenerator.template.TemplateContract
 import dev.reportgenerator.template.TotalValue
 import dev.reportgenerator.template.TemplateError
 import dev.reportgenerator.template.TemplateException
+import dev.reportgenerator.template.FlowLines
+import dev.reportgenerator.template.LinesScope
 import dev.reportgenerator.template.itemFields
 import dev.reportgenerator.template.itemSchema
+import dev.reportgenerator.template.lineNumberColumn
 import dev.reportgenerator.template.TextAlign as TemplateTextAlign
 
 // YAML flow table spec (FlowTableSpec) + rows supplied by code -> IrTable. Structure, widths, header, spacers,
@@ -72,13 +75,15 @@ object FlowTables {
         }
         val fields = spec.itemFields(schema)
         val renderers = spec.columns.associate { it.id to FlowCellRenderer(spec.rowCells.getValue(it.id), fields) }
+        // the cell bound to ${line.number} stays empty here: the layout writes the number of every physical line into it
+        val lineColumn = spec.lineNumberColumn()
         fun row(item: DataValue.Record): IrRow {
             val data = MapDataContext(rowSchema, mapOf("item" to item))
             return IrRow(
                 spec.columns.map { column ->
                     val cell = spec.rowCells.getValue(column.id)
                     IrCell(
-                        renderers.getValue(column.id).render(item, data, rows),
+                        if (column.id == lineColumn) "" else renderers.getValue(column.id).render(item, data, rows),
                         style = rowStyles.getValue(column.id), align = (cell.align ?: column.align).toIr()
                     )
                 }
@@ -108,7 +113,19 @@ object FlowTables {
             rowHeight = spec.rowHeight.mm,
             groupTitle = groupTitle,
             fillBlank = spec.fill == FlowFill.BLANK,
-            footer = shaped.totals.map(::totalRow)
+            footer = shaped.totals.map(::totalRow),
+            lineNumbers = lineColumn?.let { id ->
+                val lines = spec.lines ?: FlowLines()
+                val cell = spec.rowCells.getValue(id)
+                IrLineNumbers(
+                    column = id,
+                    start = lines.start,
+                    scope = if (lines.scope == LinesScope.PAGE) IrLineScope.PAGE else IrLineScope.TABLE,
+                    fillBlank = lines.fill,
+                    style = rowStyles.getValue(id),
+                    align = (cell.align ?: spec.columns.first { it.id == id }.align).toIr()
+                )
+            }
         )
     }
 

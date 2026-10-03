@@ -49,11 +49,19 @@ object TemplateContract {
         row.cells.forEachIndexed { i, c -> c.bind?.let { checkBind(it, c.format, "$path.cells[$i]", schema, errors) } }
     }
 
-    // `owner` = YAML path of the cell / text block that holds the bind.
-    internal fun checkBind(bind: String, format: FormatSpec?, owner: String, schema: DataSchema, errors: MutableList<TemplateError>) {
+    // `owner` = YAML path of the cell / text block that holds the bind. `allowLine`: the cell is a flow table row cell
+    // (not a `cases` variant), the only place `line.*` (the layout-derived number of a physical line) exists.
+    internal fun checkBind(
+        bind: String, format: FormatSpec?, owner: String, schema: DataSchema, errors: MutableList<TemplateError>,
+        allowLine: Boolean = false
+    ) {
         val path = Binding.path(bind)
         if (!BIND_EXPR.matches(bind)) {
             errors += TemplateError("$owner.bind", "bind must be a single path expression like \${doc.designation}, got '$bind'")
+            return
+        }
+        if (path.startsWith("line.") && !allowLine) {
+            errors += TemplateError("$owner.bind", "'$path' exists only in the row cells of a flow table (the number of a physical line), not here")
             return
         }
         val type = when (val found = schema.lookup(path)) {

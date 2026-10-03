@@ -33,7 +33,7 @@ internal object FlowContract {
         val itemSchema = t.itemSchema(schema)
         t.rowCells.forEach { (id, c) ->
             val cp = "$p.row.cells.$id"
-            c.bind?.let { TemplateContract.checkBind(it, c.format, cp, itemSchema, errors) }
+            c.bind?.let { TemplateContract.checkBind(it, c.format, cp, itemSchema, errors, allowLine = true) }
             c.cases.forEachIndexed { i, case ->
                 val kp = "$cp.cases[$i]"
                 predicate(case.where, "$kp.where", extended, emptySet(), errors)

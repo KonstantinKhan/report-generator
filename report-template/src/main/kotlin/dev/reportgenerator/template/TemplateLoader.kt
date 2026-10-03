@@ -33,7 +33,7 @@ object TemplateLoader {
 }
 
 internal val PARAM_REF = Regex("""\$\{param\.([A-Za-z_][A-Za-z0-9_]*)}""")
-internal val BIND_EXPR = Regex("""\$\{(doc|page|item)\.[A-Za-z_][A-Za-z0-9_.]*}""")
+internal val BIND_EXPR = Regex("""\$\{(doc|page|item|line)\.[A-Za-z_][A-Za-z0-9_.]*}""")
 internal val ID_PATTERN = Regex("[A-Za-z_][A-Za-z0-9_-]*")
 // Numeric operand of an arithmetic computed field; a field name never starts with a digit or a sign.
 internal val NUMBER_LITERAL = Regex("-?\\d+(\\.\\d+)?")
@@ -247,7 +247,7 @@ private class Reader {
 
     private fun flowTable(node: YamlNode, path: String): FlowTableSpec {
         val m = node.asMap(path)
-        m.allow(path, "rowHeight", "columns", "header", "groupTitle", "row", "fill", "keep", "styles", "where", "sortBy", "groupBy", "computed", "totals")
+        m.allow(path, "rowHeight", "columns", "header", "groupTitle", "row", "fill", "keep", "styles", "where", "sortBy", "groupBy", "computed", "totals", "lines")
         val rowPath = "$path.row"
         val row = m.required("row", path).asMap(rowPath)
         row.allow(rowPath, "cells")
@@ -280,7 +280,21 @@ private class Reader {
             computed = m.optional("computed")?.let { n ->
                 n.asMap("$path.computed").entries.entries.associate { (k, v) -> k.content to flowComputed(v, "$path.computed.${k.content}") }
             } ?: emptyMap(),
-            totals = m.optional("totals")?.asList("$path.totals")?.items?.mapIndexed { i, n -> flowTotal(n, "$path.totals[$i]") } ?: emptyList()
+            totals = m.optional("totals")?.asList("$path.totals")?.items?.mapIndexed { i, n -> flowTotal(n, "$path.totals[$i]") } ?: emptyList(),
+            lines = m.optional("lines")?.let { flowLines(it, "$path.lines") }
+        )
+    }
+
+    // `{start, scope: table|page, fill}`, see FlowLines.
+    private fun flowLines(node: YamlNode, path: String): FlowLines {
+        val m = node.asMap(path)
+        m.allow(path, "start", "scope", "fill")
+        return FlowLines(
+            start = m.optional("start")?.let { long(it, "$path.start") } ?: 1,
+            scope = m.optional("scope")?.let { n ->
+                LinesScope.entries.firstOrNull { it.name == n.scalar("$path.scope").uppercase() } ?: fail("$path.scope", n, "expected table|page")
+            } ?: LinesScope.TABLE,
+            fill = m.optional("fill")?.let { bool(it, "$path.fill") } ?: false
         )
     }
 

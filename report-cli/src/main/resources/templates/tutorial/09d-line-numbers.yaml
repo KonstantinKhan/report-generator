@@ -1,0 +1,51 @@
+# Шаг 9г: номер физической строки таблицы (${line.number}) и раздел lines.
+# Колонки: 10+10+80+20+65 = 185 мм = ширина области контента (210 - 20 - 5).
+name: t09d-line-numbers
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: titleBlock
+    type: table
+    reserves: true
+    columns: [185]
+    rows:
+      - {height: 15, cells: [{bind: "${doc.designation}", align: center, fontSize: 14}]}
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  - id: body
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank                       # дозаполнить страницу пустыми строками до штампа
+      styles: {head: tableHeader, data: tableText}
+      computed:
+        pos: {sequence: {}}             # номер ЗАПИСИ: один на запись, как раньше
+      lines:                            # необязательно: без раздела действуют значения по умолчанию
+        start: 1                        # номер первой строки
+        scope: table                    # table: сквозной по всем страницам, page: с начала каждой страницы
+        fill: true                      # пустые строки дозаполнения тоже получают номер (по умолчанию false)
+      columns:
+        - {id: line, width: 10, align: center}
+        - {id: pos, width: 10, align: center}
+        - {id: name, width: 80}
+        - {id: qty, width: 20, align: center}
+        - {id: note, width: 65}
+      header:
+        height: 15
+        cells:
+          line: {text: "№ строки", rotate: 90, style: head}
+          pos: {text: "№ п/п", rotate: 90, style: head}
+          name: {text: "Наименование", style: head}
+          qty: {text: "Кол.", style: head}
+          note: {text: "Примечание", style: head}
+      row:
+        cells:
+          line: {bind: "${line.number}", style: data}   # число подставляет раскладка: оно зависит от переноса текста
+          pos: {bind: "${item.pos}", style: data}
+          name: {bind: "${item.name}", style: data}
+          qty: {bind: "${item.qty}", style: data}
+          note: {bind: "${item.note}", optional: true, style: data}

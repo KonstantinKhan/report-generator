@@ -172,4 +172,39 @@ class TemplateMainTest {
         assertTrue("blocks[0].table.groupBy.order" in e.errors.map { it.path }, e.toString())
         dir.deleteRecursively()
     }
+
+    // tutorial/09d: 5 records; the note of record 2 wraps into 3 lines, of record 4 into 2 -> 8 physical lines:
+    // record 1 -> line 1; record 2 -> 2, 3, 4; record 3 -> 5; record 4 -> 6, 7; record 5 -> 8. Then the filler rows (fill: true)
+    // go on with 9 .. 32 (32 rows of 8 mm fit under the 15 mm header above the 15 mm title block). `pos` stays per record.
+    private fun lineNumberTexts(svg: String, fromMm: Int): List<String> =
+        Regex("""<text x="([\d.]+)" y="([\d.]+)"[^>]*>([^<]+)</text>""").findAll(svg)
+            .map { Triple(it.groupValues[1].toDouble(), it.groupValues[2].toDouble(), it.groupValues[3]) }
+            .filter { (x, y, _) -> x >= fromMm && x < fromMm + 10 && y > 20 }
+            .sortedBy { it.second }.map { it.third }.toList()
+
+    @Test
+    fun `tutorial 09d numbers every physical line of a wrapped record through the real engine`() {
+        val dir = Files.createTempDirectory("template-main").toFile()
+        val template = TemplateLoader.load(resource("tutorial/09d-line-numbers.yaml"), Styles.named.keys)
+        val data = DataYaml.parseFile(resource("tutorial/09d-line-numbers-data.yaml"))
+
+        val svg = renderTemplate(template, data.context, 1, dir, data.items).filter { it.extension == "svg" }.single().readText()
+
+        assertEquals((1..32).map(Int::toString), lineNumberTexts(svg, 20))
+        assertEquals((1..5).map(Int::toString), lineNumberTexts(svg, 30))
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun `without a lines section fillers stay unnumbered and the numbers still run over wrapped lines`() {
+        val dir = Files.createTempDirectory("template-main").toFile()
+        val yaml = resource("tutorial/09d-line-numbers.yaml").lines().filterNot { it.trimStart().let { l -> l.startsWith("start:") || l.startsWith("scope:") || l.startsWith("fill: true") || l.startsWith("lines:") } }.joinToString("\n")
+        val template = TemplateLoader.load(yaml, Styles.named.keys)
+        val data = DataYaml.parseFile(resource("tutorial/09d-line-numbers-data.yaml"))
+
+        val svg = renderTemplate(template, data.context, 1, dir, data.items).filter { it.extension == "svg" }.single().readText()
+
+        assertEquals((1..8).map(Int::toString), lineNumberTexts(svg, 20))
+        dir.deleteRecursively()
+    }
 }

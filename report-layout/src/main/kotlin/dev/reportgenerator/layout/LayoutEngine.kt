@@ -11,6 +11,7 @@ import dev.reportgenerator.ir.FrameSpec
 import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrColumn
 import dev.reportgenerator.ir.IrDocument
+import dev.reportgenerator.ir.IrLineScope
 import dev.reportgenerator.ir.IrRow
 import dev.reportgenerator.ir.IrTable
 import dev.reportgenerator.ir.IrTableHeader
@@ -158,24 +159,27 @@ private fun renderPages(
     table: IrTable,
     offsets: List<Length>
 ): LaidOutDocument {
-    val pageContents = mutableListOf(mutableListOf<PageElement>())
+    // Pagination only decides WHERE every block goes (page, y); the elements are drawn afterwards, page by page in
+    // document order, so the line numbers (IrTable.lineNumbers) follow the final placement, not the order the
+    // units were tried in.
+    val placements = mutableListOf(mutableListOf<Pair<LayoutBlock, Length>>())
     // Final `y` of each page at the moment it closes — needed after the loop to know how much
     // space is left to fill with blank bordered rows (fixed-rowHeight tables only, see below).
     val pageFinalY = mutableListOf<Length>()
     var y = metrics.contentTop(isFirstPage = true)
 
-    fun isFirstPage() = pageContents.size == 1
+    fun isFirstPage() = placements.size == 1
 
     fun startNewPage() {
         pageFinalY += y
-        pageContents.add(mutableListOf())
+        placements.add(mutableListOf())
         y = metrics.contentTop(isFirstPage = false)
     }
     for (unit in units) {
         val unitHeight = unit.fold(Length.ZERO) { acc, block -> acc + block.height }
 
         if (y + unitHeight > metrics.contentBottom(isFirstPage())) {
-            if (pageContents.last().isNotEmpty() || isFirstPage()) {
+            if (placements.last().isNotEmpty() || isFirstPage()) {
                 startNewPage()
             }
         }
@@ -185,30 +189,42 @@ private fun renderPages(
             throw LayoutOverflowException(
                 elementPath = first.path,
                 constraint = describeConstraint(first.constraints),
-                pageNumber = pageContents.size,
-                message = "Block '${first.path}' height ${unitHeight.toMillimeters()}mm exceeds available content height on page ${pageContents.size}"
+                pageNumber = placements.size,
+                message = "Block '${first.path}' height ${unitHeight.toMillimeters()}mm exceeds available content height on page ${placements.size}"
             )
         }
 
         for (block in unit) {
-            val elements = when (block) {
-                is GroupHeaderBlock -> drawRow(block.row, y, fontResolver)
-                is DataRowBlock -> drawRow(block.row, y, fontResolver)
-                is BorderedRowBlock -> drawBorderedRow(block, y, textMeasurer, fontResolver)
-            }
-            pageContents.last() += elements
+            placements.last() += block to y
             y += block.height
         }
     }
 
     pageFinalY += y
 
-    // Fixed-rowHeight tables (IrTable.rowHeight != null, IrTable.fillBlank): the page must be fully
-    // covered with bordered rows down to the frame/margin, even past the last real row (or with zero
-    // elements at all) — not just as far as content happened to reach.
-    val rowHeight = table.rowHeight
-    if (rowHeight != null && table.fillBlank) {
-        pageContents.forEachIndexed { index, content ->
+    // IrTable.lineNumbers: the running number, written into the numbered column of every data line (and, with
+    // fillBlank, of every filler row) in document order; PAGE scope restarts it on each page.
+    val numbers = table.lineNumbers
+    val numberColumn = numbers?.let { n -> table.columns.indexOfFirst { it.id == n.column } } ?: -1
+    var counter = numbers?.start ?: 0L
+
+    val pageContents = placements.mapIndexed { index, placed ->
+        val content = mutableListOf<PageElement>()
+        if (numbers != null && numbers.scope == IrLineScope.PAGE) counter = numbers.start
+        for ((block, top) in placed) {
+            content += when (block) {
+                is GroupHeaderBlock -> drawRow(block.row, top, fontResolver)
+                is DataRowBlock -> drawRow(block.row, top, fontResolver)
+                is BorderedRowBlock ->
+                    drawBorderedRow(if (numbers != null && block.numbered) block.withLineNumber(numberColumn, counter++) else block, top, textMeasurer, fontResolver)
+            }
+        }
+
+        // Fixed-rowHeight tables (IrTable.rowHeight != null, IrTable.fillBlank): the page must be fully
+        // covered with bordered rows down to the frame/margin, even past the last real row (or with zero
+        // elements at all) — not just as far as content happened to reach.
+        val rowHeight = table.rowHeight
+        if (rowHeight != null && table.fillBlank) {
             val pageNumber = index + 1
             val bottom = metrics.contentBottom(index == 0)
             val contentStart = pageFinalY[index]
@@ -230,8 +246,13 @@ private fun renderPages(
                 } else {
                     rowHeight
                 }
+                val filler = if (numbers != null && numbers.fillBlank) {
+                    numberedFillerRow(table.columns, offsets, currentRowHeight, "Document/Table/Filler", numberColumn, counter++, numbers)
+                } else {
+                    blankBorderedRow(table.columns, offsets, currentRowHeight, "Document/Table/Filler")
+                }
                 content += drawBorderedRow(
-                    blankBorderedRow(table.columns, offsets, currentRowHeight, "Document/Table/Filler"),
+                    filler,
                     fillY,
                     textMeasurer,
                     fontResolver,
@@ -240,6 +261,7 @@ private fun renderPages(
                 fillY += currentRowHeight
             }
         }
+        content
     }
 
     val totalPages = pageContents.size

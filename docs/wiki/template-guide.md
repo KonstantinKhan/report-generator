@@ -344,8 +344,8 @@ RUN $T/07-pages.yaml output --pages 3
 
 **Цель:** вывести в блоки значения разных типов. Файлы `tutorial/08-data.yaml` и `tutorial/08-data-data.yaml`.
 
-Каждый `bind` это один путь `${корень.поле}` с корнем `doc` (данные документа), `page` (`page.number`, `page.total`, объявлены всегда) или `item` (строка таблицы-потока,
-шаг 9). Выражений нет: `${a}/${b}` в одном bind нельзя. Типы: `String`, `Integer`, `Decimal`, `Date`, `Boolean`, `Enum`; `List` и `Record` в bind недопустимы.
+Каждый `bind` это один путь `${корень.поле}` с корнем `doc` (данные документа), `page` (`page.number`, `page.total`, объявлены всегда), `item` (строка таблицы-потока,
+шаг 9) или `line` (`line.number`, номер физической строки таблицы, только в ячейках строк потока, шаг 9г). Выражений нет: `${a}/${b}` в одном bind нельзя. Типы: `String`, `Integer`, `Decimal`, `Date`, `Boolean`, `Enum`; `List` и `Record` в bind недопустимы.
 
 Данные (`08-data-data.yaml`):
 
@@ -418,7 +418,7 @@ template error:
 - Поле есть в схеме, но не в данных, нет `optional: true` (`errors/09-missing-value.yaml`, демо-поле `approvedBy` объявлено без значения):
   `error: no value for bind '${doc.approvedBy}' (mark the cell 'optional: true' to render it empty)`
 - `format` на String (`errors/02-bind-format.yaml`): `blocks[0].format: format is not supported for String (only Decimal and Date)`.
-- `${a}/${b}` в одном bind (`errors/10-expr-in-text.yaml`): `blocks[0].bind: bind must be a single path expression like ${doc.designation} (roots: doc, page, item), got '${doc.designation}/${doc.name}'`.
+- `${a}/${b}` в одном bind (`errors/10-expr-in-text.yaml`): `blocks[0].bind: bind must be a single path expression like ${doc.designation} (roots: doc, page, item, line), got '${doc.designation}/${doc.name}'`.
 - Число `007` без `!str` станет Integer 7.
 
 ## Шаг 9. Таблица-поток
@@ -610,6 +610,49 @@ RUN $T/09b-groups.yaml output --data $T/09b-groups-data.yaml
 Сводка по `totals`: `scope` `group` (нужен `groupBy`) или `table`; `agg` `sum|count|min|max|avg`; `field` обязателен кроме `count`; `avg` требует `scale` и `rounding`;
 `skipEmpty` по умолчанию `true`. Подробности и ограничения (нет вложенных и накопительных итогов) в справочнике.
 
+### 9г. Номер физической строки: `${line.number}` и `lines`
+
+Файлы `tutorial/09d-line-numbers.yaml` + `tutorial/09d-line-numbers-data.yaml`. Колонки 10+10+80+20+65 = 185 мм.
+
+Если «Примечание» длинное, запись занимает несколько строк по 8 мм. `pos` (`computed: sequence`) нумерует записи и стоит один раз, а колонке «№ строки»
+нужен номер КАЖДОЙ физической строки. Число зависит от переноса слов, который измеряется при раскладке, поэтому его ставит движок: ячейке задаётся
+`bind: "${line.number}"` (корень `line`, только в ячейках строк потока).
+
+```yaml
+      computed:
+        pos: {sequence: {}}             # номер ЗАПИСИ: один на запись
+      lines:                            # необязательно, значения по умолчанию те же, кроме fill
+        start: 1                        # номер первой строки
+        scope: table                    # table: сквозной по страницам, page: с начала каждой страницы
+        fill: true                      # пустые строки дозаполнения тоже нумеруются (по умолчанию false)
+      row:
+        cells:
+          line: {bind: "${line.number}", style: data}
+          pos: {bind: "${item.pos}", style: data}
+```
+
+Данные: `Болт М6x20`, `Гайка М6` (примечание в 3 строки), `Шайба 6`, `Кабель ВВГ 3x1,5` (примечание в 2 строки), `Смазка`.
+
+**Что увидеть** (из SVG, колонка «№ строки» / колонка «№ п/п»):
+
+| Строка таблицы | № строки | № п/п | Наименование / примечание |
+|---|---|---|---|
+| 1 | 1 | 1 | Болт М6x20 |
+| 2 | 2 | 2 | Гайка М6, примечание: `оцинкованная, класс прочности 8.8,` |
+| 3 | 3 | пусто | `покрытие по ГОСТ 9.307, толщина слоя` |
+| 4 | 4 | пусто | `9 мкм, без хроматирования` |
+| 5 | 5 | 3 | Шайба 6 |
+| 6 | 6 | 4 | Кабель ВВГ 3x1,5, примечание: `бухта, длина 12,5 м, оболочка из ПВХ` |
+| 7 | 7 | пусто | `пластиката пониженной горючести` |
+| 8 | 8 | 5 | Смазка |
+| 9..32 | 9..32 | пусто | пустые строки дозаполнения (при `fill: true`; при `false` без чисел) |
+
+- Номер идёт по строкам, а не по записям: у записи с примечанием в 3 строки номера 2, 3, 4, следующая запись начинается с 5.
+- Заголовки групп, пустые строки вокруг них и строки итогов не нумеруются и счёт не двигают (в этом шаге групп нет, правило проверено тестами раскладки).
+- Номер сквозной по страницам (`scope: table`): запись, разорванная границей страницы, продолжает счёт на следующей; `scope: page` начнёт с `start` на каждой странице.
+- Пустые строки дозаполнения по умолчанию остаются без номера (`fill: false`): нумеровать ли их, решает ключ.
+- Чтобы перевести колонку «№ строки» с `${item.pos}` на номер строки, замените bind ячейки на `"${line.number}"` (`computed.pos` можно оставить, если `pos` нужен в другой колонке).
+
 ## Шаг 10. Сквозной пример
 
 **Цель:** собрать с нуля законченный документ «Ведомость покупных изделий»: лист, штамп первой и следующих страниц, боковая надпись, поток с группами и итогами.
@@ -701,7 +744,7 @@ RUN $T/10-complete.yaml output --data $T/10-complete-data.yaml
 | неизвестный якорь / блок | `07-unknown-anchor` | `blocks[0].attach.to: unknown anchor 'sheet.contentTopMiddle'` и `blocks[1].attach.to: unknown block 'nope' in 'nope.topLeft'` |
 | опечатка в ключе | `08-unknown-key` | `blocks[0].sise: unknown field 'sise' (allowed: anchors, attach, id, reserves, size, thickness, type, when) (line 8)` |
 | нет значения, нет `optional` | `09-missing-value` | `error: no value for bind '${doc.approvedBy}' (mark the cell 'optional: true' to render it empty)` |
-| два bind в одном | `10-expr-in-text` | `blocks[0].bind: bind must be a single path expression like ${doc.designation} (roots: doc, page, item), got '${doc.designation}/${doc.name}'` |
+| два bind в одном | `10-expr-in-text` | `blocks[0].bind: bind must be a single path expression like ${doc.designation} (roots: doc, page, item, line), got '${doc.designation}/${doc.name}'` |
 | толщина словом | `11-thick-number` | `blocks[0].thickness: expected number (mm) or ${param.x}, got 'bold' (line 8)` |
 | ширина колонок | `12-flow-width` | `blocks[0].table.columns: column widths sum to 180.0 mm, flow region is 185.0 mm wide (sheet content width, compared to 0.01 mm, no tolerance)` |
 | значение enum вне `order`/`omit` | `13-flow-enum` | `blocks[0].table.groupBy.order: 'kind' can also be DISCONTINUED: list it in 'order' (a group) or 'omit' (dropped on purpose), rows must not be lost silently` |

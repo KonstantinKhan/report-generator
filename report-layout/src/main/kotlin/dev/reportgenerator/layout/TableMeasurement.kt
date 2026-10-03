@@ -5,6 +5,7 @@ import dev.reportgenerator.geometry.mm
 import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrColumn
 import dev.reportgenerator.ir.IrGroup
+import dev.reportgenerator.ir.IrLineNumbers
 import dev.reportgenerator.ir.IrRow
 import dev.reportgenerator.ir.IrTable
 import dev.reportgenerator.ir.IrTotalRow
@@ -55,13 +56,16 @@ data class DataRowBlock(
 // IrTable.rowHeight != null path: every physical row (data, group-title, blank spacer/filler) is
 // one of these — fixed height, always bordered per column (LayoutEngine.drawBorderedRow), text
 // alignment honored (unlike the legacy path, where IrCell.align is ignored for body rows).
+// numbered: a physical row of a data record, it takes the next IrLineNumbers number when the page is drawn
+// (titles, spacers, totals and fillers are not numbered here).
 data class BorderedRowBlock(
     val cells: List<IrCell>,
     val columns: List<IrColumn>,
     val offsets: List<Length>,
     val rowHeight: Length,
     override val constraints: LayoutConstraints,
-    override val path: String
+    override val path: String,
+    val numbered: Boolean = false
 ) : LayoutBlock {
     override val height: Length get() = rowHeight
 }
@@ -174,6 +178,19 @@ fun blankBorderedRow(columns: List<IrColumn>, offsets: List<Length>, rowHeight: 
         path = path
     )
 
+// The block with `number` written into the cell of column index `column` (IrLineNumbers: style / align of the row cell stay).
+internal fun BorderedRowBlock.withLineNumber(column: Int, number: Long): BorderedRowBlock =
+    copy(cells = cells.mapIndexed { i, cell -> if (i == column) cell.copy(text = number.toString()) else cell })
+
+// A blank filler row whose cell `column` shows `number` (IrLineNumbers.fillBlank).
+internal fun numberedFillerRow(
+    columns: List<IrColumn>, offsets: List<Length>, rowHeight: Length, path: String, column: Int, number: Long, numbers: IrLineNumbers
+): BorderedRowBlock = blankBorderedRow(columns, offsets, rowHeight, path).let { blank ->
+    blank.copy(cells = blank.cells.mapIndexed { i, cell ->
+        if (i == column) IrCell(number.toString(), numbers.style, align = numbers.align) else cell
+    })
+}
+
 private fun withKeepWithNext(block: LayoutBlock): LayoutBlock = when (block) {
     is GroupHeaderBlock -> block.copy(constraints = block.constraints.copy(keepWithNext = true))
     is DataRowBlock -> block.copy(constraints = block.constraints.copy(keepWithNext = true))
@@ -189,6 +206,12 @@ fun buildBlocks(
     tablePath: String
 ): List<LayoutBlock> {
     val rowHeight = table.rowHeight
+    require(table.lineNumbers == null || rowHeight != null) { "line numbers (IrTable.lineNumbers) need a fixed IrTable.rowHeight" }
+    table.lineNumbers?.let { numbers ->
+        require(table.columns.any { it.id == numbers.column }) {
+            "line numbers column '${numbers.column}' is not a column of the table (${table.columns.joinToString { it.id }})"
+        }
+    }
     return if (rowHeight != null) {
         buildBorderedBlocks(table, offsets, tableWidth, contentLeft, rowHeight, textMeasurer, tablePath)
     } else {
@@ -267,9 +290,10 @@ private fun buildBorderedBlocks(
     val blocks = mutableListOf<LayoutBlock>()
     val title = table.groupTitle
 
-    fun physicalRowBlocks(row: IrRow, path: String): List<BorderedRowBlock> =
+    // `numbered`: the lines of a data record (IrLineNumbers); titles and totals pass false.
+    fun physicalRowBlocks(row: IrRow, path: String, numbered: Boolean = false): List<BorderedRowBlock> =
         splitRowIntoPhysicalRows(row, table.columns, textMeasurer).mapIndexed { lineIndex, cells ->
-            BorderedRowBlock(cells, table.columns, offsets, rowHeight, row.constraints, "$path/Line[$lineIndex]")
+            BorderedRowBlock(cells, table.columns, offsets, rowHeight, row.constraints, "$path/Line[$lineIndex]", numbered)
         }
 
     // The physical rows of a footer, each one a plain bordered row.
@@ -312,7 +336,7 @@ private fun buildBorderedBlocks(
                 }
 
                 val rowBlocks = element.rows.flatMapIndexed { rowIndex, row ->
-                    physicalRowBlocks(row, "$headerPath/Row[$rowIndex]")
+                    physicalRowBlocks(row, "$headerPath/Row[$rowIndex]", numbered = true)
                 }
 
                 val prefix = blanksBefore + headerBlocks + blanksAfter
@@ -338,7 +362,7 @@ private fun buildBorderedBlocks(
             }
 
             is IrRow -> {
-                blocks += physicalRowBlocks(element, "$tablePath/Row[$elementIndex]")
+                blocks += physicalRowBlocks(element, "$tablePath/Row[$elementIndex]", numbered = true)
             }
         }
     }

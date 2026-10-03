@@ -156,4 +156,65 @@ ${groups(grouped, titleStyle)}
         assertEquals(listOf("format", "zone", "position", "designation", "name", "quantity", "note"), spec.columns.map { it.id })
         assertEquals("blocks[${GostSpecTemplate.template.blocks.indexOfFirst { it is FlowBlock }}].table", GostSpecTemplate.flowTablePath)
     }
+
+    private fun numberedSpec(lines: String = "") = spec(
+        extra = lines,
+        cell = "{bind: \"\${item.name}\", style: data}",
+        grouped = false
+    )
+
+    @Test
+    fun `a line number cell stays empty in the IR and the table numbers its lines with the defaults`() {
+        val withNumber = (TemplateLoader.load(
+            """
+            sheet: {format: A4, margins: {left: 20, right: 5}}
+            blocks:
+              - id: body
+                type: flow
+                table:
+                  rowHeight: 6
+                  styles: {data: tableText}
+                  columns:
+                    - {id: n, width: 15, align: center}
+                    - {id: name, width: 170}
+                  row:
+                    cells:
+                      n: {bind: "${'$'}{line.number}", style: data}
+                      name: {bind: "${'$'}{item.name}"}
+            """.trimIndent(),
+            Styles.named.keys
+        ).blocks.single() as FlowBlock).table!!
+
+        val table = FlowTables.build(withNumber, schema, listOf(item(1, "Вал"), item(2, "Ось")))
+
+        assertEquals(IrLineNumbers("n", 1, IrLineScope.TABLE, false, Styles.tableText, TextAlign.CENTER), table.lineNumbers)
+        assertEquals(listOf(listOf("", "Вал"), listOf("", "Ось")), table.content.map { r -> (r as IrRow).cells.map { it.text } })
+    }
+
+    @Test
+    fun `lines section reaches the IR`() {
+        val yaml = """
+            sheet: {format: A4, margins: {left: 20, right: 5}}
+            blocks:
+              - id: body
+                type: flow
+                table:
+                  rowHeight: 6
+                  columns: [{id: n, width: 15}, {id: name, width: 170}]
+                  lines: {start: 10, scope: page, fill: true}
+                  row:
+                    cells:
+                      n: {bind: "${'$'}{line.number}"}
+                      name: {bind: "${'$'}{item.name}"}
+        """.trimIndent()
+        val t = (TemplateLoader.load(yaml, Styles.named.keys).blocks.single() as FlowBlock).table!!
+
+        val lines = FlowTables.build(t, schema, listOf(item(1, "Вал"))).lineNumbers
+        assertEquals(IrLineNumbers("n", 10, IrLineScope.PAGE, true, Styles.tableText, TextAlign.LEFT), lines)
+    }
+
+    @Test
+    fun `a table without a line number cell has no line numbers`() {
+        assertEquals(null, FlowTables.build(numberedSpec(), schema, listOf(item(1, "Вал"))).lineNumbers)
+    }
 }

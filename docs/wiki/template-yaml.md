@@ -173,8 +173,8 @@ blocks:
 
 ### Bind
 
-`bind: "${doc.designation}"`. Один путь с корнем `doc`, `page` или `item` (`${page.number}`,
-`${page.total}`, `${item.name}`). Составные значения вида `${a}/${b}` в одной ячейке не
+`bind: "${doc.designation}"`. Один путь с корнем `doc`, `page`, `item` или `line` (`${page.number}`,
+`${page.total}`, `${item.name}`, `${line.number}`). Составные значения вида `${a}/${b}` в одной ячейке не
 поддерживаются. Текст в `text:` всегда литерал: `${...}` в нём не подставляется.
 
 Значения берутся из типизированного контекста данных (`DataContext`, модуль `report-template`).
@@ -184,12 +184,15 @@ blocks:
 `Enum(values)`, а также `List` (записей) и `Record` (поля). Последние два в bind недопустимы
 (на них будут строиться коллекции и `repeat.from`, пока не резолвятся).
 
-**Корни**: `doc` (данные документа), `item` (строка коллекции, пока только в схеме) и `page`.
+**Корни**: `doc` (данные документа), `item` (строка коллекции, пока только в схеме), `page` и `line`.
 `page.number` и `page.total` (`Integer`) объявлены в каждой схеме всегда, значения добавляет движок
-при раскладке каждой страницы (они известны только после пагинации).
+при раскладке каждой страницы (они известны только после пагинации). `line.number` (`Integer`) тоже объявлен всегда,
+но существует только в ячейках строк таблицы потока (номер физической строки, см. «Нумерация физических строк»);
+в других местах (`text`, `table`, штамп) это ошибка контракта с путём, в файле `--data` корень `line` объявить нельзя
+(его даёт раскладка).
 
 В коде: `DataType` = `Str`, `Integer`, `Decimal`, `Date`, `Bool`, `Enum(values)`, `ListOf(Record)`, `Record(fields)`
-(`DataModel.kt`); `DataSchema` это дерево именованных типизированных полей под корнями `doc`, `page`, `item`
+(`DataModel.kt`); `DataSchema` это дерево именованных типизированных полей под корнями `doc`, `page`, `item`, `line`
 (`lookup(path)`); `DataValue` типизированные значения; `DataContext` (`schema` + `get(path): DataValue?`,
 реализации `MapDataContext` и `overlay(...)`); `DataContext.withPage(number, total)` накладывает номер страницы.
 `DataYaml.parse/load` строит контекст из YAML-карты (см. `--data` ниже).
@@ -397,7 +400,7 @@ blocks:
 | `header.cells.<id>` | `{text, lines, rotate, align, style}` или скаляр (= `text`). `text` обязателен; `lines` ручной перенос (без авто-переноса, не вместе с `rotate`); `rotate`: 0 / 90 (270 ошибка); `align`: `center` по умолчанию |
 | `groupTitle` | `{column, style, align, spacerBefore, spacerAfter}` (только вместе с `groupBy`): заголовок группы кладётся в колонку `column` (остальные ячейки строки пустые); `spacerBefore` / `spacerAfter` пустые строки с границами до и после (по умолчанию 0, в спецификации 2 и 1); `align` `center` по умолчанию. Без секции заголовок идёт одной ячейкой на всю ширину без спейсеров |
 | `row` | `{cells}`: ячейки по id колонки, покрывают все колонки |
-| `row.cells.<id>` | `{text, bind, format, optional, align, style, cases}`, скаляр (= `text`) или `~` (пустая). `bind` только вида `${item.поле}`; `align` по умолчанию из колонки; `cases` условные варианты содержимого |
+| `row.cells.<id>` | `{text, bind, format, optional, align, style, cases}`, скаляр (= `text`) или `~` (пустая). `bind` только вида `${item.поле}` или `${line.number}` (номер физической строки, у ячейки без `cases` и `format`); `align` по умолчанию из колонки; `cases` условные варианты содержимого |
 | `fill` | `blank`: дозаполнить страницу пустыми строками с границами до рамки; `none` (по умолчанию) нет |
 | `keep` | `{titleChain: true}` (по умолчанию): пустые строки до, заголовок группы, пустые после и первая строка данных не разрываются границей страницы (заголовок-сирота внизу страницы невозможен); `false` цепочки нет |
 | `styles` | псевдонимы `{имя: стиль}`; ячейка ссылается на псевдоним или прямо на имя стиля |
@@ -405,6 +408,7 @@ blocks:
 | `sortBy` | список `{field, order: asc\|desc, nulls: first\|last}`; нет = порядок источника |
 | `groupBy` | `{field, order, titles, skipEmpty, omit}`: разбиение по enum-полю на группы; нет = плоская таблица |
 | `computed` | вычисляемые поля: `{имя: {sequence: {scope, start, step}}}` или арифметика `{имя: {multiply\|add\|subtract\|divide: [операнды], scale, rounding}}` |
+| `lines` | `{start, scope, fill}`: нумерация физических строк колонки с `${line.number}` (см. «Нумерация физических строк»); без раздела значения по умолчанию |
 | `totals` | итоги и агрегаты: список `{id, scope, agg, field, label, labelColumn, valueColumn, format, style, where, skipEmpty, scale, rounding}`; строки подвала группы и таблицы (см. «Итоги») |
 
 **Валидация** (`TemplateValidator`): неизвестные ключи, id и ширины колонок, ячейки шапки и строки покрывают
@@ -578,12 +582,62 @@ note:                                                 # единица толь�
 группировка по не-enum полю, вложенные группы, подстановка значений в `titles`, несколько таблиц потока на шаблон.
 Значение итога не часть записи `item`: ячейки строк данных его не видят.
 
+## Нумерация физических строк (`${line.number}`, `lines`)
+
+Запись данных с длинным текстом (например, «Примечание») занимает несколько физических строк по 8 мм: переносит слова раскладка.
+`pos` (`computed: sequence`) нумерует ЗАПИСИ: одно число на запись, на строках-продолжениях ячейка пуста. Чтобы пронумеровать
+КАЖДУЮ физическую строку таблицы (колонка «№ строки»), ячейке строки задаётся bind `${line.number}`. Число зависит от переноса,
+который измеряется при раскладке, поэтому его ставит движок (`report-layout`), а не формирование данных; `pos` остаётся как был.
+
+```yaml
+table:
+  lines: {start: 1, scope: table, fill: false}      # весь раздел необязателен
+  row:
+    cells:
+      n: {bind: "${line.number}", style: data}      # было: ${item.pos}
+```
+
+| Ключ `lines` | Значение |
+|---|---|
+| `start` | номер первой строки (целое >= 0, по умолчанию 1): первой строки таблицы или первой строки каждой страницы при `scope: page` |
+| `scope` | `table` (по умолчанию): один счётчик по всем страницам, страницы номер не сбрасывают; `page`: счёт с `start` на каждой странице |
+| `fill` | `false` (по умолчанию): пустые строки `fill: blank` без номера; `true`: пустые строки дозаполнения тоже получают номер того же ряда |
+
+**Что нумеруется.** Каждая физическая строка каждой записи (все строки переноса записи, и при разрыве записи страницей тоже).
+НЕ нумеруются и счётчик не двигают: строки заголовка группы (в том числе перенесённый заголовок), пустые строки-спейсеры вокруг заголовка,
+строки итогов (подвал группы и таблицы). Пустые строки дозаполнения нумеруются только при `fill: true`. Номер идёт в порядке документа,
+поэтому перенос блока (цепочка заголовка, `keepWithNext`, подвал) на следующую страницу нумерацию не меняет: пропусков и повторов нет.
+Страница при `scope: table` и `fill: true`: строки дозаполнения внизу страницы 1 тоже расходуют номера, страница 2 продолжает после них
+(номер = порядковый номер физической строки листа); при `fill: false` продолжает сразу за последней строкой данных.
+
+**Умолчание `fill: false`.** Нумеровать ли пустые строки формы, владелец ещё не решил; нумерованные пустые строки заметно меняют вид
+листа, поэтому по умолчанию вид прежний (число только у настоящих строк), а выбор явный ключом `lines.fill`.
+
+**Правила.** `${line.number}` только в ячейке строки (`row.cells.<id>.bind`): не в `cases`, не в шапке, заголовке группы, итогах,
+`text`, `table` и штампе; в таблице одна такая колонка; у ячейки нет `cases` и `format` (`Integer`, формат не поддерживается).
+Раздел `lines` без ячейки с `${line.number}` ошибка. Стиль и выравнивание числа берутся из ячейки (на строках дозаполнения тоже).
+Шаблон без `lines`, но с ячейкой `${line.number}` работает со значениями по умолчанию. Ошибки несут путь YAML:
+`blocks[0].table.lines.scope: expected table|page`, `blocks[0].table.row.cells.n.cases: a cell bound to ${line.number} takes no 'cases'`,
+`blocks[0].bind: 'line.number' exists only in the row cells of a flow table ...`.
+
+**Реализация.** `FlowTables.build` оставляет ячейку пустой и кладёт настройки в `IrTable.lineNumbers` (`IrLineNumbers`: `column`, `start`,
+`scope`, `fillBlank`, стиль и выравнивание ячейки). `buildBorderedBlocks` помечает физические строки записей (`BorderedRowBlock.numbered`);
+`renderPages` сначала раскладывает блоки по страницам (пагинация не меняется), затем рисует страницы по порядку и ставит числа
+(`LayoutEngine.kt`): так число следует итоговому месту строки, а не порядку примерки блоков. Страницы и золотые файлы таблиц без
+`lines` не изменились (порядок элементов прежний).
+
+**Ограничения.** Одна нумерованная колонка на таблицу; число не форматируется (нет `format`, ведущих нулей); нумерация только в таблице
+с фиксированным `rowHeight` (поток без `rowHeight` не поддерживается и вне YAML: `IrTable.lineNumbers` без `rowHeight` ошибка);
+число измеряется как обычный текст ячейки (колонка должна вмещать его целиком: узкая колонка перенесёт цифры на вторую строку); `stick` колонки на число не влияет;
+нет нумерации с шагом и по группам (для группы есть `pos` со `scope: group`).
+
 **Соответствие IR** (`report-ir` `FlowTables.build`): `columns[]` в `IrColumn` (`stick: first` в
 `stickToFirstRow`, `last` в `stickToLastRow`), `rowHeight` в `IrTable.rowHeight`, `header` в `IrTableHeader`
 (`height`, `repeat`; ячейка: `rotate: 90` в `VERTICAL_BOTTOM_TO_TOP`, `lines` в `manualLines`; текст шапки только
 здесь), `groupTitle` и `keep.titleChain` в `IrGroupTitle` (`column`, `style`, `align`, `spacerBefore`,
 `spacerAfter`, `keepWithRows`), `fill: blank` в `IrTable.fillBlank`, ячейки строки в `IrCell` по bind-ам записи
-`item`, `totals` в `IrTotalRow` (`scope: group` в `IrGroup.footer`, `table` в `IrTable.footer`). Движок строит из
+`item`, `totals` в `IrTotalRow` (`scope: group` в `IrGroup.footer`, `table` в `IrTable.footer`), `lines` и ячейка
+`${line.number}` в `IrTable.lineNumbers`. Движок строит из
 `IrGroupTitle` цепочку `keepWithNext` и пустые строки, из `fillBlank` дозаполнение, из подвалов строки итогов и цепочку
 к итожимой строке.
 
@@ -747,6 +801,7 @@ first.flowRegion    // область контента минус блоки с 
 | `FlowCellRenderer` (`FlowData.kt`) | текст ячейки строки: `cases`, `bind`, `format`, `optional` |
 | `FlowArithmetic.kt` | арифметические `computed` (типы, зависимости, цикл, точный расчёт) |
 | `FlowTotals.kt` | агрегаты `totals` |
+| `FlowLines`, `FlowTableSpec.lineNumberColumn()` (`Model.kt`) | раздел `lines` и колонка с `${line.number}` |
 | `FlowContract` (`FlowContract.kt`) | проверка bind-ов, предикатов, `sortBy`, `groupBy`, `cases`, `format` по корню `item` схемы |
 | `FlowTables.build(spec, schema, rows)` (`report-ir`) | собирает `IrTable`; итоги группы в `IrGroup.footer`, итоги таблицы в `IrTable.footer`; раскладка держит подвал вместе с последней строкой данных |
 
@@ -769,15 +824,20 @@ first.flowRegion    // область контента минус блоки с 
   `where`, `skipEmpty`, контракт и валидация с путями).
 - `report-ir`: `FlowTablesTest` (YAML-описание в `IrTable`: стили, шапка, optional).
 - `report-ir`: `FlowTotalsIrTest` (`totals` в `IrGroup.footer` / `IrTable.footer`, стили, колонки).
+- `report-template`: `LineNumbersTemplateTest` (корень `line`, `lines` и ошибки с путями, `${line.number}` вне ячейки строки, файл данных).
+- `report-layout`: `LineNumberLayoutTest` (номера физических строк, заголовок / спейсеры / итоги без номера, перенос цепочки и подвала,
+  разрыв записи страницей, `scope: page`, `fill`).
 - `report-layout`: `FlowTableLayoutTest` (спейсеры, цепочка, `fillBlank`, `header.repeat`), `TotalRowLayoutTest` (цепочка итога,
   итог внизу страницы, дозаполнение после подвала, переполнение; свой измеритель текста).
 - `reports/specification`: `SpecificationTableParityTest` (`IrTable` из YAML равен старой таблице,
   `LegacySpecificationTable` только в тестах), `SpecificationQuantityFormatTest` (формат количества и правило единицы против
   старого форматтера).
-- `report-cli`: `TemplateMainTest` (смоук `--data`, ошибка контракта до раскладки, таблица потока с пагинацией).
+- `report-cli`: `TemplateMainTest` (смоук `--data`, ошибка контракта до раскладки, таблица потока с пагинацией, шаг 9г с номерами строк).
 - `report-geometry`: `AnchorTest` для `placeOrigin` и `resolveAnchor`.
 - `report-ir`: `FrameSpecsTemplateParityTest` сверяет `FrameSpecs` из YAML со старыми
   константами (`LegacyFrameSpecs.kt`, только для этой сверки).
+- `reports/specification`: `LineNumbersGoldenTest` (`lines-*.txt`: записи с переносом на 2 страницы, `scope: page`, `fill` true / false;
+  номера сверены с ручным расчётом в тесте).
 - `reports/specification`: `StaticBlocksGoldenTest` с эталонами в `src/test/resources/golden`.
   Каталог `reports/` попадает под правило `.gitignore` строки `/reports/`, новые файлы
   добавляются через `git add -f`.

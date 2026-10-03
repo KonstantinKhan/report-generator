@@ -32,17 +32,23 @@ sealed interface DataType {
     val isScalar: kotlin.Boolean get() = this !is ListOf && this !is Record
 }
 
-// Roots a bind path may start with. `page.number` / `page.total` are supplied by the layout engine.
-val DATA_ROOTS: List<String> = listOf("doc", "page", "item")
+// Roots a bind path may start with. `page.number` / `page.total` and `line.number` are supplied by the layout engine
+// (`line` only inside the row cells of a flow table, see LINE_NUMBER_BIND).
+val DATA_ROOTS: List<String> = listOf("doc", "page", "item", "line")
 
 // Layout-derived fields, always declared in every schema.
 val PAGE_FIELDS: Map<String, DataType> = linkedMapOf("number" to DataType.Integer, "total" to DataType.Integer)
+val LINE_FIELDS: Map<String, DataType> = linkedMapOf("number" to DataType.Integer)
 
 class DataSchema(roots: Map<String, DataType.Record> = emptyMap()) {
-    // Always exactly doc / page / item. `page` always contains the layout-derived fields.
+    // Always exactly doc / page / item / line. `page` and `line` always contain their layout-derived fields.
     val roots: Map<String, DataType.Record> = DATA_ROOTS.associateWith { name ->
         val declared = roots[name]?.fields ?: emptyMap()
-        if (name == "page") DataType.Record(declared + PAGE_FIELDS) else DataType.Record(declared)
+        when (name) {
+            "page" -> DataType.Record(declared + PAGE_FIELDS)
+            "line" -> DataType.Record(declared + LINE_FIELDS)
+            else -> DataType.Record(declared)
+        }
     }.also { r ->
         val unknown = roots.keys - DATA_ROOTS.toSet()
         require(unknown.isEmpty()) { "unknown schema roots $unknown (allowed: ${DATA_ROOTS.joinToString()})" }

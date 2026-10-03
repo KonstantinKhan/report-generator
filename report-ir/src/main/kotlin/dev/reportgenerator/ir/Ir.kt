@@ -25,8 +25,27 @@ data class IrTable(
     // rowHeight != null only: cover each page down to the frame with blank bordered rows.
     val fillBlank: Boolean = true,
     // rowHeight != null only: total rows after the last group / row, before the blank fill (see IrTotalRow).
-    val footer: List<IrTotalRow> = emptyList()
+    val footer: List<IrTotalRow> = emptyList(),
+    // rowHeight != null only: number the physical rows of the data records (see IrLineNumbers).
+    val lineNumbers: IrLineNumbers? = null
 ) : IrElement
+
+// Line numbering of a fixed-rowHeight table, done by the layout (the number depends on how the text wraps, so it
+// cannot be known when the rows are built). Every PHYSICAL row of a data record (IrGroup.rows / IrRow, all the lines a
+// wrapped record occupies) gets the next number in the cell of column `column`, in document order across pages; group
+// title rows, spacers and total rows are not numbered and do not advance the counter. `start` = the first number (of
+// the table, or of every page with PAGE). `fillBlank`: the blank filler rows (IrTable.fillBlank) are numbered too, in
+// the same sequence; style / align are those of the numbered cell (the filler has no row cell of its own).
+data class IrLineNumbers(
+    val column: String,
+    val start: Long = 1,
+    val scope: IrLineScope = IrLineScope.TABLE,
+    val fillBlank: Boolean = false,
+    val style: TextStyle = Styles.tableText,
+    val align: TextAlign = TextAlign.LEFT
+)
+
+enum class IrLineScope { TABLE, PAGE }
 
 // The header text lives in IrTableHeader.cells (one per column, in column order), not in the column.
 data class IrColumn(

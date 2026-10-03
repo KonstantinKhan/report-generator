@@ -277,6 +277,18 @@ data class FlowRowCell(
 
 enum class FlowFill { NONE, BLANK }
 
+// Bind of the row cell that shows the number of the physical line (layout-derived, see FlowLines).
+const val LINE_NUMBER_BIND = "\${line.number}"
+
+// `scope`: one running line number over the whole table (all pages) or restarted on every page.
+enum class LinesScope { TABLE, PAGE }
+
+// `lines:` of a flow table: numbering of the PHYSICAL rows (every line a record occupies once its text is wrapped), shown
+// by the row cell bound to `${line.number}`. `start` = the number of the first line (of the table / of every page).
+// `fill`: the blank filler rows (`fill: blank`) take numbers too (default: they stay empty, the owner decides per form).
+// Group titles, spacers and total rows are never numbered.
+data class FlowLines(val start: Long = 1, val scope: LinesScope = LinesScope.TABLE, val fill: Boolean = false)
+
 // `titleChain`: spacers + group title + the first data line stay together (a title is never left alone
 // at the bottom of a page).
 data class FlowKeep(val titleChain: Boolean = true)
@@ -331,8 +343,13 @@ data class FlowTableSpec(
     val sortBy: List<FlowSort> = emptyList(),
     val groupBy: FlowGroupBy? = null,
     val computed: Map<String, FlowComputed> = emptyMap(),
-    val totals: List<FlowTotal> = emptyList()
+    val totals: List<FlowTotal> = emptyList(),
+    // null = no `lines:` section (the defaults of FlowLines apply to a table that numbers its lines)
+    val lines: FlowLines? = null
 )
+
+// Id of the column whose row cell is bound to `${line.number}` (null: the table does not number its lines).
+fun FlowTableSpec.lineNumberColumn(): String? = rowCells.entries.firstOrNull { it.value.bind == LINE_NUMBER_BIND }?.key
 
 // `format` / `optional` only go with `bind` (see FormatSpec, Binding).
 // `span` = columns, `rowSpan` = rows (the cell covers the rows below it in its columns; later rows leave those

@@ -45,6 +45,7 @@ object DataYaml {
         var items = emptyList<DataValue.Record>()
         for ((k, v) in map.entries) {
             val name = k.content
+            if (name == "line") throw TemplateException(name, "root 'line' is supplied by the layout engine (line.number), a data file cannot declare it (line ${k.location.line})")
             if (name !in DATA_ROOTS) throw TemplateException(name, "unknown root '$name' (${DATA_ROOTS.joinToString()}) (line ${k.location.line})")
             if (name == "item" && v.unwrap() is YamlList) {
                 val (type, value) = list(v.unwrap() as YamlList, name)

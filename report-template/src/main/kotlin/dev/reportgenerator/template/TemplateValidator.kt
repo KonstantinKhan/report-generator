@@ -267,7 +267,7 @@ object TemplateValidator {
 
     private fun checkBind(bind: String, path: String, errors: MutableList<TemplateError>) {
         if (!BIND_EXPR.matches(bind)) {
-            errors += TemplateError(path, "bind must be a single path expression like \${doc.designation} (roots: doc, page, item), got '$bind'")
+            errors += TemplateError(path, "bind must be a single path expression like \${doc.designation} (roots: ${DATA_ROOTS.joinToString()}), got '$bind'")
         }
     }
 
@@ -386,9 +386,15 @@ object TemplateValidator {
         }
 
         coverage(t.rowCells.keys, "$p.row.cells")
+        val lineColumns = mutableListOf<String>()
         t.rowCells.forEach { (id, c) ->
             val cp = "$p.row.cells.$id"
-            rowContent(c.text, c.bind, c.format != null, c.optional, cp, errors)
+            rowContent(c.text, c.bind, c.format != null, c.optional, cp, errors, lineAllowed = true)
+            if (c.bind == LINE_NUMBER_BIND) {
+                if (c.cases.isNotEmpty()) errors += TemplateError("$cp.cases", "a cell bound to $LINE_NUMBER_BIND takes no 'cases' (the number is the whole content)")
+                if (c.format != null) errors += TemplateError("$cp.format", "$LINE_NUMBER_BIND is an Integer, 'format' is not supported for it")
+                lineColumns += id
+            }
             c.cases.forEachIndexed { i, case ->
                 val kp = "$cp.cases[$i]"
                 predicateShape(case.where, "$kp.where", errors)
@@ -396,6 +402,14 @@ object TemplateValidator {
             }
             style(c.style, "$cp.style")
         }
+
+        lineColumns.drop(1).forEach {
+            errors += TemplateError("$p.row.cells.$it.bind", "$LINE_NUMBER_BIND is already shown in column '${lineColumns.first()}', one column numbers the lines")
+        }
+        if (lineColumns.isEmpty() && t.lines != null) {
+            errors += TemplateError("$p.lines", "'lines' needs a row cell bound to $LINE_NUMBER_BIND (no cell shows the line number)")
+        }
+        t.lines?.let { if (it.start < 0) errors += TemplateError("$p.lines.start", "must be >= 0, got ${it.start}") }
 
         // data shaping
         t.where?.let { predicateShape(it, "$p.where", errors) }
@@ -460,12 +474,18 @@ object TemplateValidator {
     }
 
     // Content of a cell or a case: `text` xor `bind` (an `item` path), `format` / `optional` need a bind.
-    private fun rowContent(text: String?, bind: String?, hasFormat: Boolean, optional: Boolean, path: String, errors: MutableList<TemplateError>) {
+    // `lineAllowed`: the bind of a cell itself (not of a case) may be ${line.number}, the layout-derived line counter.
+    private fun rowContent(
+        text: String?, bind: String?, hasFormat: Boolean, optional: Boolean, path: String, errors: MutableList<TemplateError>,
+        lineAllowed: Boolean = false
+    ) {
         if (text != null && bind != null) errors += TemplateError(path, "cell has both 'text' and 'bind'")
         bind?.let {
             checkBind(it, "$path.bind", errors)
-            if (BIND_EXPR.matches(it) && !Binding.path(it).startsWith("item.")) {
-                errors += TemplateError("$path.bind", "flow row binds read the row record: expected \${item.<field>}, got '$it'")
+            if (BIND_EXPR.matches(it) && it == LINE_NUMBER_BIND) {
+                if (!lineAllowed) errors += TemplateError("$path.bind", "$LINE_NUMBER_BIND is the bind of a row cell, it cannot be a 'cases' variant")
+            } else if (BIND_EXPR.matches(it) && !Binding.path(it).startsWith("item.")) {
+                errors += TemplateError("$path.bind", "flow row binds read the row record: expected \${item.<field>} (or $LINE_NUMBER_BIND), got '$it'")
             }
         }
         checkBindOptions(bind, hasFormat, optional, path, errors)
