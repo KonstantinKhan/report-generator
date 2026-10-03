@@ -3,22 +3,32 @@ package dev.reportgenerator.template
 // Contract of a flow table with the schema of the `item` record: every field named by `where`, `sortBy`,
 // `groupBy`, `cases` exists and is a scalar, literals fit the field's type (Enum: a member of the schema's
 // values), `groupBy` reads an Enum field and covers every value of it (in `order` or `omit`, nothing is dropped
-// silently), `computed` names do not clash with record fields, binds and their `format` fit the types (computed
-// fields are Integer). Errors carry YAML paths. Called by TemplateContract for the `flow` block.
+// silently), `computed` names do not clash with record fields, arithmetic computed fields read numeric fields
+// without cycles and round as their result type needs, binds and their `format` fit the types (a sequence is
+// Integer, arithmetic is inferred, see computedTypes), `totals` read numeric fields and format their result type.
+// Errors carry YAML paths. Called by TemplateContract for the `flow` block.
 internal object FlowContract {
     fun check(t: FlowTableSpec, schema: DataSchema, p: String, errors: MutableList<TemplateError>) {
         val raw = schema.roots.getValue("item").fields
-        val extended = t.itemFields(schema)
+        val computed = t.computedTypes(raw, p)
+        errors += computed.errors
+        val extended = raw + computed.types
         val computedNames = t.computed.keys
+        val arithmeticNames = t.computed.filterValues { it is FlowComputed.Arithmetic }.keys
+        val sortable = raw + computed.types.filterKeys { it in arithmeticNames }
 
         computedNames.filter { it in raw }.forEach {
             errors += TemplateError("$p.computed.$it", "computed field '$it' clashes with a field of item (${raw.keys.joinToString()})")
         }
+        t.computed.forEach { (name, op) ->
+            if (op is FlowComputed.Arithmetic) computed.types[name]?.let { rounding(op, it, "$p.computed.$name", errors) }
+        }
         t.where?.let { predicate(it, "$p.where", raw, computedNames, errors) }
         t.sortBy.forEachIndexed { i, s ->
-            field(s.field, "$p.sortBy[$i].field", raw, computedNames, errors)
+            field(s.field, "$p.sortBy[$i].field", sortable, computedNames - arithmeticNames, errors)
         }
         t.groupBy?.let { groupBy(it, "$p.groupBy", raw, computedNames, errors) }
+        t.totals.forEachIndexed { i, total -> total(total, "$p.totals[$i]", extended, errors) }
 
         val itemSchema = t.itemSchema(schema)
         t.rowCells.forEach { (id, c) ->
@@ -32,12 +42,47 @@ internal object FlowContract {
         }
     }
 
+    // `scale` / `rounding` of an arithmetic field against its result type.
+    private fun rounding(op: FlowComputed.Arithmetic, type: DataType, p: String, errors: MutableList<TemplateError>) {
+        if (type != DataType.Decimal) {
+            if (op.scale != null) errors += TemplateError("$p.scale", "the result is Integer, 'scale' applies to a Decimal result")
+            if (op.rounding != null) errors += TemplateError("$p.rounding", "the result is Integer, 'rounding' applies to a Decimal result")
+            return
+        }
+        if (op.op == ArithOp.DIVIDE && (op.scale == null || op.rounding == null)) {
+            errors += TemplateError(p, "divide needs both 'scale' and 'rounding' (the quotient is rounded explicitly)")
+        } else if ((op.scale == null) != (op.rounding == null)) {
+            errors += TemplateError(p, "'scale' and 'rounding' go together")
+        }
+    }
+
+    // A total reads a numeric field (item or computed), `where` reads item and computed fields, `format` fits the
+    // result type (count: Integer, sum / min / max: the field's type, avg: Decimal).
+    private fun total(t: FlowTotal, p: String, fields: Map<String, DataType>, errors: MutableList<TemplateError>) {
+        var fieldType: DataType? = null
+        if (t.field != null) {
+            fieldType = field(t.field, "$p.field", fields, emptySet(), errors)
+            if (fieldType != null && fieldType !in setOf(DataType.Integer, DataType.Decimal)) {
+                errors += TemplateError("$p.field", "${t.agg.key} needs an Integer or Decimal field, '${t.field}' is ${fieldType.typeName}")
+                fieldType = null
+            }
+        }
+        t.where?.let { predicate(it, "$p.where", fields, emptySet(), errors) }
+        val result = when {
+            t.agg == TotalAgg.COUNT -> DataType.Integer
+            t.agg == TotalAgg.AVG -> DataType.Decimal
+            else -> fieldType
+        }
+        if (t.format != null && result != null) ValueFormatter.problem(result, t.format)?.let { errors += TemplateError("$p.format", it) }
+    }
+
     // Type of a scalar item field, or null after reporting why it cannot be used. `computed` names are unknown here
     // (they exist only after shaping).
     private fun field(name: String, path: String, fields: Map<String, DataType>, computed: Set<String>, errors: MutableList<TemplateError>): DataType? {
         val type = fields[name]
         if (type == null) {
-            val message = if (name in computed) "computed field '$name' is not available here (where / sortBy / groupBy read the record's own fields)"
+            val message = if (name in computed) "computed field '$name' is not available here (where / groupBy read the record's own fields, " +
+                "sortBy also arithmetic computed fields, a sequence depends on the row order)"
             else {
                 val hint = TemplateContract.nearest(name, fields.keys.toList())?.let { ", did you mean '$it'?" }.orEmpty()
                 "unknown item field '$name' (${fields.keys.ifEmpty { setOf("none") }.joinToString()})$hint"

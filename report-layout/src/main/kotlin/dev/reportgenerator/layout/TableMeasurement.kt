@@ -7,6 +7,7 @@ import dev.reportgenerator.ir.IrColumn
 import dev.reportgenerator.ir.IrGroup
 import dev.reportgenerator.ir.IrRow
 import dev.reportgenerator.ir.IrTable
+import dev.reportgenerator.ir.IrTotalRow
 import dev.reportgenerator.ir.LayoutConstraints
 import dev.reportgenerator.ir.Styles
 import dev.reportgenerator.ir.TextStyle
@@ -203,6 +204,9 @@ private fun buildLegacyBlocks(
     textMeasurer: TextMeasurer,
     tablePath: String
 ): List<LayoutBlock> {
+    require(table.footer.isEmpty() && table.content.none { it is IrGroup && it.footer.isNotEmpty() }) {
+        "total rows (IrGroup.footer / IrTable.footer) need a fixed IrTable.rowHeight"
+    }
     val blocks = mutableListOf<LayoutBlock>()
 
     table.content.forEachIndexed { elementIndex, element ->
@@ -245,6 +249,12 @@ private fun buildLegacyBlocks(
 // the group's first data line) so they can never be split by a page break or left orphaned at the
 // bottom of a page — independent of the group's own keepTogether (which only decides whether the
 // WHOLE group binds). IrGroupTitle.keepWithRows = false drops the chain.
+//
+// Total rows (IrGroup.footer, IrTable.footer) are bordered rows after the data. They chain backwards: the block
+// before the footer (the group's last data line, or the last block of its title prefix when it has no data
+// rows; for the table footer the last block of the table) and all footer rows but the last bind forward, so the
+// footer is always in one unit with the line it totals and never starts a page alone. The chain adds
+// 1 + footer rows to the unit; LayoutOverflowException needs such a unit taller than a whole page.
 private fun buildBorderedBlocks(
     table: IrTable,
     offsets: List<Length>,
@@ -261,6 +271,10 @@ private fun buildBorderedBlocks(
         splitRowIntoPhysicalRows(row, table.columns, textMeasurer).mapIndexed { lineIndex, cells ->
             BorderedRowBlock(cells, table.columns, offsets, rowHeight, row.constraints, "$path/Line[$lineIndex]")
         }
+
+    // The physical rows of a footer, each one a plain bordered row.
+    fun footerBlocks(footer: List<IrTotalRow>, path: String): List<BorderedRowBlock> =
+        footer.flatMapIndexed { i, total -> physicalRowBlocks(IrRow(total.cells), "$path/Total[$i]") }
 
     table.content.forEachIndexed { elementIndex, element ->
         when (element) {
@@ -302,7 +316,10 @@ private fun buildBorderedBlocks(
                 }
 
                 val prefix = blanksBefore + headerBlocks + blanksAfter
-                val unit = prefix + rowBlocks
+                val footer = footerBlocks(element.footer, headerPath)
+                val unit = prefix + rowBlocks + footer
+                // first block of the chain that ends in the footer: the line it totals
+                val footerChainStart = (unit.size - footer.size - 1).coerceAtLeast(0)
 
                 val effective = unit.mapIndexed { i, block ->
                     // Every block of the prefix binds forward (blanks -> header line(s) ->
@@ -313,7 +330,8 @@ private fun buildBorderedBlocks(
                     // whole group binds together only when keepTogether says so.
                     val inPrefix = title.keepWithRows && (i < prefix.size - 1 || (i == prefix.size - 1 && rowBlocks.isNotEmpty()))
                     val boundToRows = element.constraints.keepTogether && i < unit.lastIndex
-                    if (inPrefix || boundToRows) withKeepWithNext(block) else block
+                    val inFooterChain = footer.isNotEmpty() && i >= footerChainStart && i < unit.lastIndex
+                    if (inPrefix || boundToRows || inFooterChain) withKeepWithNext(block) else block
                 }
 
                 blocks += effective
@@ -323,6 +341,12 @@ private fun buildBorderedBlocks(
                 blocks += physicalRowBlocks(element, "$tablePath/Row[$elementIndex]")
             }
         }
+    }
+
+    val footer = footerBlocks(table.footer, tablePath)
+    if (footer.isNotEmpty()) {
+        if (blocks.isNotEmpty()) blocks[blocks.lastIndex] = withKeepWithNext(blocks.last())
+        blocks += footer.mapIndexed { i, block -> if (i < footer.lastIndex) withKeepWithNext(block) else block }
     }
 
     return blocks

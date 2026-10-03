@@ -1,5 +1,7 @@
 package dev.reportgenerator.template
 
+import java.math.RoundingMode
+
 // Declarative template model, exactly as written in YAML (millimetres, unresolved params).
 // Resolution to Length/Rect happens in TemplateResolver.
 
@@ -208,9 +210,34 @@ data class FlowSort(val field: String, val order: SortOrder = SortOrder.ASC, val
 // `scope`: one running number over the whole table (group order) or restarted in every group.
 enum class SequenceScope { TABLE, GROUP }
 
+// Operand of an arithmetic computed field: a field of the row record (raw or another arithmetic computed field) or
+// a numeric literal as written in YAML (no '.' = Integer, else Decimal). The loader tells them apart by shape.
+sealed interface Operand {
+    data class Field(val name: String) : Operand
+    data class Literal(val text: String) : Operand
+}
+
+enum class ArithOp(val key: String) {
+    MULTIPLY("multiply"), ADD("add"), SUBTRACT("subtract"), DIVIDE("divide");
+
+    companion object {
+        fun byKey(key: String): ArithOp? = entries.firstOrNull { it.key == key }
+    }
+}
+
 // `computed:` entries, a closed set. `sequence` gives an Integer: start, start + step, ...
+// Arithmetic: one operation over numeric operands, BigDecimal / Long exact. `multiply` / `add` take 2+ operands,
+// `subtract` / `divide` exactly 2. Integer op Integer = Integer (not `divide`), anything with a Decimal = Decimal,
+// `divide` = Decimal. `scale` + `rounding` round a Decimal result (`divide` needs both, the others may skip them);
+// an Integer result takes neither. A row with no value for an operand has no value for the result.
 sealed interface FlowComputed {
     data class Sequence(val scope: SequenceScope = SequenceScope.TABLE, val start: Long = 1, val step: Long = 1) : FlowComputed
+    data class Arithmetic(
+        val op: ArithOp,
+        val operands: List<Operand>,
+        val scale: Int? = null,
+        val rounding: RoundingMode? = null
+    ) : FlowComputed
 }
 
 // Rows are split by an Enum field of the row record into groups, in `order`; `titles` = the group title text of
@@ -254,11 +281,43 @@ enum class FlowFill { NONE, BLANK }
 // at the bottom of a page).
 data class FlowKeep(val titleChain: Boolean = true)
 
+// `totals:` entry: one aggregate over the rows of a group (needs `groupBy`) or of the whole table, drawn as a
+// bordered row after the group's data rows / after the last group: `label` in `labelColumn`, the result in
+// `valueColumn`, the other cells empty. `field` is an item field or a computed field (Integer / Decimal; not for
+// `count`). `where` keeps only matching rows in the aggregate. `skipEmpty` (default): no row when the scope has no
+// rows at all. `scale` + `rounding` only for `avg` (both required).
+enum class TotalScope { GROUP, TABLE }
+
+enum class TotalAgg(val key: String) {
+    SUM("sum"), COUNT("count"), MIN("min"), MAX("max"), AVG("avg");
+
+    companion object {
+        fun byKey(key: String): TotalAgg? = entries.firstOrNull { it.key == key }
+    }
+}
+
+data class FlowTotal(
+    val id: String,
+    val scope: TotalScope,
+    val agg: TotalAgg,
+    val field: String? = null,
+    val label: String,
+    val labelColumn: String,
+    val valueColumn: String,
+    val format: FormatSpec? = null,
+    val style: String? = null,
+    val where: Predicate? = null,
+    val skipEmpty: Boolean = true,
+    val scale: Int? = null,
+    val rounding: RoundingMode? = null
+)
+
 // `styles`: alias -> style name the consumer knows (cells may use either).
 // Data shaping, in this order: `where` (filter rows) -> `sortBy` (stable; none = source order) -> `groupBy`
 // (none = a flat table; groups follow `order`, rows keep their order inside) -> `computed` (numbers over the
-// final order, so `scope: table` runs through the groups in table order). `where`, `sortBy`, `groupBy` read the
-// record's own fields; `computed` names are visible to row cells and `cases` only.
+// final order, so `scope: table` runs through the groups in table order). `where`, `groupBy` read the record's own
+// fields; `sortBy` also reads arithmetic `computed` fields (they are evaluated right after `where`, a `sequence` is not);
+// `computed` names are visible to row cells, `cases`, `sortBy` (arithmetic) and `totals`. `totals`: see FlowTotal.
 data class FlowTableSpec(
     val rowHeight: Double,
     val columns: List<FlowColumn>,
@@ -271,7 +330,8 @@ data class FlowTableSpec(
     val where: Predicate? = null,
     val sortBy: List<FlowSort> = emptyList(),
     val groupBy: FlowGroupBy? = null,
-    val computed: Map<String, FlowComputed> = emptyMap()
+    val computed: Map<String, FlowComputed> = emptyMap(),
+    val totals: List<FlowTotal> = emptyList()
 )
 
 // `format` / `optional` only go with `bind` (see FormatSpec, Binding).

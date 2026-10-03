@@ -32,6 +32,9 @@ object Styles {
     val designation = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 2.5)
     val tableHeader = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5)
     val groupHeader = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5, italic = true, underline = true)
+    // Total rows of a flow table (subtotals, grand total): Type B like the header, bold so a total reads apart from
+    // the data lines (bold is a style flag only, there is no bold font loaded yet, see fonts-and-licensing.md).
+    val totalText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5, bold = true)
     val frameText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5)
     val frameTextLarge = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 7.0)
     val tableBorder = BorderStyle(widthPt = 2.0)
@@ -48,6 +51,7 @@ object Styles {
         "designation" to designation,
         "tableHeader" to tableHeader,
         "groupHeader" to groupHeader,
+        "totalText" to totalText,
         "frameText" to frameText,
         "frameTextLarge" to frameTextLarge
     )

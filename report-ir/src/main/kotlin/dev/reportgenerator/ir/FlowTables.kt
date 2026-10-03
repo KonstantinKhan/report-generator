@@ -10,6 +10,7 @@ import dev.reportgenerator.template.FlowStick
 import dev.reportgenerator.template.FlowTableSpec
 import dev.reportgenerator.template.MapDataContext
 import dev.reportgenerator.template.TemplateContract
+import dev.reportgenerator.template.TotalValue
 import dev.reportgenerator.template.TemplateError
 import dev.reportgenerator.template.TemplateException
 import dev.reportgenerator.template.itemFields
@@ -17,19 +18,20 @@ import dev.reportgenerator.template.itemSchema
 import dev.reportgenerator.template.TextAlign as TemplateTextAlign
 
 // YAML flow table spec (FlowTableSpec) + rows supplied by code -> IrTable. Structure, widths, header, spacers,
-// styles, the data rules (where / sortBy / groupBy / computed numbering) and the content of every row cell
-// (bind, format, cases) come from the spec; the layout algorithm (measure, wrap, pagination, fill) stays in
+// styles, the data rules (where / sortBy / groupBy / computed numbers and arithmetic / totals) and the content of
+// every row cell (bind, format, cases) come from the spec; the layout algorithm (measure, wrap, pagination, fill) stays in
 // report-layout. `schema` declares the `item` record the rows are made of (the code adds no table logic).
 object FlowTables {
     private const val DEFAULT_ROW_STYLE = "tableText"
     private const val DEFAULT_HEADER_STYLE = "tableHeader"
     private const val DEFAULT_TITLE_STYLE = "groupHeader"
+    private const val DEFAULT_TOTAL_STYLE = "totalText"
 
     // `rows` = one `item` record per row, in source order. `path` = YAML location of the spec (e.g.
     // `blocks[5].table`), for error messages. The spec is checked against `schema` first (TemplateContract).
     fun build(spec: FlowTableSpec, schema: DataSchema, rows: List<DataValue.Record>, path: String = "table"): IrTable {
         TemplateContract.requireFlowTable(spec, schema, path)
-        val shaped = FlowShaper.shape(spec, schema, rows)
+        val shaped = FlowShaper.shapeTable(spec, schema, rows)
         val rowSchema = spec.itemSchema(schema)
         val styles = StyleResolver(spec)
         val columns = spec.columns.map {
@@ -83,14 +85,30 @@ object FlowTables {
             )
         }
 
+        // total row: the label and the result in their columns, the other cells empty (bordered like any row)
+        val totalStyles = spec.totals.mapIndexed { i, t ->
+            t.id to styles.resolve(t.style ?: DEFAULT_TOTAL_STYLE, "$path.totals[$i].style")
+        }.toMap()
+        fun totalRow(v: TotalValue): IrTotalRow = IrTotalRow(
+            spec.columns.map { column ->
+                val style = totalStyles.getValue(v.total.id)
+                when (column.id) {
+                    v.total.labelColumn -> IrCell(v.total.label, style, align = column.align.toIr())
+                    v.total.valueColumn -> IrCell(v.text, style, align = column.align.toIr())
+                    else -> IrCell("")
+                }
+            }
+        )
+
         return IrTable(
             columns = columns,
             header = header,
-            content = if (spec.groupBy == null) shaped.flatMap { it.rows }.map(::row)
-            else shaped.map { g -> IrGroup(requireNotNull(g.title), g.rows.map(::row)) },
+            content = if (spec.groupBy == null) shaped.groups.flatMap { it.rows }.map(::row)
+            else shaped.groups.map { g -> IrGroup(requireNotNull(g.title), g.rows.map(::row), footer = g.totals.map(::totalRow)) },
             rowHeight = spec.rowHeight.mm,
             groupTitle = groupTitle,
-            fillBlank = spec.fill == FlowFill.BLANK
+            fillBlank = spec.fill == FlowFill.BLANK,
+            footer = shaped.totals.map(::totalRow)
         )
     }
 

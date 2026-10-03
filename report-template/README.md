@@ -9,7 +9,9 @@ the layout algorithm (measure, wrap, pagination, blank fill) stays Kotlin in `re
 rules into the same section, as a closed set of structured operations (no string expressions, no scripting): `where`,
 `sortBy`, `groupBy` (order, titles, skipEmpty, omit), `computed` (`sequence`, scope table|group), and per cell
 `format` + `cases` (first matching predicate wins, the cell's own content is the default). Predicates are
-`{field, eq|ne|in|isNull|notNull}` plus `and`/`or`/`not`. The code only supplies typed `item` records (raw values). `FlowTableSpec` (model) is turned into an `IrTable`
+`{field, eq|ne|in|isNull|notNull}` plus `and`/`or`/`not`. Stage 4 adds arithmetic `computed` fields
+(`multiply|add|subtract|divide: [fields or numbers]`, exact BigDecimal / Long, explicit `scale` + `rounding`) and `totals`
+(sum / count / min / max / avg per group or per table, drawn as bordered footer rows, see below). The code only supplies typed `item` records (raw values). `FlowTableSpec` (model) is turned into an `IrTable`
 by `report-ir` `FlowTables`. Units in YAML: mm. Internally `Length` (1/100 mm).
 
 Flow table validation (`TemplateValidator`): unknown keys, column ids and widths, header / row cells must cover
@@ -19,11 +21,17 @@ width = the template sheet's content width, exactly at 0.01 mm (no tolerance). `
 checks the row binds, predicates, `sortBy`, `groupBy`, `cases` and `format` against the `item` root of the data
 schema, with YAML paths: fields exist and are scalars, literals fit the type (enum values are schema members),
 `groupBy` reads an Enum field and every enum value is in `order` or `omit` (nothing is dropped silently),
-`computed` names (Integer) do not clash with record fields and are visible to cells / `cases` only. Order of
-shaping: where -> sortBy (stable, strings natural + Russian collation, nulls last by default) -> groupBy ->
-computed. `FlowShaper` / `FlowCellRenderer` (`FlowData.kt`) run it; `FlowTables.build(spec, schema, rows)` in
-`report-ir` makes the `IrTable`. Reference: `docs/wiki/template-yaml.md`. Not covered: totals / aggregates,
-expressions, sorting by computed fields, nested or non-enum grouping.
+`computed` names do not clash with record fields (a sequence is Integer, arithmetic gets an inferred type:
+Integer op Integer = Integer, anything with a Decimal = Decimal, divide = Decimal; cycles are errors) and are visible to
+cells / `cases` / `totals`, arithmetic ones also to `sortBy`, never to `where` / `groupBy`. `totals` entries
+(`{id, scope: group|table, agg, field, label, labelColumn, valueColumn, format, style, where, skipEmpty, scale, rounding}`)
+read numeric fields and are checked for ids, columns, `format` against the result type, `scope: group` needing `groupBy`.
+Order of shaping: where -> arithmetic computed -> sortBy (stable, strings natural + Russian collation, nulls last by
+default) -> groupBy -> sequences -> totals. `FlowShaper.shapeTable` / `FlowCellRenderer` (`FlowData.kt`, `FlowArithmetic.kt`,
+`FlowTotals.kt`) run it; `FlowTables.build(spec, schema, rows)` in `report-ir` makes the `IrTable` (totals become
+`IrGroup.footer` / `IrTable.footer`, kept with their last data row by the layout). Reference: `docs/wiki/template-yaml.md`.
+Not covered: nested and running totals, expressions beyond the closed arithmetic ops, totals over Date / String,
+sorting by a sequence, nested or non-enum grouping.
 
 ```kotlin
 val template = TemplateLoader.load(yamlText)            // parse + validate, throws TemplateException

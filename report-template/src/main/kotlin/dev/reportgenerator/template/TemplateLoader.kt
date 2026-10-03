@@ -8,6 +8,7 @@ import com.charleskorn.kaml.YamlNode
 import com.charleskorn.kaml.YamlNull
 import com.charleskorn.kaml.YamlScalar
 import com.charleskorn.kaml.YamlTaggedNode
+import java.math.RoundingMode
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -34,6 +35,8 @@ object TemplateLoader {
 internal val PARAM_REF = Regex("""\$\{param\.([A-Za-z_][A-Za-z0-9_]*)}""")
 internal val BIND_EXPR = Regex("""\$\{(doc|page|item)\.[A-Za-z_][A-Za-z0-9_.]*}""")
 internal val ID_PATTERN = Regex("[A-Za-z_][A-Za-z0-9_-]*")
+// Numeric operand of an arithmetic computed field; a field name never starts with a digit or a sign.
+internal val NUMBER_LITERAL = Regex("-?\\d+(\\.\\d+)?")
 
 private val COMMON_KEYS = setOf("id", "type", "anchors", "attach", "when", "reserves")
 
@@ -244,7 +247,7 @@ private class Reader {
 
     private fun flowTable(node: YamlNode, path: String): FlowTableSpec {
         val m = node.asMap(path)
-        m.allow(path, "rowHeight", "columns", "header", "groupTitle", "row", "fill", "keep", "styles", "where", "sortBy", "groupBy", "computed")
+        m.allow(path, "rowHeight", "columns", "header", "groupTitle", "row", "fill", "keep", "styles", "where", "sortBy", "groupBy", "computed", "totals")
         val rowPath = "$path.row"
         val row = m.required("row", path).asMap(rowPath)
         row.allow(rowPath, "cells")
@@ -276,7 +279,33 @@ private class Reader {
             groupBy = m.optional("groupBy")?.let { flowGroupBy(it, "$path.groupBy") },
             computed = m.optional("computed")?.let { n ->
                 n.asMap("$path.computed").entries.entries.associate { (k, v) -> k.content to flowComputed(v, "$path.computed.${k.content}") }
-            } ?: emptyMap()
+            } ?: emptyMap(),
+            totals = m.optional("totals")?.asList("$path.totals")?.items?.mapIndexed { i, n -> flowTotal(n, "$path.totals[$i]") } ?: emptyList()
+        )
+    }
+
+    // `{id, scope: group|table, agg: sum|count|min|max|avg, field, label, labelColumn, valueColumn, format, style,
+    // where, skipEmpty, scale, rounding}`; which keys fit which `agg` is the validator's / contract's job.
+    private fun flowTotal(node: YamlNode, path: String): FlowTotal {
+        val m = node.asMap(path)
+        m.allow(path, "id", "scope", "agg", "field", "label", "labelColumn", "valueColumn", "format", "style", "where", "skipEmpty", "scale", "rounding")
+        fun text(key: String) = m.string(key, path) ?: fail(path, node, "missing required field '$key'")
+        val scopeNode = m.required("scope", path)
+        val aggNode = m.required("agg", path)
+        return FlowTotal(
+            id = text("id"),
+            scope = TotalScope.entries.firstOrNull { it.name == scopeNode.scalar("$path.scope").uppercase() } ?: fail("$path.scope", scopeNode, "expected group|table"),
+            agg = TotalAgg.byKey(aggNode.scalar("$path.agg")) ?: fail("$path.agg", aggNode, "expected ${TotalAgg.entries.joinToString("|") { it.key }}"),
+            field = m.string("field", path),
+            label = text("label"),
+            labelColumn = text("labelColumn"),
+            valueColumn = text("valueColumn"),
+            format = m.optional("format")?.let { format(it, "$path.format") },
+            style = m.string("style", path),
+            where = m.optional("where")?.let { predicate(it, "$path.where") },
+            skipEmpty = m.optional("skipEmpty")?.let { bool(it, "$path.skipEmpty") } ?: true,
+            scale = m.optional("scale")?.let { integer(it, "$path.scale") },
+            rounding = m.optional("rounding")?.let { rounding(it, "$path.rounding") }
         )
     }
 
@@ -310,19 +339,36 @@ private class Reader {
         )
     }
 
-    // `computed.<name>`: a closed set of one-key operations, now only `sequence`.
+    // `computed.<name>`: a closed set of operations: `sequence: {scope, start, step}` or arithmetic, one key
+    // `multiply|add|subtract|divide: [operand, ...]` with optional `scale` / `rounding` beside it.
     private fun flowComputed(node: YamlNode, path: String): FlowComputed {
         val m = node.asMap(path)
-        m.allow(path, "sequence")
-        val seq = m.required("sequence", path).asMap("$path.sequence")
-        val sp = "$path.sequence"
-        seq.allow(sp, "scope", "start", "step")
-        return FlowComputed.Sequence(
-            scope = seq.optional("scope")?.let { n ->
-                SequenceScope.entries.firstOrNull { it.name == n.scalar("$sp.scope").uppercase() } ?: fail("$sp.scope", n, "expected table|group")
-            } ?: SequenceScope.TABLE,
-            start = seq.optional("start")?.let { long(it, "$sp.start") } ?: 1,
-            step = seq.optional("step")?.let { long(it, "$sp.step") } ?: 1
+        val ops = ArithOp.entries.map { it.key }
+        m.allow(path, (listOf("sequence") + ops + listOf("scale", "rounding")).toSet())
+        val given = (listOf("sequence") + ops).filter { m.optional(it) != null }
+        if (given.size != 1) fail(path, node, "expected exactly one of ${(listOf("sequence") + ops).joinToString("|")}, got ${given.ifEmpty { listOf("none") }.joinToString()}")
+        val key = given.single()
+        if (key == "sequence") {
+            if (m.optional("scale") != null || m.optional("rounding") != null) fail(path, node, "'scale' / 'rounding' apply to arithmetic, not to 'sequence'")
+            val seq = m.required("sequence", path).asMap("$path.sequence")
+            val sp = "$path.sequence"
+            seq.allow(sp, "scope", "start", "step")
+            return FlowComputed.Sequence(
+                scope = seq.optional("scope")?.let { n ->
+                    SequenceScope.entries.firstOrNull { it.name == n.scalar("$sp.scope").uppercase() } ?: fail("$sp.scope", n, "expected table|group")
+                } ?: SequenceScope.TABLE,
+                start = seq.optional("start")?.let { long(it, "$sp.start") } ?: 1,
+                step = seq.optional("step")?.let { long(it, "$sp.step") } ?: 1
+            )
+        }
+        return FlowComputed.Arithmetic(
+            op = ArithOp.byKey(key)!!,
+            operands = m.required(key, path).asList("$path.$key").items.mapIndexed { i, n ->
+                val text = n.scalar("$path.$key[$i]")
+                if (NUMBER_LITERAL.matches(text)) Operand.Literal(text) else Operand.Field(text)
+            },
+            scale = m.optional("scale")?.let { integer(it, "$path.scale") },
+            rounding = m.optional("rounding")?.let { rounding(it, "$path.rounding") }
         )
     }
 
@@ -495,12 +541,13 @@ private class Reader {
                 if (it !in FORMAT_LOCALES) fail("$path.locale", n, "expected ${FORMAT_LOCALES.keys.joinToString("|")}")
             }
         }
-        val rounding = m.optional("rounding")?.let { n ->
-            FORMAT_ROUNDINGS.firstOrNull { it.name == n.scalar("$path.rounding").uppercase() }
-                ?: fail("$path.rounding", n, "expected ${FORMAT_ROUNDINGS.joinToString("|") { it.name }}")
-        }
+        val rounding = m.optional("rounding")?.let { rounding(it, "$path.rounding") }
         return FormatSpec(m.string("pattern", path), locale, rounding)
     }
+
+    private fun rounding(node: YamlNode, path: String): RoundingMode =
+        FORMAT_ROUNDINGS.firstOrNull { it.name == node.scalar(path).uppercase() }
+            ?: fail(path, node, "expected ${FORMAT_ROUNDINGS.joinToString("|") { it.name }}")
 
     // `thin` / `thick` or a number in mm.
     private fun thickness(node: YamlNode, path: String): Num {

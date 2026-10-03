@@ -23,7 +23,9 @@ data class IrTable(
     // How a group's title row looks and what surrounds it; only used when rowHeight is fixed.
     val groupTitle: IrGroupTitle = IrGroupTitle(),
     // rowHeight != null only: cover each page down to the frame with blank bordered rows.
-    val fillBlank: Boolean = true
+    val fillBlank: Boolean = true,
+    // rowHeight != null only: total rows after the last group / row, before the blank fill (see IrTotalRow).
+    val footer: List<IrTotalRow> = emptyList()
 ) : IrElement
 
 // The header text lives in IrTableHeader.cells (one per column, in column order), not in the column.
@@ -56,16 +58,24 @@ data class IrGroupTitle(
 
 sealed interface IrTableElement
 
+// footer: total rows right after the group's data rows (rowHeight != null only, see IrTotalRow).
 data class IrGroup(
     val title: String,
     val rows: List<IrRow>,
-    val constraints: LayoutConstraints = LayoutConstraints.Default
+    val constraints: LayoutConstraints = LayoutConstraints.Default,
+    val footer: List<IrTotalRow> = emptyList()
 ) : IrTableElement
 
 data class IrRow(
     val cells: List<IrCell>,
     val constraints: LayoutConstraints = LayoutConstraints.Default
 ) : IrTableElement
+
+// Total row of a fixed-rowHeight table: one cell per column (the label and the value in their columns, the others
+// empty), always drawn as a bordered row like any data row. In IrGroup.footer / IrTable.footer. The layout keeps
+// the footer rows together with the line before them (the last data line of the group / table), so a total is
+// never alone at the top of a page; a long label wraps into more physical rows like any cell.
+data class IrTotalRow(val cells: List<IrCell>)
 
 enum class TextOrientation { HORIZONTAL, VERTICAL_BOTTOM_TO_TOP }
 

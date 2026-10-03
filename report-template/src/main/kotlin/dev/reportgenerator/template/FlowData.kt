@@ -11,9 +11,13 @@ import java.util.Locale
 // (FlowContract) checks the spec against the schema before this runs, so the failures here (IllegalStateException)
 // only mean data that does not fit its own schema. The layout algorithm stays in report-layout.
 
-// The `item` record type of the spec: the adapter's fields plus the `computed` names (Integer).
-fun FlowTableSpec.itemFields(schema: DataSchema): Map<String, DataType> =
-    schema.roots.getValue("item").fields + computed.mapValues { DataType.Integer }
+// The `item` record type of the spec: the adapter's fields plus the `computed` names (a sequence is Integer,
+// arithmetic is inferred, see computedTypes; a computed field that does not resolve is left out, the contract
+// reports it).
+fun FlowTableSpec.itemFields(schema: DataSchema): Map<String, DataType> {
+    val raw = schema.roots.getValue("item").fields
+    return raw + computedTypes(raw).types
+}
 
 // The schema row binds and `cases` are checked against: `item` extended with the computed fields.
 fun FlowTableSpec.itemSchema(schema: DataSchema): DataSchema =
@@ -39,6 +43,7 @@ fun FlowTableSpec.declaredEnumValues(): Map<String, Set<String>> {
     groupBy?.let { add(it.field, it.order + it.omit + it.titles.keys) }
     walk(where)
     rowCells.values.forEach { c -> c.cases.forEach { walk(it.where) } }
+    totals.forEach { walk(it.where) }
     return found
 }
 
@@ -106,17 +111,29 @@ internal fun compilePredicate(p: Predicate, fields: Map<String, DataType>): (Dat
     }
 }
 
-// One group of the shaped table; `title` is null for a flat table (no `groupBy`).
-class ShapedGroup(val title: String?, val rows: List<DataValue.Record>)
+// One group of the shaped table; `title` is null for a flat table (no `groupBy`). `totals` = the group's `totals`
+// (scope group) in spec order, empty without any.
+class ShapedGroup(val title: String?, val rows: List<DataValue.Record>, val totals: List<TotalValue> = emptyList())
+
+// The whole shaped table: groups plus the table-scope totals (over the rows of all groups, as drawn).
+class ShapedTable(val groups: List<ShapedGroup>, val totals: List<TotalValue>)
 
 object FlowShaper {
-    // `rows` are records of the `item` root in source order. where -> sortBy (stable) -> groupBy -> computed.
-    // Returned rows carry the computed fields. A flat table is a single group without a title.
-    fun shape(spec: FlowTableSpec, schema: DataSchema, rows: List<DataValue.Record>): List<ShapedGroup> {
-        val raw = schema.roots.getValue("item").fields
+    // `rows` are records of the `item` root in source order. where -> arithmetic computed -> sortBy (stable) ->
+    // groupBy -> sequences -> totals. Returned rows carry the computed fields. A flat table is a single group
+    // without a title.
+    fun shape(spec: FlowTableSpec, schema: DataSchema, rows: List<DataValue.Record>): List<ShapedGroup> =
+        shapeTable(spec, schema, rows).groups
 
-        val kept = spec.where?.let { compilePredicate(it, raw) }?.let { keep -> rows.filter(keep) } ?: rows
-        val sorted = if (spec.sortBy.isEmpty()) kept else kept.sortedWith(comparator(spec.sortBy, raw))
+    fun shapeTable(spec: FlowTableSpec, schema: DataSchema, rows: List<DataValue.Record>): ShapedTable {
+        val raw = schema.roots.getValue("item").fields
+        val computedTypes = spec.computedTypes(raw)
+
+        val keep = spec.where?.let { compilePredicate(it, raw) }
+        val kept = rows.withIndex().filter { keep == null || keep(it.value) }
+        val calculated = arithmetic(spec, computedTypes, kept)
+        val sortFields = raw + computedTypes.types.filterKeys { spec.computed[it] is FlowComputed.Arithmetic }
+        val sorted = if (spec.sortBy.isEmpty()) calculated else calculated.sortedWith(comparator(spec.sortBy, sortFields))
 
         val groups: List<Pair<String?, List<DataValue.Record>>> = spec.groupBy?.let { g ->
             val type = raw[g.field] ?: error("groupBy field '${g.field}' is not an item field")
@@ -131,7 +148,27 @@ object FlowShaper {
             }
         } ?: listOf(null to sorted)
 
-        return numbered(spec, groups)
+        val numbered = numbered(spec, groups)
+        if (spec.totals.isEmpty()) return ShapedTable(numbered, emptyList())
+        val totals = FlowTotals(spec.totals, raw + computedTypes.types)
+        return ShapedTable(
+            numbered.map { ShapedGroup(it.title, it.rows, totals.group(it.rows)) },
+            totals.table(numbered.flatMap { it.rows })
+        )
+    }
+
+    // Arithmetic computed fields on the kept rows (source order), in dependency order. Failures name the source row.
+    private fun arithmetic(spec: FlowTableSpec, types: ComputedTypes, rows: List<IndexedValue<DataValue.Record>>): List<DataValue.Record> {
+        if (types.order.isEmpty()) return rows.map { it.value }
+        return rows.map { (index, row) ->
+            val known = LinkedHashMap<String, DataValue>()
+            for (name in types.order) {
+                FlowArithmetic.evaluate(
+                    name, spec.computed.getValue(name) as FlowComputed.Arithmetic, types.types.getValue(name), row, known
+                ) { FlowArithmetic.describe(row, index) }?.let { known[name] = it }
+            }
+            DataValue.Record(row.fields + known)
+        }
     }
 
     private fun comparator(keys: List<FlowSort>, fields: Map<String, DataType>): Comparator<DataValue.Record> =
@@ -151,18 +188,18 @@ object FlowShaper {
             0
         }
 
-    // Adds the computed fields; `scope: table` counts through all groups in table order.
+    // Adds the sequence fields; `scope: table` counts through all groups in table order.
     private fun numbered(spec: FlowTableSpec, groups: List<Pair<String?, List<DataValue.Record>>>): List<ShapedGroup> {
-        if (spec.computed.isEmpty()) return groups.map { (t, r) -> ShapedGroup(t, r) }
+        val sequences = spec.computed.mapNotNull { (name, op) -> (op as? FlowComputed.Sequence)?.let { name to it } }
+        if (sequences.isEmpty()) return groups.map { (t, r) -> ShapedGroup(t, r) }
         val tableCounters = HashMap<String, Long>()
         return groups.map { (title, rows) ->
             val groupCounters = HashMap<String, Long>()
             ShapedGroup(title, rows.map { row ->
-                val extra = spec.computed.mapValues { (name, op) ->
-                    op as FlowComputed.Sequence
+                val extra = sequences.associate { (name, op) ->
                     val counters = if (op.scope == SequenceScope.TABLE) tableCounters else groupCounters
                     val index = counters.merge(name, 1L, Long::plus)!! - 1
-                    DataValue.Integer(op.start + op.step * index)
+                    name to DataValue.Integer(op.start + op.step * index)
                 }
                 DataValue.Record(row.fields + extra)
             })

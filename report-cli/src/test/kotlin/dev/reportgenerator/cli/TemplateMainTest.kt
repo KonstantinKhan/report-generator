@@ -115,6 +115,36 @@ class TemplateMainTest {
         dir.deleteRecursively()
     }
 
+    // Worked out by hand from purchased-list-data.yaml (cost = qty * price, kopecks, HALF_UP; no price = no cost):
+    // Крепёж 2.5 * 2.8 = 7.00, 24 * 3.2 = 76.80, 8 * 5 = 40.00, 0.35 * 410 = 143.50, 48 * 0.45 = 21.60 -> 288.90;
+    // Подшипники 2 * 180 = 360.00, 4 * 312.5 = 1250.00 -> 1610.00; Электроизделия 1 * 640 = 640.00 (the cable has
+    // no price) -> 640.00; all together 288.90 + 1610.00 + 640.00 = 2538.90; 9 positions.
+    @Test
+    fun `sample template shows cost, group subtotals and the grand total`() {
+        val dir = Files.createTempDirectory("template-main").toFile()
+        val template = TemplateLoader.load(resource("purchased-list.yaml"), Styles.named.keys)
+        val spec = (template.blocks.single() as dev.reportgenerator.template.FlowBlock).table!!
+        val data = DataYaml.parseFile(resource("purchased-list-data.yaml"), mapOf("category" to spec.declaredEnumValues().getValue("category")))
+
+        val svg = renderTemplate(template, data.context, 1, dir, data.items).first { it.extension == "svg" }.readText()
+        val texts = Regex(">([^<]+)<").findAll(svg).map { it.groupValues[1] }.toList()
+
+        val costs = listOf("7,00", "76,80", "40,00", "143,50", "21,60", "288,90", "360,00", "1250,00", "1610,00", "640,00", "640,00", "2538,90")
+        val tail = texts.dropWhile { it != "Сумма, руб." }.drop(1).filter { it in costs || it.startsWith("Итого") || it == "Всего" }
+        assertEquals(
+            listOf(
+                "7,00", "76,80", "40,00", "143,50", "21,60", "Итого по группе", "288,90",
+                "360,00", "1250,00", "Итого по группе", "1610,00",
+                "640,00", "640,00", "Итого по группе", "640,00", // the price of the Автомат is 640,00 too
+                "Всего", "2538,90"
+            ),
+            tail
+        )
+        assertEquals(listOf("Позиций", "9"), texts.filter { it.isNotBlank() }.let { t -> t.drop(t.indexOf("Позиций")).take(2) })
+        assertEquals(3, texts.count { it == "Итого по группе" })
+        dir.deleteRecursively()
+    }
+
     @Test
     fun `a category the template does not list is a contract error, not a lost row`() {
         val dir = Files.createTempDirectory("template-main").toFile()

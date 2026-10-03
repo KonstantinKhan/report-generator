@@ -63,7 +63,8 @@ data class IrTable(
     val style: TableStyle = ...,
     val rowHeight: Length? = null,
     val groupTitle: IrGroupTitle = IrGroupTitle(),   // заменил groupTitleColumn
-    val fillBlank: Boolean = true                    // только при rowHeight != null
+    val fillBlank: Boolean = true,                   // только при rowHeight != null
+    val footer: List<IrTotalRow> = emptyList()       // итоги таблицы, только при rowHeight != null
 )
 ```
 
@@ -73,6 +74,10 @@ data class IrTable(
   (не full-width спан, это `column = null`), остальные колонки остаются пусты;
   `spacerBefore` / `spacerAfter` (по умолчанию 2 / 1), `style`, `align`, `keepWithRows` (цепочка заголовка)
 - `fillBlank` — дозаполнять страницу пустыми строками (`fill: blank` в YAML)
+- `IrGroup.footer` / `IrTable.footer` — строки итогов (`IrTotalRow(cells)`, по ячейке на колонку): подвал группы после
+  её строк данных, подвал таблицы после последней группы и до пустого дозаполнения. Строка итога рисуется как обычная
+  строка с границами; движок привязывает её цепочкой `keepWithNext` к последней строке, которую она итожит (см. «Итоги»
+  в `template-yaml.md`)
 - `IrTableHeader.repeat` — шапка на каждой странице (по умолчанию да); `false`: только на первой,
   остальные страницы начинаются у верхнего поля
 - Текст шапки хранится только в `IrTableHeader.cells`; поле `IrColumn.header` удалено (дубль)

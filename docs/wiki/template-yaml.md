@@ -372,11 +372,13 @@ blocks:
 | `where` | предикат фильтра строк (см. «Данные таблицы»); нет = все строки |
 | `sortBy` | список `{field, order: asc\|desc, nulls: first\|last}`; нет = порядок источника |
 | `groupBy` | `{field, order, titles, skipEmpty, omit}`: разбиение по enum-полю на группы; нет = плоская таблица |
-| `computed` | вычисляемые поля `{имя: {sequence: {scope, start, step}}}` |
+| `computed` | вычисляемые поля: `{имя: {sequence: {scope, start, step}}}` или арифметика `{имя: {multiply\|add\|subtract\|divide: [операнды], scale, rounding}}` |
+| `totals` | итоги и агрегаты: список `{id, scope, agg, field, label, labelColumn, valueColumn, format, style, where, skipEmpty, scale, rounding}`; строки подвала группы и таблицы (см. «Итоги») |
 
 **Стили.** Имена стилей закрытый набор `Styles.named` из `report-ir`: `mainText`, `tableText`, `heading`,
-`designation`, `tableHeader`, `groupHeader`, `frameText`, `frameTextLarge`. Умолчания: ячейка строки `tableText`,
-шапка `tableHeader`, заголовок группы `groupHeader`. Неизвестное имя это ошибка с путём
+`designation`, `tableHeader`, `groupHeader`, `totalText`, `frameText`, `frameTextLarge`. Умолчания: ячейка строки
+`tableText`, шапка `tableHeader`, заголовок группы `groupHeader`, строка итога `totalText` (GOST Type B, флаг bold:
+жирного начертания в проекте пока нет, как и у `heading`, поэтому итог отличается гарнитурой, а не весом). Неизвестное имя это ошибка с путём
 (`blocks[5].table.row.cells.name.style`), если загрузчику переданы известные имена
 (`TemplateLoader.load(yaml, styleNames)`; `GostSpecTemplate` и CLI передают `Styles.named.keys`), иначе ошибка
 возникает при сборке `IrTable`.
@@ -389,15 +391,17 @@ blocks:
 **Контракт.** Корень `item` в схеме данных это запись одной строки, поля объявляет адаптер (для спецификации
 `SpecificationData.toDataContext()`): `designation` String, `name` String, `kind` Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL),
 `quantity` Decimal, `unit` String. Поле без значения в записи (нет обозначения, нет единицы) требует `optional: true`
-(в ячейке или в варианте `cases`), иначе ошибка раскладки. К полям записи добавляются `computed` (Integer).
+(в ячейке или в варианте `cases`), иначе ошибка раскладки. К полям записи добавляются `computed`: `sequence` это Integer, тип арифметики выводится (см. «Арифметика»).
 Контракт проверяет по схеме (пути `blocks[5].table...`): bind-ы ячеек и вариантов, поля и литералы в `where` / `sortBy` /
 `groupBy` / `cases[].where`, `format` под тип, пересечение имён `computed` с полями. Неизвестное поле это ошибка
 загрузки (с подсказкой ближайшего имени), а не пустой столбец.
 
 ### Данные таблицы: where, sortBy, groupBy, computed, cases, format
 
-Порядок: `where` (фильтр) -> `sortBy` (устойчивая сортировка) -> `groupBy` (разбиение) -> `computed` (числа по итоговому
-порядку). `where`, `sortBy`, `groupBy` читают только собственные поля записи; имена `computed` видны ячейкам и `cases`.
+Порядок: `where` (фильтр) -> арифметика `computed` -> `sortBy` (устойчивая сортировка) -> `groupBy` (разбиение) ->
+`sequence` (числа по итоговому порядку) -> `totals`. `where` и `groupBy` читают только собственные поля записи; `sortBy`
+ещё и арифметические `computed` (они считаются сразу после `where`); `sequence` зависит от порядка строк, поэтому
+виден только ячейкам, `cases` и `totals`. Имена `computed` видны ячейкам, `cases`, `totals`.
 
 **Предикат** (закрытый набор): `{field: kind, eq: MATERIAL}`, `ne`, `in: [A, B]`, `{field: unit, isNull: true}`,
 `notNull: true`; комбинаторы `{and: [..]}`, `{or: [..]}`, `{not: p}` (каждый единственный ключ предиката). Литерал
@@ -426,9 +430,86 @@ groupBy:
 `IllegalStateException`. Внутри группы строки идут в порядке после `where` / `sortBy`. `titles` лишь для значений
 `order`. Без `groupBy` таблица плоская (`groupTitle` тогда ошибка).
 
-**`computed`**: `name: {sequence: {scope: table|group, start: 1, step: 1}}` даёт Integer `start + step * k`. `scope: table`
+**`computed`, нумерация**: `name: {sequence: {scope: table|group, start: 1, step: 1}}` даёт Integer `start + step * k`. `scope: table`
 сквозная нумерация по всем группам в порядке таблицы (спецификация), `group` счёт заново в каждой группе. Имя не
 должно совпадать с полем записи (ошибка `computed.<имя>`), `step` не 0. Использование: `${item.position}`.
+
+#### Арифметика `computed`
+
+Закрытый набор операций над числовыми полями (Integer, Decimal) и числовыми литералами, без языка выражений:
+
+```yaml
+computed:
+  cost: {multiply: [qty, price], scale: 2, rounding: HALF_UP}   # стоимость = количество * цена
+  net:  {subtract: [cost, 1.5]}                                 # операнд: поле записи, другое арифметическое поле или литерал
+  each: {divide: [cost, qty], scale: 4, rounding: HALF_UP}
+  pcs:  {add: [qty, spare, 10]}
+```
+
+| Операция | Операндов | Тип результата |
+|---|---|---|
+| `multiply`, `add` | 2 и больше | Integer, если все операнды Integer; иначе Decimal |
+| `subtract` | ровно 2 (`a - b`) | так же |
+| `divide` | ровно 2 (`a / b`) | всегда Decimal; `scale` и `rounding` обязательны |
+
+Операнд это скаляр: число (`10`, `1.5`, `-2`; без точки Integer, с точкой Decimal) или имя поля (имя не начинается с цифры
+или знака, поэтому путаницы нет). Расчёт точный: Decimal через `BigDecimal` (`1.005` остаётся `1.005`), Integer через `Long` с
+проверкой переполнения. `scale` + `rounding` (значения как в `format.rounding`) округляют Decimal-результат; для
+`multiply` / `add` / `subtract` их можно не задавать (результат точный), задаются только вместе; у Integer-результата
+`scale` и `rounding` ошибка. Нет значения у операнда (необязательное поле без значения) значит нет значения у результата,
+ячейка с `optional: true` пустая, в итогах такая строка не участвует. Деление на ноль это ошибка с номером исходной строки и
+её полями (`computed 'each' (divide): division by zero, source row 2 {name=Болт, qty=0, ...}`, `IllegalStateException`).
+Арифметика считается для строк, прошедших `where`, до `sortBy` и `groupBy` (строка, значение которой ушло в `omit`,
+всё равно считается).
+
+Результат виден ячейкам, `cases`, `sortBy`, `totals` и другим арифметическим полям; НЕ виден `where` и `groupBy` (ошибка
+контракта `not available here`). `sequence` не может быть операндом (зависит от порядка, а порядок может зависеть от
+арифметики). Цикл зависимостей (`a` читает `b`, `b` читает `a`) это ошибка `computed.<имя>: cyclic computed dependency: a -> b -> a`.
+Неизвестное и нечисловое поле операнда ошибка с путём `computed.<имя>.multiply[0]`.
+
+#### Итоги: `totals`
+
+Каждая запись одна строка итога: `label` в колонке `labelColumn`, результат в колонке `valueColumn`, остальные ячейки
+строки пусты (с границами, высота `rowHeight`, как у любой строки). Подвал группы стоит после строк данных группы, подвал
+таблицы после последней группы и до пустого дозаполнения (`fill: blank`). Несколько итогов одного `scope` идут отдельными
+строками в порядке списка.
+
+```yaml
+totals:
+  - {id: groupCost, scope: group, agg: sum, field: cost, label: "Итого по группе", labelColumn: name, valueColumn: cost,
+     format: {pattern: "0.00", locale: ru, rounding: HALF_UP}}
+  - {id: totalCost, scope: table, agg: sum, field: cost, label: "Всего", labelColumn: name, valueColumn: cost,
+     format: {pattern: "0.00", locale: ru, rounding: HALF_UP}}
+  - {id: positions, scope: table, agg: count, label: "Позиций", labelColumn: name, valueColumn: qty}
+  - {id: avgPrice, scope: table, agg: avg, field: price, label: "Средняя цена", labelColumn: name, valueColumn: price,
+     scale: 2, rounding: HALF_UP, where: {field: price, notNull: true}, format: {pattern: "0.00", locale: ru}}
+```
+
+| Ключ | Значение |
+|---|---|
+| `id` | уникальный в таблице (буквы, цифры, `_`, `-`) |
+| `scope` | `group`: по строкам каждой группы (нужен `groupBy`), `table`: по всем строкам таблицы (в группах, как нарисовано: значения из `omit` не входят) |
+| `agg` | `sum`, `count`, `min`, `max`, `avg` |
+| `field` | поле записи или `computed` (Integer / Decimal); обязателен для `sum` / `min` / `max` / `avg`, у `count` запрещён (считает строки) |
+| `label` | текст строки (литерал), не пустой |
+| `labelColumn`, `valueColumn` | id колонок, существуют и различны; длинный текст переносится на следующие физические строки колонки, значит выбирайте широкую колонку для подписи |
+| `format` | как у bind: `{pattern, locale, rounding}`; проверяется по типу результата (Decimal: `pattern` обязателен; Integer: формата нет, как у bind). Умолчание: Decimal как есть (`toPlainString`), Integer целым |
+| `style` | имя стиля или псевдоним `styles`; умолчание `totalText` |
+| `where` | предикат (как везде): в агрегат идут только подходящие строки; читает поля записи и `computed`; строки остаются в таблице |
+| `skipEmpty` | по умолчанию `true`: нет строк в области (группа пуста / в таблице нет строк) нет и строки итога; `false` итог выводится (sum 0, count 0). Область считается до `where` итога: пустой результат `where` даёт sum 0 / count 0, а не пропуск |
+| `scale`, `rounding` | только для `avg`, оба обязательны: среднее делится `BigDecimal` и округляется явно |
+
+Типы: `sum` / `min` / `max` дают тип поля (Integer остаётся Integer, Decimal Decimal), `avg` Decimal, `count` Integer.
+`sum` Decimal точная (`0.1 + 0.2 = 0.3`, масштаб = наибольший из слагаемых), без округления. Строки без значения поля в
+`sum` / `min` / `max` / `avg` не участвуют (`count` считает строки). `min` / `max` / `avg` без единого значения дают пустой
+текст ячейки. Переполнение `Long` в `sum` Integer это ошибка.
+
+**Раскладка.** Строки итога привязываются цепочкой `keepWithNext` к строке, которую итожат: последняя строка данных
+группы (для группы без строк заголовок группы) плюс все строки подвала образуют один блок; подвал таблицы привязан к
+последней строке таблицы (через подвал группы тоже). Итог не окажется один вверху страницы: если подвал не помещается,
+на следующую страницу вместе с ним уходит последняя строка данных. Блок длиннее пустой страницы
+(`1 + число строк подвала`) вызвал бы `LayoutOverflowException` (на практике невозможно: подвал это единицы строк).
+Страницы, где итогов нет, раскладываются как раньше (цепочки и golden-файлы не менялись).
 
 **`cases`** (ячейка строки): `cases: [{where: <предикат>, text|bind, format, optional}, ...]`. Выигрывает первый вариант,
 чей `where` истинен; иначе собственное содержимое ячейки (`text` или `bind` + `format` + `optional`, по сути `else`);
@@ -455,16 +536,21 @@ note:                                                 # единица толь�
       optional: true
 ```
 
-**Что не покрыто:** итоги и агрегаты (sum, count, подвалы групп), выражения (`${a} * ${b}`), вычисляемые строки,
-сортировка по вычисляемому полю, группировка по не-enum полю, вложенные группы, подстановка значений в `titles`,
-несколько таблиц потока на шаблон.
+**Что не покрыто:** выражения общего вида (`${a} * ${b}`: только закрытые операции `multiply` / `add` / `subtract` /
+`divide`), вложенные итоги (подитоги подгрупп), накопительные итоги (running total), итоги с текстом из данных
+(`label` литерал, подстановки значений нет), итог по Date / String (`min` / `max` только числа), `group` итоги без
+`groupBy`, правое выравнивание чисел (во flow-таблице есть только `left` / `center`), сортировка по `sequence`,
+группировка по не-enum полю, вложенные группы, подстановка значений в `titles`, несколько таблиц потока на шаблон.
+Значение итога не часть записи `item`: ячейки строк данных его не видят.
 
 **Соответствие IR** (`report-ir` `FlowTables.build`): `columns[]` в `IrColumn` (`stick: first` в
 `stickToFirstRow`, `last` в `stickToLastRow`), `rowHeight` в `IrTable.rowHeight`, `header` в `IrTableHeader`
 (`height`, `repeat`; ячейка: `rotate: 90` в `VERTICAL_BOTTOM_TO_TOP`, `lines` в `manualLines`; текст шапки только
 здесь), `groupTitle` и `keep.titleChain` в `IrGroupTitle` (`column`, `style`, `align`, `spacerBefore`,
 `spacerAfter`, `keepWithRows`), `fill: blank` в `IrTable.fillBlank`, ячейки строки в `IrCell` по bind-ам записи
-`item`. Движок строит из `IrGroupTitle` цепочку `keepWithNext` и пустые строки, из `fillBlank` дозаполнение.
+`item`, `totals` в `IrTotalRow` (`scope: group` в `IrGroup.footer`, `table` в `IrTable.footer`). Движок строит из
+`IrGroupTitle` цепочку `keepWithNext` и пустые строки, из `fillBlank` дозаполнение, из подвалов строки итогов и цепочку
+к итожимой строке.
 
 Пример из `gost-spec.yaml` (спецификация ГОСТ 2.106, колонки 6+6+8+70+63+10+22 = 185 мм):
 
@@ -585,7 +671,7 @@ enum без тегов, его домен задаёт сам шаблон (`ord
 - Один шрифт (GOST Type B), поле `style` в `TemplateMain` игнорируется.
 - `repeat.from` не резолвится.
 - Блоки шаблона не из слотов участвуют в расстановке основного движка, но не рисуются.
-- Bind только скалярный: `repeat.from` не резолвится. Выражений нет; итогов и агрегатов таблицы потока нет (см. «Данные таблицы»).
+- Bind только скалярный: `repeat.from` не резолвится. Выражений нет (только закрытая арифметика `computed` и `totals`, см. «Данные таблицы»); вложенных и накопительных итогов нет.
 - Лист нулевой или отрицательной ширины и высоты даёт ошибку валидации.
 
 ## Тесты
@@ -593,9 +679,13 @@ enum без тегов, его домен задаёт сам шаблон (`ord
 - `report-template`: загрузка, валидация, привязки, поворот, наборы, область потока; `DataTest` (типы, схема,
   форматы, `--data`), `TemplateContractTest` (контракт, `format`, `optional`, пути ошибок).
 - `report-template`: `FlowTableTest` (загрузка, неизвестные ключи, структура, ширина, стили, контракт строки), `FlowShapingTest`
-  (where / sortBy / groupBy / computed / cases / format: загрузка, валидация, контракт, прогон на данных, `DataYaml`).
+  (where / sortBy / groupBy / computed / cases / format: загрузка, валидация, контракт, прогон на данных, `DataYaml`),
+  `FlowTotalsTest` (арифметика `computed`: типы, цикл, деление на ноль, точность; `totals`: sum / count / min / max / avg,
+  `where`, `skipEmpty`, контракт и валидация с путями).
 - `report-ir`: `FlowTablesTest` (YAML-описание в `IrTable`: стили, шапка, optional).
-- `report-layout`: `FlowTableLayoutTest` (спейсеры, цепочка, `fillBlank`, `header.repeat`).
+- `report-ir`: `FlowTotalsIrTest` (`totals` в `IrGroup.footer` / `IrTable.footer`, стили, колонки).
+- `report-layout`: `FlowTableLayoutTest` (спейсеры, цепочка, `fillBlank`, `header.repeat`), `TotalRowLayoutTest` (цепочка итога,
+  итог внизу страницы, дозаполнение после подвала, переполнение; свой измеритель текста).
 - `reports/specification`: `SpecificationTableParityTest` (`IrTable` из YAML равен старой таблице,
   `LegacySpecificationTable` только в тестах), `SpecificationQuantityFormatTest` (формат количества и правило единицы против
   старого форматтера).

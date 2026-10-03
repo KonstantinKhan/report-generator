@@ -413,7 +413,48 @@ object TemplateValidator {
         t.computed.forEach { (name, op) ->
             val cp = "$p.computed.$name"
             if (!ID_PATTERN.matches(name)) errors += TemplateError(cp, "invalid computed name '$name' (letters, digits, _ and -)")
-            if (op is FlowComputed.Sequence && op.step == 0L) errors += TemplateError("$cp.sequence.step", "must not be 0")
+            when (op) {
+                is FlowComputed.Sequence -> if (op.step == 0L) errors += TemplateError("$cp.sequence.step", "must not be 0")
+                is FlowComputed.Arithmetic -> {
+                    val key = op.op.key
+                    val exactly = op.op == ArithOp.SUBTRACT || op.op == ArithOp.DIVIDE
+                    if (exactly && op.operands.size != 2) errors += TemplateError("$cp.$key", "$key takes exactly 2 operands, got ${op.operands.size}")
+                    if (!exactly && op.operands.size < 2) errors += TemplateError("$cp.$key", "$key takes at least 2 operands, got ${op.operands.size}")
+                    if (op.scale != null && op.scale < 0) errors += TemplateError("$cp.scale", "must be >= 0, got ${op.scale}")
+                }
+            }
+        }
+
+        val totalIds = HashSet<String>()
+        t.totals.forEachIndexed { i, total ->
+            val tp = "$p.totals[$i]"
+            when {
+                !ID_PATTERN.matches(total.id) -> errors += TemplateError("$tp.id", "invalid id '${total.id}' (letters, digits, _ and -)")
+                !totalIds.add(total.id) -> errors += TemplateError("$tp.id", "duplicate total id '${total.id}'")
+            }
+            if (total.scope == TotalScope.GROUP && t.groupBy == null) {
+                errors += TemplateError("$tp.scope", "scope 'group' needs 'groupBy' (there are no groups to total)")
+            }
+            if (total.agg == TotalAgg.COUNT) {
+                if (total.field != null) errors += TemplateError("$tp.field", "count counts rows and takes no 'field'")
+            } else if (total.field == null) {
+                errors += TemplateError(tp, "${total.agg.key} needs a 'field' (an Integer or Decimal item or computed field)")
+            }
+            if (total.agg == TotalAgg.AVG) {
+                if (total.scale == null) errors += TemplateError(tp, "avg needs 'scale' (the mean is rounded explicitly)")
+                if (total.rounding == null) errors += TemplateError(tp, "avg needs 'rounding' (the mean is rounded explicitly)")
+                if (total.scale != null && total.scale < 0) errors += TemplateError("$tp.scale", "must be >= 0, got ${total.scale}")
+            } else {
+                if (total.scale != null) errors += TemplateError("$tp.scale", "'scale' applies to avg only")
+                if (total.rounding != null) errors += TemplateError("$tp.rounding", "'rounding' applies to avg only")
+            }
+            if (total.label.isEmpty()) errors += TemplateError("$tp.label", "must not be empty")
+            for ((key, column) in listOf("labelColumn" to total.labelColumn, "valueColumn" to total.valueColumn)) {
+                if (column !in ids) errors += TemplateError("$tp.$key", "unknown column '$column' (columns: ${ids.joinToString()})")
+            }
+            if (total.labelColumn == total.valueColumn) errors += TemplateError("$tp.valueColumn", "label and value need different columns, both are '${total.valueColumn}'")
+            style(total.style, "$tp.style")
+            total.where?.let { predicateShape(it, "$tp.where", errors) }
         }
     }
 
