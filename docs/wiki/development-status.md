@@ -1,7 +1,9 @@
 # Статус разработки
 
-47 тестов, 10 модулей, всё зелёное. История коммитов ниже — от старого к
-новому (`git log --oneline`, реверс порядка вывода).
+13 модулей, 368 тестов, всё зелёное (`./gradlew test`, 2026-10-03). История коммитов ниже — от старого к
+новому (`git log --oneline`, реверс порядка вывода); ветка `engine` — отдельным разделом в конце таблиц фаз.
+Нумерация «фаз» тут своя: в `../dev-plan-0.1.md` фаза 7 это XLSX (не начата), а «фаза 7» в таблице ниже — форматирование таблицы
+спецификации.
 
 ## Фазы (по `../dev-plan-0.1.md`)
 
@@ -27,6 +29,38 @@
 | — | Подписи "Копировал"/"Формат" под рамкой, `BorderWeight.NONE` | `report-ir`, `report-layout`, `reports/specification` | `da88960` |
 | 7 | Форматирование таблицы спецификации: фиксированная высота 8мм, 4 блока (СЕ/Детали/Стандарты/Материалы), заголовки блоков курсивные+подчёркнутые 3.5мм, тонкие границы на каждой ячейке, синтетический italic (shear в PDF / font-style в SVG), word-wrap в физические строки, дозаполнение страницы пустыми строками | все модули, особенно `report-layout`, рендереры | `adee345` |
 
+## Ветка `engine`: YAML-шаблоны и таблица потока
+
+Ветка `engine`, 15 коммитов поверх `279b40f` (merge PR #1, 2026-10-01), всё 2026-10-03. Хронология возможностей и
+как мигрировать: [changelog-engine.md](changelog-engine.md). Справка: [template-yaml.md](template-yaml.md), практикум:
+[template-guide.md](template-guide.md).
+
+| Этап | Что | Коммит |
+|---|---|---|
+| — | Чистка: удалён устаревший `SpecificationEndToEndTest` (красный, сравнивал с протухшим снапшотом), `reports/` больше не в `.gitignore` | `e588fac` |
+| — | Loodsman: сборочные единицы (`Сборочная единица`) попадают в спецификацию (`mapItemKind` -> `ASSEMBLY`) | `e0eda3d` |
+| 1 | Модуль `report-template`: YAML -> модель -> валидация -> резолвер (якоря, `attach` по осям, поворот таблиц, наборы, `when`, `reserves`, область потока); `Corner`/`resolveAnchor` в `report-geometry`; статические блоки ГОСТ из `gost-spec.yaml`; типизированный контекст данных (`DataType`/`DataSchema`/`DataContext`), `format`/`optional`, контракт; `FrameField`/`FrameBindings`-поля заменены биндом по пути; CLI `runTemplate`; фиксы таблицы (отступы ячейки, перенос длинных слов, цепочка заголовка группы, единица только у материалов) | `928f245` |
+| 2 | Таблица потока описана в YAML (`type: flow` + `table:`), `FlowTables` (`report-ir`) собирает `IrTable`; `IrGroupTitle`, `IrTable.fillBlank`, `IrTableHeader.repeat`; `IrColumn.header` удалён; `TemplateMain` рисует поток из `--data`; parity-тест со старым кодом | `c4d8893` |
+| 3 | Правила данных таблицы в YAML: `groupBy`, структурные предикаты `where`, `sortBy` (натуральная русская сортировка), `computed.sequence`, `cases`, `format`; `Specification.kt` только поставляет `DataContext`; пример `purchased-list.yaml` | `03ecc29` |
+| — | Фикс: `report-server` не компилировался (параметр `customerRepresentative` в `Routing.kt`) | `29a0f2a` |
+| — | Тесты слоя раскладки переведены на границы-`Line` (три теста были красными) | `c8a8cda` |
+| 4 | Арифметика `computed` (multiply/add/subtract/divide) и итоги `totals` (sum/count/min/max/avg, группа и таблица), `IrTotalRow`, `IrGroup.footer`/`IrTable.footer`, стиль `totalText` | `ff7cbc5` |
+| — | Практикум `template-guide.md` + проверенные шаблоны `tutorial/` и `tutorial/errors/` | `314c16c` |
+| — | README модуля `report-template` перенесён в вики и удалён (документация живёт только в `docs/wiki`) | `aeec4c7` |
+| — | Фиксы: id слотов привязаны к `FrameSpec` только на пути спецификации (`bindStaticSlots`), ранняя проверка поворота текста (0/90), типизированные ошибки `--data` | `f910e64` |
+| 5 | Нумерация физических строк `${line.number}` + раздел `lines` (расчёт в раскладке, `IrTable.lineNumbers`) | `1234ffe` |
+| 6 | Параметризованные стили (`{base, size, bold, italic, underline}`) и жёсткий перенос `\n` в ячейках данных | `998529a` |
+| 7 | Многоуровневая шапка потока: `header.rows`, `span`, `rowSpan` (`IrHeaderGrid`) | `e4f45bd` |
+| 8 | `remainder: stretch\|gap` для `fill: blank`; нижняя граница последней строки рисуется всегда (меняет 8 golden-файлов спецификации) | `81fa21d` |
+
+Тесты ветки: golden-эталоны раскладки в `reports/specification/src/test/resources/golden/*.txt` (текстовый дамп Layout IR в сотых
+долях мм, значения сверены с ручным расчётом): `StaticBlocksGoldenTest` (спецификация и рамка без таблицы, 9 эталонов), `TotalsGoldenTest`,
+`LineNumbersGoldenTest`, `StylesAndBreaksGoldenTest`, `MultiHeaderGoldenTest`, `RemainderGoldenTest`; parity-тесты
+`SpecificationTableParityTest` (таблица из YAML = старая таблица из кода, эталон `LegacySpecificationTable` только в тестах),
+`SpecificationQuantityFormatTest`, `FrameSpecsTemplateParityTest` (`report-ir`, `FrameSpecs` из YAML = старые константы).
+Шаблоны практикума реально запускались через `runTemplate` (числа в `template-guide.md` взяты из SVG), но PDF шаблонов глазами не проверялся:
+см. [known-gaps.md](known-gaps.md).
+
 ## Loodsman API интеграция
 
 **Статус:** Работает (feature/service). Клиент + сервер end-to-end проверены на
@@ -42,7 +76,7 @@
 
 ## Что сознательно НЕ начато
 
-Фаза 7 (XLSX) — отложена по явному решению пользователя.
+XLSX-проекция (фаза 7 по `../dev-plan-0.1.md`) — отложена по явному решению пользователя.
 Подробности — [known-gaps.md](known-gaps.md).
 
 ## Как проверялась каждая фаза
@@ -61,6 +95,7 @@ Y-flip координат PDF) не поддаётся проверке одни
   виден на превью 1:1, найден покадровым кропом PDF через `pdftoppm` в
   высоком DPI (см. [eskd-title-block.md](eskd-title-block.md))
 
-Golden-снапшоты (SVG-текст, PNG-растеризация PDF) используются как
-регрессионный барьер — самозагружаются при первом прогоне, сравниваются
-байт-в-байт при последующих.
+Golden-эталоны используются как регрессионный барьер: SVG-текст и PNG-растеризация PDF
+(`report-render-svg`, `report-render-pdf`) и текстовые дампы Layout IR (`reports/specification`, каталог `golden/`).
+Отсутствующий эталон создаётся при первом прогоне, дальше сравнение байт-в-байт. Правила обращения — в
+[running-the-project.md](running-the-project.md).

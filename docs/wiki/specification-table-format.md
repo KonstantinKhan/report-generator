@@ -1,5 +1,11 @@
 # Форматирование таблицы спецификации (ЕСКД §1)
 
+> **Частично устарело (2026-10-03).** Вид таблицы и алгоритм раскладки описаны верно, но правила данных и стиль теперь живут
+> в `gost-spec.yaml` (блок `body`), а не в `Specification.kt`; границы ячеек рисуются линиями, а не `Rectangle`; у
+> дозаполнения страницы есть режим `remainder` и нижняя граница последней строки рисуется всегда. Актуальная справка:
+> [template-yaml.md](template-yaml.md#таблица-потока-flow--table). Отмеченные ниже места исправлены, историческое описание
+> сохранено.
+
 Таблица спецификации состоит из 5 блоков (в порядке ГОСТ Р 2.106-2019 §1, как в коде
 `Specification.kt`):
 1. **Сборочные единицы** (СЕ, `ItemKind.ASSEMBLY`)
@@ -64,7 +70,9 @@ data class IrTable(
     val rowHeight: Length? = null,
     val groupTitle: IrGroupTitle = IrGroupTitle(),   // заменил groupTitleColumn
     val fillBlank: Boolean = true,                   // только при rowHeight != null
-    val footer: List<IrTotalRow> = emptyList()       // итоги таблицы, только при rowHeight != null
+    val fillRemainder: IrFillRemainder = STRETCH,    // остаток высоты: STRETCH (в последнюю строку) | GAP (зазор)
+    val footer: List<IrTotalRow> = emptyList(),      // итоги таблицы, только при rowHeight != null
+    val lineNumbers: IrLineNumbers? = null           // нумерация физических строк (`${line.number}`), только при rowHeight != null
 )
 ```
 
@@ -120,8 +128,9 @@ object Styles {
 
 #### Границы ячеек
 
-**`drawBorderedRow(block: BorderedRowBlock, y, ...)`** — новая функция рендера:
-1. **Для каждой колонки** отдельный `Rectangle(rect, styleBorderThin)`
+**`drawBorderedRow(block: BorderedRowBlock, y, ...)`** — функция рендера:
+1. **Для каждой колонки** четыре тонких `Line` (верх, право, низ, лево; ГОСТ 2.303). Раньше был один `Rectangle(rect, styleBorderThin)`:
+   единственный `Rectangle` на странице теперь рамка листа (`c8a8cda` перевёл тесты слоя раскладки на линии)
 2. **Text с паддингом**: `TextAlign.LEFT` → левый паддинг 1 мм (иначе текст спадает
    на границу), ширина переноса `cellTextWidth` (минус 1 мм справа).
    `TextAlign.CENTER` → текст центрируется по ширине колонки, перенос по той же `cellTextWidth`.
@@ -163,21 +172,20 @@ Layout IR: добавляет в `PageElement` список дополнител
 
 #### Дозаполнение страницы
 
-В `renderPages`:
-1. Отслеживаем `pageFinalY: List<Length>` — финальная Y-координата закрытой
-   каждой страницы
-2. После основного цикла выкладки, если `table.rowHeight != null` и `table.fillBlank`:
+В `renderPages` (`LayoutEngine.kt`):
+1. Отслеживается `pageFinalY: List<Length>`: финальная Y-координата закрытой каждой страницы.
+2. После основного цикла выкладки, если `table.rowHeight != null` и `table.fillBlank`, для каждой страницы:
    ```kotlin
-   for (page in pages) {
-       val remaining = contentBottom(page) - pageFinalY[page]
-       val blankRowCount = (remaining / rowHeight).toInt()
-       for (i in 0..blankRowCount) {
-           add measureBlankRow() + drawBorderedRow()
-       }
-   }
+   val available = contentBottom(page) - pageFinalY[page]
+   val fullRowsCount = available / rowHeight                // целых пустых строк
+   val remainder = available - rowHeight * fullRowsCount    // 0 <= остаток < rowHeight
+   // STRETCH: последняя строка = rowHeight + remainder, GAP: все ровно rowHeight, остаток остаётся зазором
    ```
-3. Если контента ноль вообще (пустой документ или все блоки пусты) —
-   `pageFinalY[0] = contentTop`, дозаполняется вся страница
+   Раньше при наличии рамки движок убирал нижнюю границу последней строки; теперь нижняя граница
+   последней строки рисуется всегда, в обоих режимах. Подробности и пример с цифрами: `template-yaml.md`, «Остаток высоты при `fill: blank`».
+3. Если контента ноль вообще (пустой документ или все блоки пусты) — `pageFinalY[0] = contentTop`, дозаполняется вся страница.
+4. Нумерация физических строк (`lineNumbers`) ставится вторым проходом, после раскладки блоков по страницам, чтобы номер
+   следовал итоговому месту строки.
 
 ### Renderer уровень
 

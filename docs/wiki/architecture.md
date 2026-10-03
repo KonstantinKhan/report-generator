@@ -2,38 +2,95 @@
 
 См. также: [architecture-0.2.md](../architecture-0.2.md) (полная актуальная
 версия — рамка/штамп как `FrameSpec`, §34), [architecture-0.1.md](../architecture-0.1.md)
-(исходная версия), [modules.md](modules.md) (модули по отдельности).
+(исходная версия), [modules.md](modules.md) (модули по отдельности),
+[template-yaml.md](template-yaml.md) (YAML-шаблоны, данные, таблица потока).
+
+> **Обновление (2026-10-03, ветка `engine`).** Добавлен модуль `report-template` и путь «YAML-шаблон + типизированные
+> данные». Статические блоки листа и описание таблицы спецификации теперь в YAML, из кода ушли `FrameField`,
+> `frameBindings`, захардкоженные `FrameSpecs`, список групп `GROUPS` в `Specification.kt`, `item.position` /
+> `item.quantityText`, `IrColumn.header`. Хронология: [changelog-engine.md](changelog-engine.md).
 
 ## Главный pipeline
 
+Путь спецификации (боевой движок):
+
 ```text
-PDM (REST API)
+PDM (Loodsman REST API)
       │
       ▼
-report-api        — DTO + контракт клиента (без реальной HTTP-реализации,
-      │              см. known-gaps.md)
-      ▼
-report-data       — mapping DTO → Report Data (домен отчёта)
+report-loodsman   — реализация PdmClient поверх Loodsman API v4 (report-server — Ktor-обёртка)
       │
       ▼
-reports/specification  — Report Builder: Report Data → Semantic IR
-      │                   (DSL из report-ir)
+report-api        — DTO + интерфейс PdmClient (контракт, без HTTP-библиотеки)
       ▼
-Semantic IR (report-ir)
+report-data       — mapping DTO → Report Data (SpecificationData)
       │
+      ▼
+reports/specification  — Report Builder = адаптер данных: Report Data → DataContext
+      │                   (схема + значения doc.*, типизированные записи item.*)
+      │                   + document { pageSetup, table(FlowTables.build(...)) }
+      ▼
+report-template   — YAML (gost-spec.yaml): статические блоки, якоря, шаблон таблицы потока
+      │             (FlowTableSpec); DataContext/DataSchema, контракт, FlowShaper
+      ▼
+Semantic IR (report-ir) — FlowTables: описание таблицы + записи → IrTable
+      │                   (группы, нумерация, форматы, итоги, шапка-сетка)
       ▼
 report-layout      — Layout Engine: Semantic IR → Layout IR
-      │               (measurement, table layout, pagination)
+      │               (измерение, перенос, пагинация, дозаполнение, нумерация строк;
+      │                статические блоки из шаблона)
       ▼
 Layout IR (report-layout-ir)
       │
       ├──────────────┬──────────────┐
       ▼              ▼              ▼
-report-render-svg  report-render-pdf   (XLSX — не начато, фаза 7)
+report-render-svg  report-render-pdf   (XLSX — не начато)
 ```
 
-`report-cli` — точка сборки всего пайплайна в одну команду (демо/раннер, не
-часть архитектурного pipeline самого по себе).
+Путь своего шаблона (`report-cli` `TemplateMain`, `runTemplate`): минуя `report-api`/`report-data`/Report Builder.
+
+```text
+template.yaml ──► TemplateLoader (разбор + валидация)
+--data file.yaml ► DataYaml (DataContext: схема выводится из файла; item: строки таблицы)
+                        │
+                        ▼
+              TemplateContract.require(template, schema)   — ошибка до раскладки
+                        │
+        есть flow + table:                    нет flow
+                        │                         │
+   FlowTables.build → IrTable                     │
+   layOut(bindStaticSlots = false)                │
+   (пагинация, резерв места блоков)               │
+                        │                         │
+        + layOutTemplate(TemplateResolver.resolve) на каждую страницу
+                        ▼
+                  Layout IR ──► report-render-svg / report-render-pdf
+```
+
+В обоих путях слои одинаковы: YAML описывает ЧТО (структура, стиль, правила данных), алгоритм (измерение, перенос,
+пагинация, дозаполнение) остаётся Kotlin-кодом `report-layout`. Почему так — [design-decisions.md](design-decisions.md).
+
+`report-cli` — точка сборки пайплайна в команду (демо `Main.kt` на зашитой фикстуре и `TemplateMain.kt` для своих
+шаблонов), не часть архитектурного pipeline самого по себе.
+
+## Данные шаблона: DataContext
+
+`report-template` владеет типизированной моделью данных: `DataType` (`Str`, `Integer`, `Decimal`, `Date`, `Bool`,
+`Enum`, `ListOf`, `Record`), `DataSchema` (дерево полей под корнями `doc`, `item`, `page`, `line`), `DataValue`,
+`DataContext` (`schema` + `get(path)`). Каждый bind шаблона (`${doc.designation}`, `${item.name}`, `${page.number}`,
+`${line.number}`) проверяется по схеме при загрузке (`TemplateContract`), поэтому опечатка в пути или неподходящий формат
+это ошибка до раскладки, а не пустая ячейка. Адаптер данных конкретного отчёта (для спецификации
+`SpecificationData.toDataContext()`) объявляет схему и значения одним билдером. `page.*` добавляет движок при раскладке
+каждой страницы (число страниц известно только после пагинации), `line.number` ставит раскладка (перенос известен только
+ей). Подробности — [template-yaml.md](template-yaml.md#bind).
+
+## Путь «шаблон → IrTable»
+
+`FlowTableSpec` (модель блока `flow` + `table:`) и записи `item` → `FlowShaper` (`where`, арифметика `computed`,
+`sortBy`, `groupBy`, `sequence`, `totals`) → `FlowTables.build` в `report-ir` собирает `IrTable` (`IrColumn`,
+`IrTableHeader` с `IrHeaderGrid`, `IrGroup`/`IrRow`/`IrCell`, `IrGroupTitle`, `IrTotalRow`, `IrLineNumbers`,
+`IrFillRemainder`). Семантический IR по-прежнему не знает координат: `report-layout` измеряет текст, переносит слова,
+режет страницы, дозаполняет страницу пустыми строками и нумерует физические строки.
 
 ## Два IR — главная граница
 
@@ -48,12 +105,21 @@ report-render-svg  report-render-pdf   (XLSX — не начато, фаза 7)
 ## Правило зависимостей модулей
 
 ```text
-report-geometry  ← report-ir
-report-geometry  ← report-layout-ir      (НЕ зависит от report-ir!)
-report-ir + report-layout-ir  ← report-layout
+report-geometry  ← report-template       (+ kaml; НЕ зависит от report-ir / layout)
+report-geometry + report-template  ← report-ir
+report-geometry  ← report-layout-ir      (НЕ зависит от report-ir и report-template!)
+report-ir + report-layout-ir  ← report-layout     (+ PDFBox)
 report-layout-ir  ← report-render-svg    (main-код, только это)
 report-layout-ir + report-layout(FontRegistry)  ← report-render-pdf
+report-api ← report-data ← reports/specification (+ report-ir)
+report-api ← report-loodsman
+reports/specification, report-layout, report-template, рендереры ← report-cli
+report-loodsman, report-data, reports/specification, report-layout, report-render-pdf ← report-server
 ```
+
+`report-template` это самый нижний слой после геометрии: он знает про YAML, данные и геометрию блоков, но ничего про
+`IrTable`, раскладку и рендер. `report-ir` зависит от него (api), потому что `FlowTables` и `FrameSpecs` читают шаблоны, а
+`PageSetup` несёт `Template` и `DataContext`. Обратной зависимости (`report-template` → `report-ir`) нет, она бы замкнула цикл.
 
 Ключевая инвариант, которую держали через все фазы и проверяли grep'ом после
 каждого изменения:
@@ -61,6 +127,8 @@ report-layout-ir + report-layout(FontRegistry)  ← report-render-pdf
 ```bash
 grep -rn "import dev.reportgenerator.ir" report-layout-ir/src/main/     # должно быть пусто
 grep -rn "import dev.reportgenerator.ir\." report-render-svg/src/main/ report-render-pdf/src/main/  # должно быть пусто
+grep -rn "import dev.reportgenerator.template" report-layout-ir/src/main/ report-render-svg/src/main/ report-render-pdf/src/main/  # должно быть пусто
+grep -rn "import dev.reportgenerator.\(ir\|layout\)" report-template/src/main/            # должно быть пусто
 ```
 
 Ренде­реры видят **только** Layout IR. Это то, что позволяет когда-нибудь
