@@ -38,6 +38,9 @@
 - **[eskd-title-block.md](eskd-title-block.md)** — рамка/штамп: `FrameSpec`,
   геометрия основной надписи и доп. граф, два прохода `renderPages()` ради
   вычисляемого номера/количества листов, баг с вырезом на углах ячеек
+- **[template-yaml.md](template-yaml.md)** — YAML-шаблоны страницы (`report-template`):
+  блоки, наборы, типы (`frame`/`rect`/`table`/`text`/`flow`), привязка и якоря,
+  запуск своего шаблона через `runTemplate`
 - **[loodsman-integration.md](loodsman-integration.md)** — клиент Loodsman PDM
   API: авторизация, разделение свойств/атрибутов, правило ключевого атрибута
   по типу объекта, известные грабли API

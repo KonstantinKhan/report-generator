@@ -3,7 +3,6 @@ package dev.reportgenerator.ir.frames
 import dev.reportgenerator.geometry.mm
 import dev.reportgenerator.ir.BorderWeight
 import dev.reportgenerator.ir.FrameCell
-import dev.reportgenerator.ir.FrameField
 import dev.reportgenerator.ir.TextOrientation
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,7 +21,7 @@ class FrameSpecsTest {
     fun `designation cell spans the full header strip width`() {
         val designation = FrameSpecs.firstPageStamp.cells
             .filterIsInstance<FrameCell.Dynamic>()
-            .single { it.field == FrameField.DESIGNATION }
+            .single { it.path == "doc.designation" }
 
         assertEquals(120.mm, designation.rect.width)
         assertEquals(15.mm, designation.rect.height)
@@ -32,7 +31,7 @@ class FrameSpecsTest {
     fun `name cell merges the five signature rows`() {
         val name = FrameSpecs.firstPageStamp.cells
             .filterIsInstance<FrameCell.Dynamic>()
-            .single { it.field == FrameField.NAME }
+            .single { it.path == "doc.name" }
 
         assertEquals(70.mm, name.rect.width)
         assertEquals(25.mm, name.rect.height)
@@ -42,10 +41,10 @@ class FrameSpecsTest {
     fun `sheet number and sheets total each appear exactly once`() {
         val dynamicFields = FrameSpecs.firstPageStamp.cells
             .filterIsInstance<FrameCell.Dynamic>()
-            .map { it.field }
+            .map { it.path }
 
-        assertEquals(1, dynamicFields.count { it == FrameField.SHEET_NUMBER })
-        assertEquals(1, dynamicFields.count { it == FrameField.SHEETS_TOTAL })
+        assertEquals(1, dynamicFields.count { it == "page.number" })
+        assertEquals(1, dynamicFields.count { it == "page.total" })
     }
 
     @Test

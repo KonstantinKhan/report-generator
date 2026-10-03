@@ -56,4 +56,40 @@ class PdfBoxTextMeasurerTest {
         assertTrue(result.lineCount > 1)
         assertTrue(result.width <= narrow)
     }
+
+    @Test
+    fun `single word wider than maxWidth is hard-broken by characters and never overflows`() {
+        val word = "АААА.123456.789-ОченьДлиннаяНеделимаяСтрокаБезПробелов"
+        val narrow = 20.mm
+        val result = measurer.measure(word, style, maxWidth = narrow, breakLongWords = true)
+
+        assertTrue(result.lineCount > 1)
+        assertEquals(word, result.lines.joinToString(""), "hard break must not lose or add characters")
+        result.lines.forEach { line ->
+            assertTrue(measurer.measure(line, style, maxWidth = 1000.mm).width <= narrow, "line '$line' overflows")
+        }
+    }
+
+    @Test
+    fun `tail of a hard-broken word stays open for the next word`() {
+        val result = measurer.measure("ААААААААААААААААААААААААААААААААААААААА б", style, maxWidth = 20.mm, breakLongWords = true)
+
+        assertTrue(result.lines.size > 1)
+        assertTrue(result.lines.last().endsWith("б"), "next word joins or follows the broken tail, never lost")
+    }
+
+    @Test
+    fun `repeated and edge spaces do not produce empty words`() {
+        val result = measurer.measure("  Вал   Вал  ", style, maxWidth = 100.mm)
+
+        assertEquals(listOf("Вал Вал"), result.lines)
+    }
+
+    @Test
+    fun `long word overflows on one line unless breakLongWords is requested`() {
+        val result = measurer.measure("НеделимаяСтрокаБезПробеловИТочекВообще", style, maxWidth = 10.mm)
+
+        assertEquals(1, result.lineCount)
+        assertTrue(result.width > 10.mm)
+    }
 }

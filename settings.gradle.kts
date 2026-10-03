@@ -11,6 +11,7 @@ include(
     "report-ir",
     "report-layout-ir",
     "report-layout",
+    "report-template",
     "report-render-svg",
     "report-render-pdf",
     "report-api",

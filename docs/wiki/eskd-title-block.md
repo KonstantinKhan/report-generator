@@ -46,6 +46,12 @@ Layout Engine (см. ниже), это не входные данные отчё
 
 ## Пресеты (`report-ir/frames/FrameSpecs.kt`)
 
+> **Обновление (2026-10-03).** Геометрия пресетов больше не зашита в `FrameSpecs.kt`:
+> `FrameSpecs` берёт ячейки из `report-ir/src/main/resources/templates/gost-spec.yaml`
+> (`GostSpecTemplate`). Размеры и состав ячеек ниже остались верными (их проверяет
+> `FrameSpecsTemplateParityTest`), но править их надо в YAML. Старый хардкод сохранён
+> только в тестовом `LegacyFrameSpecs.kt`. Формат YAML: [template-yaml.md](template-yaml.md).
+
 ### `firstPageStamp` — основная надпись, 185×40мм
 
 Только первая страница. Две независимые под-сетки одна над другой:

@@ -101,6 +101,11 @@ height)` с константами `PageFormat.A4`/`PageFormat.A3` в
 
 ## `FrameSpec`/`FrameCell` вместо `TitleBlockSpec`
 
+> **Обновление (2026-10-03).** Содержимое `FrameSpec` теперь строится из YAML
+> (`gost-spec.yaml`, модуль `report-template`), а не из констант в `FrameSpecs.kt`.
+> Сам тип `FrameSpec`/`FrameCell` остался как внутренний формат между шаблоном и
+> раскладкой. См. [template-yaml.md](template-yaml.md).
+
 `report-ir/Frame.kt` + `report-ir/frames/FrameSpecs.kt`. Разобрано подробно
 в [eskd-title-block.md](eskd-title-block.md). Коротко: `TitleBlockSpec`
 (designation/name/sheetsTotal) не могла выразить реальную геометрию

@@ -1,0 +1,112 @@
+# Mini specification template: every feature of the report-template model. All sizes in mm.
+name: mini-spec
+
+sheet:
+  format: A4                # A4|A3|A2|A1|A0, or explicit `width:` + `height:`
+  orientation: portrait
+  margins: {left: 20, top: 5, right: 5, bottom: 5}
+  anchors:                  # custom sheet points, mm from the sheet top-left
+    mid: {x: 105, y: 148.5}
+
+# Where blocks without `attach` go (default: sheet.topLeft)
+root: {self: topLeft, to: sheet.topLeft}
+
+blocksets:
+  # leaf blockset: params with defaults (null = required), exposed ports
+  sideLabel:
+    params: {w: 7, h: 30, label: null}
+    ports:
+      tail: box.bottomLeft
+    blocks:
+      - {id: box, type: rect, size: {width: "${param.w}", height: "${param.h}"}}
+      - id: caption
+        type: text
+        text: "${param.label}"
+        rotate: 90
+        align: center
+        size: {width: "${param.w}", height: "${param.h}"}
+        attach: {self: center, to: box.center}
+
+  # nested blockset: stacks two sideLabel instances, forwards its params as args
+  sideStack:
+    params: {w: 7, h: 30}
+    ports:
+      tail: lower.bottomLeft
+    blocks:
+      - {id: upper, use: sideLabel, args: {w: "${param.w}", h: "${param.h}", label: "Inv. no."}}
+      - id: lower
+        use: sideLabel
+        args: {w: "${param.w}", h: "${param.h}", label: "Sign and date"}
+        attach: {self: topLeft, to: upper.bottomLeft}
+
+blocks:
+  # frame nested into the sheet content area
+  - id: frame
+    type: frame
+    thickness: 0.7
+    size: {width: 185, height: 287}
+    attach: {self: topLeft, to: sheet.contentTopLeft}
+
+  # first-page stamp: fixed + generated rows, spans, binds, rotation; reserves flow space
+  - id: stamp
+    type: table
+    when: first
+    reserves: true
+    columns: [10, 10, 25, 20, 15, 55, 50]
+    rows:
+      - height: 15
+        cells:
+          - {text: "Rev", rotate: 90}
+          - "Sheet"
+          - "Doc no."
+          - "Sign"
+          - "Date"
+          - {bind: "${doc.designation}", span: 2, align: center, fontSize: 14}
+      - height: 8
+        cells: [~, ~, ~, ~, ~, {bind: "${doc.name}", span: 2}]
+      - repeat:
+          count: 2
+          row:
+            height: 5
+            cells: [~, ~, ~, ~, ~, ~, ~]
+    attach: {self: bottomRight, to: frame.bottomRight}
+
+  # continuation-page stamp: smaller
+  - id: stampRest
+    type: table
+    when: rest
+    reserves: true
+    columns: [10, 10, 25, 20, 15, 105]
+    rows:
+      - height: 8
+        cells: ["Rev", "Sheet", "Doc no.", "Sign", "Date", {bind: "${doc.designation}"}]
+    attach: {self: bottomRight, to: frame.bottomRight}
+
+  # page number placed on the stamp's anchor, offset in sheet axes (x right, y down)
+  - id: pageNo
+    type: text
+    bind: "${page.number}"
+    align: center
+    size: {width: 10, height: 8}
+    anchors: {baseline: {x: 5, y: 6}}
+    attach:
+      self: topLeft
+      to: stamp.cell[0,1].topLeft
+      offset: {x: 0, y: 0}
+    when: first
+
+  # nested blockset hanging outside the frame's left edge, attached through its port
+  - id: margin
+    use: sideStack
+    args: {h: 25}
+    attach: {self: bottomRight, to: frame.bottomLeft}
+
+  # attach to the instance port
+  - id: note
+    type: rect
+    size: {width: 7, height: 10}
+    attach: {self: topRight, to: margin.tail}
+
+  # data-driven table region: no size = flow region (content area minus reserves)
+  - id: body
+    type: flow

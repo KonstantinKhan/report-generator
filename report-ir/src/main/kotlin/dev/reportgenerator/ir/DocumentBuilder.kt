@@ -4,6 +4,8 @@ import dev.reportgenerator.geometry.Insets
 import dev.reportgenerator.geometry.Length
 import dev.reportgenerator.geometry.PageFormat
 import dev.reportgenerator.geometry.mm
+import dev.reportgenerator.template.DataContext
+import dev.reportgenerator.template.Template
 
 fun document(block: DocumentBuilder.() -> Unit): IrDocument {
     val builder = DocumentBuilder()
@@ -22,19 +24,21 @@ class DocumentBuilder {
         format: PageFormat = currentPageSetup.format,
         margins: Insets = currentPageSetup.margins,
         frame: FrameSpec? = currentPageSetup.frame,
-        frameBindings: FrameBindings? = currentPageSetup.frameBindings,
+        dataContext: DataContext? = currentPageSetup.dataContext,
         continuationFrame: FrameSpec? = currentPageSetup.continuationFrame,
         leftMarginFrame: FrameSpec? = currentPageSetup.leftMarginFrame,
         belowFrame: FrameSpec? = currentPageSetup.belowFrame,
         specLeftTable: FrameSpec? = currentPageSetup.specLeftTable,
-        mainTitleRightTable: FrameSpec? = currentPageSetup.mainTitleRightTable
+        mainTitleRightTable: FrameSpec? = currentPageSetup.mainTitleRightTable,
+        staticTemplate: Template = currentPageSetup.staticTemplate
     ) {
         currentPageSetup = PageSetup(
             format, margins,
-            frame = frame, frameBindings = frameBindings,
+            frame = frame, dataContext = dataContext,
             continuationFrame = continuationFrame,
             leftMarginFrame = leftMarginFrame, belowFrame = belowFrame,
-            specLeftTable = specLeftTable, mainTitleRightTable = mainTitleRightTable
+            specLeftTable = specLeftTable, mainTitleRightTable = mainTitleRightTable,
+            staticTemplate = staticTemplate
         )
     }
 

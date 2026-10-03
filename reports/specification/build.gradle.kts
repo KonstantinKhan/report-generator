@@ -10,3 +10,9 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)
 }
+
+// StaticBlocksGoldenTest lays out several multi-page documents; PdfBoxTextMeasurer re-parses the
+// TTF on every measure() call (see FontRegistry), which exceeds the default test heap.
+tasks.test {
+    maxHeapSize = "4g"
+}

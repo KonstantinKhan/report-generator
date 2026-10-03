@@ -127,7 +127,7 @@ fun measureGroupHeader(
 // blank on lineIndex > 0 — no separate "don't repeat on continuation" branch needed.
 fun splitRowIntoPhysicalRows(row: IrRow, columns: List<IrColumn>, textMeasurer: TextMeasurer): List<List<IrCell>> {
     val linesPerColumn = row.cells.mapIndexed { index, cell ->
-        textMeasurer.measure(cell.text, cell.style, columns[index].width).lines
+        textMeasurer.measure(cell.text, cell.style, cellTextWidth(columns[index].width), breakLongWords = true).lines
     }
     val physicalCount = (linesPerColumn.maxOfOrNull { it.size } ?: 0).coerceAtLeast(1)
 
@@ -155,6 +155,14 @@ fun splitRowIntoPhysicalRows(row: IrRow, columns: List<IrColumn>, textMeasurer: 
         }
     }
 }
+
+// Width actually available to text inside a bordered cell: the column minus FRAME_CELL_PADDING on
+// BOTH sides, for every alignment. LEFT text is drawn 1mm off the left border (drawBorderedRow), so
+// wrapping against the full column let a line run into the right border; the same margin on the
+// right keeps the text block symmetric, and centered text gets the same limit so a full-width
+// line never touches either border.
+internal fun cellTextWidth(columnWidth: Length): Length =
+    maxOf(columnWidth - FRAME_CELL_PADDING * 2, Length.ZERO)
 
 fun blankBorderedRow(columns: List<IrColumn>, offsets: List<Length>, rowHeight: Length, path: String): BorderedRowBlock =
     BorderedRowBlock(
@@ -234,9 +242,9 @@ private fun buildLegacyBlocks(
 // Every physical row — group title, blank spacer, or a (possibly word-wrapped) data line — is a
 // BorderedRowBlock so it's uniformly bordered per column. The "2 blank before / 1 blank after"
 // spacer rule around a group title is expressed here as an unconditional keepWithNext chain
-// (blank, blank, header all bind to the next block) so they can never be split by a page break —
-// independent of the group's own keepTogether (which, as before, only decides whether the header
-// unit also binds to the first data row).
+// (blank, blank, header, blank all bind to the next block, ending at the group's first data line)
+// so they can never be split by a page break or left orphaned at the bottom of a page —
+// independent of the group's own keepTogether (which only decides whether the WHOLE group binds).
 private fun buildBorderedBlocks(
     table: IrTable,
     offsets: List<Length>,
@@ -295,12 +303,15 @@ private fun buildBorderedBlocks(
                 val unit = prefix + rowBlocks
 
                 val effective = unit.mapIndexed { i, block ->
-                    // Every block up to and including the last header line binds forward
-                    // (blanks -> header line(s) -> next header line -> blankAfter) unconditionally;
-                    // only blankAfter's own binding into the data rows depends on keepTogether.
-                    val spacerAndHeader = i < prefix.size - 1
+                    // Every block of the prefix binds forward (blanks -> header line(s) ->
+                    // blankAfter), and blankAfter binds to the FIRST data line only — so a title
+                    // plus its spacers can never be stranded at the bottom of a page, while the
+                    // rest of a long group stays free to break. A group without data rows has
+                    // nothing to bind to (and must not bind to the next group's spacers). The
+                    // whole group binds together only when keepTogether says so.
+                    val inPrefix = i < prefix.size - 1 || (i == prefix.size - 1 && rowBlocks.isNotEmpty())
                     val boundToRows = element.constraints.keepTogether && i < unit.lastIndex
-                    if (spacerAndHeader || boundToRows) withKeepWithNext(block) else block
+                    if (inPrefix || boundToRows) withKeepWithNext(block) else block
                 }
 
                 blocks += effective

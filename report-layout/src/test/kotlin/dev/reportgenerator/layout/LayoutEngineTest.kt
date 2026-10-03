@@ -8,7 +8,6 @@ import dev.reportgenerator.geometry.Size
 import dev.reportgenerator.geometry.mm
 import dev.reportgenerator.ir.FrameBindings
 import dev.reportgenerator.ir.FrameCell
-import dev.reportgenerator.ir.FrameField
 import dev.reportgenerator.ir.FrameSpec
 import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrColumn
@@ -147,8 +146,8 @@ class LayoutEngineTest {
     private fun tinyFrameSpec() = FrameSpec(
         size = Size(20.mm, 10.mm),
         cells = listOf(
-            FrameCell.Dynamic(Rect(0.mm, 0.mm, 20.mm, 5.mm), FrameField.DESIGNATION),
-            FrameCell.Dynamic(Rect(0.mm, 5.mm, 20.mm, 5.mm), FrameField.SHEETS_TOTAL)
+            FrameCell.Dynamic(Rect(0.mm, 0.mm, 20.mm, 5.mm), "doc.designation"),
+            FrameCell.Dynamic(Rect(0.mm, 5.mm, 20.mm, 5.mm), "page.total")
         )
     )
 
@@ -164,7 +163,7 @@ class LayoutEngineTest {
                 tinyFormat,
                 Insets(2.mm, 2.mm, 2.mm, 2.mm),
                 frame = tinyFrameSpec(),
-                frameBindings = FrameBindings(designation = "AAA.001")
+                dataContext = FrameBindings(designation = "AAA.001")
             ),
             elements = listOf(table)
         )
@@ -193,10 +192,10 @@ class LayoutEngineTest {
 
         val frameSpec = FrameSpec(
             size = Size(20.mm, 5.mm),
-            cells = listOf(FrameCell.Dynamic(Rect(0.mm, 0.mm, 20.mm, 5.mm), FrameField.NAME))
+            cells = listOf(FrameCell.Dynamic(Rect(0.mm, 0.mm, 20.mm, 5.mm), "doc.name"))
         )
         val document = IrDocument(
-            pageSetup = PageSetup(PageFormat.A4, defaultMargins(), frame = frameSpec, frameBindings = null),
+            pageSetup = PageSetup(PageFormat.A4, defaultMargins(), frame = frameSpec, dataContext = null),
             elements = listOf(table)
         )
 
@@ -325,6 +324,63 @@ class LayoutEngineTest {
         val header = blocks[2] as BorderedRowBlock
         assertEquals("Детали", header.cells.single().text)
         assertEquals(dev.reportgenerator.ir.TextAlign.CENTER, header.cells.single().align)
+    }
+
+    @Test
+    fun `group title chain binds to the first data line only, not to the whole group`() {
+        val columns = listOf(column("name", 60.mm))
+        val table = IrTable(
+            columns = columns,
+            header = null,
+            content = listOf(IrGroup("Детали", listOf(IrRow(listOf(cell("Вал"))), IrRow(listOf(cell("Втулка")))))),
+            rowHeight = 8.mm
+        )
+        val blocks = buildBlocks(table, columnOffsets(columns, 20.mm), 60.mm, 20.mm, textMeasurer, "Document/Table")
+
+        assertEquals(6, blocks.size, "blank, blank, header, blank, 2 data rows")
+        assertTrue(blocks[3].constraints.keepWithNext, "blank after the title must stay with the first data row")
+        assertTrue(!blocks[4].constraints.keepWithNext, "first data row must not drag the rest of the group")
+        assertTrue(!blocks[5].constraints.keepWithNext)
+        assertEquals(5, groupIntoUnits(blocks).first().size, "title chain is blank, blank, header, blank + first data row")
+    }
+
+    @Test
+    fun `group without data rows does not bind its trailing blank to the next group`() {
+        val columns = listOf(column("name", 60.mm))
+        val table = IrTable(
+            columns = columns,
+            header = null,
+            content = listOf(IrGroup("Пустая", emptyList()), IrGroup("Детали", listOf(IrRow(listOf(cell("Вал")))))),
+            rowHeight = 8.mm
+        )
+        val blocks = buildBlocks(table, columnOffsets(columns, 20.mm), 60.mm, 20.mm, textMeasurer, "Document/Table")
+
+        assertTrue(!blocks[3].constraints.keepWithNext, "nothing to bind to inside an empty group")
+        assertEquals(4, groupIntoUnits(blocks).first().size, "empty group is its own unit")
+    }
+
+    @Test
+    fun `group title and spacers are not stranded at the bottom of a page`() {
+        val columns = listOf(column("name", 60.mm))
+        val margins = defaultMargins()
+        val fillerCount = 5
+        // Page fits exactly the filler rows plus blank, blank, title, blank (4 x 8mm) — and not
+        // the first data row of the group.
+        val tinyFormat = PageFormat("tiny", width = 120.mm, height = margins.top + margins.bottom + 8.mm * (fillerCount + 4))
+        val table = IrTable(
+            columns = columns,
+            header = null,
+            content = (1..fillerCount).map { IrRow(listOf(cell("x"))) } +
+                IrGroup("Детали", listOf(IrRow(listOf(cell("Вал"))), IrRow(listOf(cell("Втулка"))))),
+            rowHeight = 8.mm
+        )
+        val document = IrDocument(pageSetup = PageSetup(tinyFormat, margins), elements = listOf(table))
+
+        val result = layOut(document, textMeasurer, stubFontResolver)
+
+        fun texts(page: Int) = result.pages[page].elements.filterIsInstance<PositionedText>().map { it.text }
+        assertTrue("Детали" !in texts(0), "group title must move to the next page together with its first row")
+        assertTrue("Детали" in texts(1) && "Вал" in texts(1))
     }
 
     @Test

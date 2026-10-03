@@ -7,7 +7,6 @@ import dev.reportgenerator.data.formattedQuantity
 import dev.reportgenerator.geometry.Length
 import dev.reportgenerator.geometry.mm
 import dev.reportgenerator.ir.ColumnsBuilder
-import dev.reportgenerator.ir.FrameBindings
 import dev.reportgenerator.ir.GroupBuilder
 import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrDocument
@@ -27,7 +26,7 @@ fun specification(data: SpecificationData, customerRepresentative: Boolean = tru
 
         pageSetup(
             frame = FrameSpecs.firstPageStamp,
-            frameBindings = FrameBindings(designation = data.documentDesignation, name = data.documentName),
+            dataContext = data.toDataContext(),
             continuationFrame = FrameSpecs.continuationPageStamp,
             leftMarginFrame = FrameSpecs.leftMarginTable,
             specLeftTable = FrameSpecs.specLeftTable,
@@ -103,8 +102,9 @@ private fun ColumnsBuilder.noteColumn(width: Length) = column("note", width, hea
 
 // Формат/Зона aren't modeled in SpecificationItem yet — left blank per row, matching column
 // order (7 columns must line up between header and every data row). Примечание carries the
-// MATERIAL unit (e.g. "кг", "м") — "Кол." itself is too narrow (10mm) to fit value + unit
-// without wrapping (see TableMeasurement.splitRowIntoPhysicalRows history).
+// unit (e.g. "кг", "м") for MATERIAL only — other kinds are counted in pieces and get no unit.
+// "Кол." itself is too narrow (10mm) to fit value + unit without wrapping (see
+// TableMeasurement.splitRowIntoPhysicalRows history).
 private fun GroupBuilder.row(item: SpecificationItem, position: Int) {
     row(
         listOf(
@@ -114,7 +114,7 @@ private fun GroupBuilder.row(item: SpecificationItem, position: Int) {
             IrCell(item.designation ?: ""),
             IrCell(item.name),
             IrCell(item.formattedQuantity(), align = TextAlign.CENTER),
-            IrCell(item.unit ?: "", align = TextAlign.CENTER)
+            IrCell(if (item.kind == ItemKind.MATERIAL) item.unit ?: "" else "", align = TextAlign.CENTER)
         )
     )
 }

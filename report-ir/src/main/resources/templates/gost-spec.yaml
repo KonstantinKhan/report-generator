@@ -1,0 +1,183 @@
+# Static blocks of a GOST (ESKD) specification sheet: title blocks and margin tables.
+# Units: mm. Read by report-ir (GostSpecTemplate): content -> FrameSpec, placement/reservation -> LayoutEngine.
+#
+# Slots (block ids) are bound to PageSetup fields by report-ir StaticSlot:
+#   stamp = frame, continuationStamp = continuationFrame, leftMargin = leftMarginFrame,
+#   belowFrame, specLeft = specLeftTable, mainTitleRight = mainTitleRightTable.
+# The paginated flow table itself is NOT described here (it stays engine code).
+#
+# `sheet` is only a default (A4 + ESKD margins): at layout time format and margins come from PageSetup.
+# "frame" below = the sheet content area = the page frame rectangle -> sheet.content* anchors.
+# Offsets are sheet axes (x right, y down). Borders default to thick; `thin`, `none` as marked.
+# Block order = drawing order. `reserves: true` = the block cuts the flow region (union rule, see
+# TemplateResolver.flowRegion); blocks outside the content column (left margin, specLeft) are ignored
+# by that rule geometrically, they are flagged for uniformity.
+name: gost-spec
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocksets:
+  # 65 x 15 header strip: Изм / Лист / № докум. / Подп. / Дата on the 3rd of 3 physical rows.
+  headerStrip:
+    blocks:
+      - id: grid
+        type: table
+        columns: [7, 10, 23, 15, 10]
+        rows:
+          - {height: 5, cells: [~, ~, ~, ~, ~]}
+          - {height: 5, cells: [~, ~, ~, ~, ~]}
+          - height: 5
+            cells:
+              - {text: "Изм", align: center}
+              - {text: "Лист", align: center}
+              - {text: "№ докум.", align: center}
+              - {text: "Подп.", align: center}
+              - {text: "Дата", align: center}
+
+  # 185 x 40 first-page title block: header strip + merged designation (120 x 15) + 5 signature rows.
+  # Signature part: 11 columns (the 70mm "Наименование" cell is merged over 5 rows, the blank box on the
+  # right over 3 rows). Label cells span the first two columns (17mm).
+  firstStamp:
+    blocks:
+      - {id: head, use: headerStrip}
+      - id: designation
+        type: table
+        columns: [120]
+        rows:
+          - height: 15
+            cells: [{bind: "${doc.designation}", align: center, style: frameTextLarge}]
+        attach: {self: topLeft, to: head.topRight}
+      - id: signatures
+        type: table
+        columns: [7, 10, 23, 15, 10, 70, 5, 5, 5, 15, 20]
+        rows:
+          - height: 5
+            cells:
+              - {text: "Разраб.", span: 2, borders: {bottom: thin}}
+              - {borders: {bottom: thin}}
+              - {borders: {bottom: thin}}
+              - {borders: {bottom: thin}}
+              - {bind: "${doc.name}", rowSpan: 5, align: center, style: frameTextLarge}
+              - {text: "Лит.", span: 3, align: center}
+              - {text: "Лист", align: center}
+              - {text: "Листов", align: center}
+          - height: 5
+            cells:
+              - {text: "Пров.", span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - ~
+              - ~
+              - ~
+              - {bind: "${page.number}", align: center}
+              - {bind: "${page.total}", align: center}
+          - height: 5
+            cells:
+              - {span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {span: 5, rowSpan: 3}
+          - height: 5
+            cells:
+              - {text: "Н. контр.", span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+          - height: 5
+            cells:
+              - {text: "Утв.", span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+        attach: {self: topLeft, to: head.bottomLeft}
+
+  # 185 x 15 continuation stamp (ESKD 2.104 §34.3): header strip + designation + sheet number column.
+  # The sheet column (10mm) overlays the right end of the designation cell, as in the printed form.
+  restStamp:
+    blocks:
+      - {id: head, use: headerStrip}
+      - id: designation
+        type: table
+        columns: [120]
+        rows:
+          - height: 15
+            cells: [{bind: "${doc.designation}", align: center, style: frameTextLarge}]
+        attach: {self: topLeft, to: head.topRight}
+      - id: sheetColumn
+        type: table
+        columns: [10]
+        rows:
+          - {height: 5, cells: [{text: "Лист", align: center}]}
+          - {height: 10, cells: [{bind: "${page.number}", align: center}]}
+        attach: {self: topRight, to: designation.topRight}
+
+blocks:
+  # first-page stamp nests into the frame's bottom-right corner
+  - id: stamp
+    use: firstStamp
+    when: first
+    reserves: true
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  # continuation stamp (pages 2+)
+  - id: continuationStamp
+    use: restStamp
+    when: rest
+    reserves: true
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  # 12 x 135 strip hanging outside the frame's left edge (its right edge touches the frame, bottoms
+  # aligned). Labels read bottom to top (rotate: 90): 5mm labelled column outermost, 7mm blank behind it.
+  # Rows along the strip, top to bottom: Подп. и дата / Инв. № дубл. / Взам. инв. № / Подл. и дата / Инв. № подл.
+  - id: leftMargin
+    type: table
+    reserves: true
+    columns: [5, 7]
+    rows:
+      - {height: 35, cells: [{text: "Подп. и дата", align: center, rotate: 90}, ~]}
+      - {height: 25, cells: [{text: "Инв. № дубл.", align: center, rotate: 90}, ~]}
+      - {height: 25, cells: [{text: "Взам. инв. №", align: center, rotate: 90}, ~]}
+      - {height: 25, cells: [{text: "Подл. и дата", align: center, rotate: 90}, ~]}
+      - {height: 25, cells: [{text: "Инв. № подл.", align: center, rotate: 90}, ~]}
+    attach: {self: bottomRight, to: sheet.contentBottomLeft}
+
+  # 12 x 120 strip hanging off the frame's top-left corner (outside the frame, right edge on its left
+  # edge, top aligned). Two rows (60 + 60), labels rotated.
+  - id: specLeft
+    type: table
+    when: first
+    reserves: true
+    columns: [5, 7]
+    rows:
+      - {height: 60, cells: [{text: "Справ. №", align: center, rotate: 90}, ~]}
+      - {height: 60, cells: [{text: "Перв. примен.", align: center, rotate: 90}, ~]}
+    attach: {self: topRight, to: sheet.contentTopLeft}
+
+  # 120 x 22 table in the frame's bottom-right corner, 40mm up (above the first-page stamp).
+  - id: mainTitleRight
+    type: table
+    when: first
+    reserves: true
+    columns: [14, 53, 53]
+    rows:
+      - {height: 14, cells: [~, ~, ~]}
+      - {height: 8, cells: [{span: 3}]}
+    attach: {self: bottomRight, to: sheet.contentBottomRight, offset: {x: 0, y: -40}}
+
+  # "Копировал" / "Формат" captions in the sheet's own bottom-right gutter, below the frame
+  # (borderless; centres 90mm and 30mm from the sheet's right edge). Anchored to the SHEET corner.
+  - id: belowFrame
+    type: table
+    when: first
+    reserves: true
+    borders: none
+    columns: [10, 40, 25, 30, 15]
+    rows:
+      - height: 5
+        cells: [~, {text: "Копировал", align: center}, ~, {text: "Формат", align: center}, ~]
+    attach: {self: bottomRight, to: sheet.bottomRight}
