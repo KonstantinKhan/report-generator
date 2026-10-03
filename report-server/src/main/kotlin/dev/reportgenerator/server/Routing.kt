@@ -82,7 +82,7 @@ fun Application.reportServerModule(
                 val dto = pdmClient.fetchSpecification(versionId.toString())
 
                 val data = mapToSpecificationData(dto)
-                val document = specification(data, withChangeLog = customerRepresentative)
+                val document = specification(data, customerRepresentative = customerRepresentative)
                 val laidOut = layOut(document, textMeasurer, fonts::resolve)
                 val pdfBytes = renderToPdf(laidOut, fonts.registry)
 
