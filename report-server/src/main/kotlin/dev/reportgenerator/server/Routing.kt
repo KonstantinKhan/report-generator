@@ -8,7 +8,10 @@ import dev.reportgenerator.layout.layOut
 import dev.reportgenerator.loodsman.LoodsmanApiException
 import dev.reportgenerator.renderpdf.renderToPdf
 import dev.reportgenerator.reports.specification.specification
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.ContentDisposition
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -16,7 +19,9 @@ import io.ktor.server.application.install
 import io.ktor.server.application.log
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.response.header
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -66,6 +71,32 @@ fun Application.reportServerModule(
     routing {
         get("/health") {
             call.respondText("OK")
+        }
+
+        // Plugin downloads the generated PDF here and saves it itself under the user's own
+        // Loodsman session, so the server never writes to Loodsman on the user's behalf.
+        get("/reports/{id}") {
+            val id = call.parameters["id"]
+            // Only canonical UUIDs are accepted: the id becomes a file name, so anything else
+            // (e.g. "../x") must never reach the filesystem.
+            val uuid = id?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            if (uuid == null || uuid.toString() != id.lowercase()) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("report id must be a UUID"))
+                return@get
+            }
+
+            val file = File(outputDir, "$uuid.pdf")
+            if (!file.isFile) {
+                call.respond(HttpStatusCode.NotFound, ErrorResponse("report not found: $uuid"))
+                return@get
+            }
+
+            val bytes = withContext(Dispatchers.IO) { file.readBytes() }
+            call.response.header(
+                HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, "$uuid.pdf").toString(),
+            )
+            call.respondBytes(bytes, ContentType.Application.Pdf)
         }
 
         post("/specifications/{versionId}") {
