@@ -4,8 +4,7 @@ import dev.reportgenerator.ir.FontFamilies
 import dev.reportgenerator.ir.TextStyle
 import dev.reportgenerator.layoutir.FontRef
 
-// GOST Type A: real font not available/licensed — PT Sans Regular remains a stand-in.
-// GOST Type B: real ASCON font (KOMPAS-3D), licensed for this use.
+// GOST Type A, B: real ASCON fonts (KOMPAS-3D), licensed for this use.
 class DefaultFontRegistry private constructor(
     val registry: FontRegistry,
     private val regularRef: FontRef,

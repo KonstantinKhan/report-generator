@@ -4,7 +4,7 @@
 
 | Роль | Файл | Что это | Лицензия | Константа |
 |---|---|---|---|---|
-| GOST Type A (тело таблицы, `Styles.tableText`/`mainText`/`designation`) | `PT_Sans-Regular.ttf` | **Заглушка.** Настоящего ГОСТ 2.304 Type A нет — PT Sans выбран из-за поддержки кириллицы и открытой лицензии | OFL (ParaType) — свободно | `FontFamilies.GOST_TYPE_A` |
+| GOST Type A (тело таблицы, `Styles.tableText`/`mainText`/`designation`) | `GOST-Type-A.ttf` | **Настоящий.** ГОСТ 2.304 Type A, поставлен пользователем | ASCON — подтверждено | `FontFamilies.GOST_TYPE_A` |
 | GOST Type A наклонный | `GOST-Type-A-Italic.ttf` | **Настоящий.** ГОСТ 2.304 Type A с наклоном (поставлен пользователем) | ASCON — подтверждено | `FontFamilies.GOST_TYPE_A_ITALIC` |
 | GOST Type B (заголовок таблицы, `Styles.tableHeader`) | `GOST-Type-B.ttf` | **Настоящий.** `gosttypeb.ttf`, поставлен пользователем | Copyright © 1996-97 ASCON Ltd, All Rights Reserved — права на использование подтверждены пользователем явно | `FontFamilies.GOST_TYPE_B` |
 | GOST Type B наклонный | `GOST-Type-B-Italic.ttf` | **Настоящий.** ГОСТ 2.304 Type B с наклоном (поставлен пользователем) | ASCON — подтверждено | `FontFamilies.GOST_TYPE_B_ITALIC` |

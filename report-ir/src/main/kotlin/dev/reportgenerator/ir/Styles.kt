@@ -31,10 +31,10 @@ object FontFamilies {
 
 object Styles {
     val mainText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 3.5)
-    val tableText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 3.5)
+    val tableText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A_ITALIC, fontSizeMm = 3.5)
     val heading = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 5.0, bold = true)
     val designation = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A, fontSizeMm = 2.5)
-    val tableHeader = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5)
+    val tableHeader = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A_ITALIC, fontSizeMm = 3.5)
     val groupHeader = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5, italic = true, underline = true)
     // Total rows of a flow table (subtotals, grand total): Type B like the header, bold so a total reads apart from
     // the data lines (bold is a style flag only, there is no bold font loaded yet, see fonts-and-licensing.md).
