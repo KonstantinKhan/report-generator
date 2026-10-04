@@ -39,7 +39,7 @@ object Styles {
     // Total rows of a flow table (subtotals, grand total): Type B like the header, bold so a total reads apart from
     // the data lines (bold is a style flag only, there is no bold font loaded yet, see fonts-and-licensing.md).
     val totalText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5, bold = true)
-    val frameText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 3.5)
+    val frameText = TextStyle(fontFamily = FontFamilies.GOST_TYPE_A_ITALIC, fontSizeMm = 3.5)
     val frameTextLarge = TextStyle(fontFamily = FontFamilies.GOST_TYPE_B, fontSizeMm = 7.0)
     val tableBorder = BorderStyle(widthPt = 2.0)
 
