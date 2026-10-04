@@ -17,3 +17,5 @@ report-cli/output/
 # font sources (processed files in report-layout/src/main/resources/fonts/)
 /fonts-GOST/
 
+# generated reports (docker-compose mounts ./reports as REPORT_OUTPUT_DIR; reports/specification/ is a source module, do not ignore it)
+/reports/*.pdf
