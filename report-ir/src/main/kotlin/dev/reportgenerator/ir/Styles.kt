@@ -22,7 +22,11 @@ data class TableStyle(
 // font at runtime.
 object FontFamilies {
     const val GOST_TYPE_A = "GOST Type A"
+    const val GOST_TYPE_A_ITALIC = "GOST Type A Italic"
     const val GOST_TYPE_B = "GOST Type B"
+    const val GOST_TYPE_B_ITALIC = "GOST Type B Italic"
+    const val GOST_TYPE_AU = "GOST Type AU"
+    const val GOST_TYPE_BU = "GOST Type BU"
 }
 
 object Styles {

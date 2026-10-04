@@ -9,17 +9,35 @@ import dev.reportgenerator.layoutir.FontRef
 class DefaultFontRegistry private constructor(
     val registry: FontRegistry,
     private val regularRef: FontRef,
-    private val gostBRef: FontRef
+    private val gostARef: FontRef,
+    private val gostAItalicRef: FontRef,
+    private val gostBRef: FontRef,
+    private val gostBItalicRef: FontRef,
+    private val gostAURef: FontRef,
+    private val gostBURef: FontRef
 ) {
     fun resolve(style: TextStyle): FontRef =
-        if (style.fontFamily == FontFamilies.GOST_TYPE_B) gostBRef else regularRef
+        when (style.fontFamily) {
+            FontFamilies.GOST_TYPE_A -> gostARef
+            FontFamilies.GOST_TYPE_A_ITALIC -> gostAItalicRef
+            FontFamilies.GOST_TYPE_B -> gostBRef
+            FontFamilies.GOST_TYPE_B_ITALIC -> gostBItalicRef
+            FontFamilies.GOST_TYPE_AU -> gostAURef
+            FontFamilies.GOST_TYPE_BU -> gostBURef
+            else -> regularRef
+        }
 
     companion object {
         fun load(): DefaultFontRegistry {
             val registry = FontRegistry()
-            val regularRef = registry.register("gost-type-a", loadFontResource("PT_Sans-Regular.ttf"))
+            val regularRef = registry.register("pt-sans-regular", loadFontResource("PT_Sans-Regular.ttf"))
+            val gostARef = registry.register("gost-type-a", loadFontResource("GOST-Type-A.ttf"))
+            val gostAItalicRef = registry.register("gost-type-a-italic", loadFontResource("GOST-Type-A-Italic.ttf"))
             val gostBRef = registry.register("gost-type-b", loadFontResource("GOST-Type-B.ttf"))
-            return DefaultFontRegistry(registry, regularRef, gostBRef)
+            val gostBItalicRef = registry.register("gost-type-b-italic", loadFontResource("GOST-Type-B-Italic.ttf"))
+            val gostAURef = registry.register("gost-type-au", loadFontResource("GOST-Type-AU.ttf"))
+            val gostBURef = registry.register("gost-type-bu", loadFontResource("GOST-Type-BU.ttf"))
+            return DefaultFontRegistry(registry, regularRef, gostARef, gostAItalicRef, gostBRef, gostBItalicRef, gostAURef, gostBURef)
         }
 
         private fun loadFontResource(name: String): ByteArray =
