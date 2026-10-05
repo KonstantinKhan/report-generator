@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Флоу формирования отчёта",
+    "output": "docs/diagrams/report-generation-flow.html",
+    "viewBox": [
+      1080,
+      470
+    ],
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "source-to-document",
+        "label": "Вход и данные",
+        "focus": [
+          "server",
+          "pdm",
+          "mapper"
+        ],
+        "note": "report-server принимает задание, report-loodsman идёт в PDM, report-data превращает DTO в записи item.*"
+      },
+      {
+        "id": "two-ir-boundary",
+        "label": "Смысл и раскладка",
+        "focus": [
+          "template",
+          "builder",
+          "ir",
+          "layout",
+          "layoutir"
+        ],
+        "note": "report-ir хранит смысл без координат, report-layout считает физику, report-layout-ir хранит результат."
+      },
+      {
+        "id": "render-from-layout-ir",
+        "label": "Рендер из Layout IR",
+        "focus": [
+          "layoutir",
+          "renders"
+        ],
+        "note": "Рендереры читают только Layout IR; третий рендерер не затронет ни report-ir, ни report-layout."
+      }
+    ],
+    "legend": {
+      "entries": {
+        "database": {
+          "label": "данные (шаблон, IR)"
+        },
+        "default": {
+          "label": "поток данных"
+        }
+      }
+    }
+  },
+  "stages": [
+    {
+      "label": "Источник"
+    },
+    {
+      "label": "Данные"
+    },
+    {
+      "label": "Документ"
+    },
+    {
+      "label": "Раскладка"
+    },
+    {
+      "label": "Рендер"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "server",
+      "type": "backend",
+      "label": "Приём задачи",
+      "sublabel": "report-server",
+      "stage": 0,
+      "row": 1,
+      "yOffset": 40,
+      "tag": "POST /specifications"
+    },
+    {
+      "id": "pdm",
+      "type": "external",
+      "label": "Источник PDM",
+      "sublabel": "PDM Loodsman",
+      "stage": 0,
+      "row": 0,
+      "tag": "REST API v4"
+    },
+    {
+      "id": "mapper",
+      "type": "backend",
+      "label": "Маппинг DTO",
+      "sublabel": "report-data",
+      "stage": 1,
+      "row": 0,
+      "tag": "mapToSpecificationData()"
+    },
+    {
+      "id": "template",
+      "type": "database",
+      "label": "Шаблон ГОСТ",
+      "sublabel": "YAML-шаблон",
+      "stage": 2,
+      "row": 1,
+      "yOffset": 40,
+      "tag": "gost-spec.yaml"
+    },
+    {
+      "id": "builder",
+      "type": "backend",
+      "label": "Сборка IR",
+      "sublabel": "Report Builder",
+      "stage": 2,
+      "row": 0,
+      "tag": "specification()"
+    },
+    {
+      "id": "ir",
+      "type": "database",
+      "label": "Смысл отчёта",
+      "sublabel": "Semantic IR",
+      "stage": 3,
+      "row": 1,
+      "yOffset": 40,
+      "tag": "report-ir"
+    },
+    {
+      "id": "layout",
+      "type": "backend",
+      "label": "Вёрстка",
+      "sublabel": "Layout Engine",
+      "stage": 3,
+      "row": 0,
+      "tag": "layOut()"
+    },
+    {
+      "id": "layoutir",
+      "type": "database",
+      "label": "Координаты",
+      "sublabel": "Layout IR",
+      "stage": 4,
+      "row": 1,
+      "yOffset": 40,
+      "tag": "report-layout-ir"
+    },
+    {
+      "id": "renders",
+      "type": "backend",
+      "label": "Вывод в файл",
+      "sublabel": "PDF и SVG",
+      "stage": 4,
+      "row": 0,
+      "tag": "renderToPdf()"
+    }
+  ],
+  "flows": [
+    {
+      "id": "server_fetch",
+      "from": "server",
+      "to": "pdm",
+      "label": "fetch",
+      "route": "straight",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "pdm_dto",
+      "from": "pdm",
+      "to": "mapper",
+      "label": "SpecificationDto"
+    },
+    {
+      "id": "mapper_records",
+      "from": "mapper",
+      "to": "builder",
+      "label": "SpecificationData"
+    },
+    {
+      "id": "template_flow",
+      "from": "template",
+      "to": "builder",
+      "label": "FlowTableSpec",
+      "route": "straight",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "builder_table",
+      "from": "builder",
+      "to": "ir",
+      "label": "IrTable"
+    },
+    {
+      "id": "ir_document",
+      "from": "ir",
+      "to": "layout",
+      "label": "IrDocument",
+      "route": "straight",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "layout_document",
+      "from": "layout",
+      "to": "layoutir",
+      "label": "LaidOutDocument"
+    },
+    {
+      "id": "layoutir_render",
+      "from": "layoutir",
+      "to": "renders",
+      "label": "Layout IR",
+      "route": "straight",
+      "fromSide": "top",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Вход и данные",
+      "items": [
+        "report-server — приём POST /specifications/{versionId}, оркестрация пайплайна",
+        "report-loodsman — сессия Loodsman, PdmClient поверх REST API v4",
+        "report-data — маппинг SpecificationDto в типизированные записи item.*"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Документ: смысл",
+      "items": [
+        "YAML-шаблон — ЧТО рисовать: рамка, штамп, шапка, колонки, правила",
+        "Report Builder — схема и значения DataContext, сборка IrDocument",
+        "Semantic IR (report-ir) — смысл без координат: колонки, группы, нумерация, итоги",
+        "TemplateContract — опечатка в bind это ошибка до раскладки"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Раскладка и выход",
+      "items": [
+        "Layout Engine (report-layout) — код: измеряет текст, переносит, режет страницы, нумерует строки",
+        "Layout IR (report-layout-ir) — данные: результат раскладки, готовые страницы и координаты",
+        "Раскладка считается один раз; рендереры только рисуют готовый Layout IR",
+        "Третий рендерер (XLSX) не тронет ни report-ir, ни report-layout"
+      ]
+    }
+  ]
+}
