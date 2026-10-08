@@ -1,11 +1,15 @@
-dependencies {
-    api(project(":report-data"))
-    api(project(":report-ir"))
-    implementation(project(":report-geometry"))
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+}
 
-    testImplementation(project(":report-layout"))
-    testImplementation(project(":report-render-svg"))
-    testImplementation(project(":report-render-pdf"))
+dependencies {
+    api(projects.reportData)
+    api(projects.reportIr)
+    implementation(projects.reportGeometry)
+
+    testImplementation(projects.reportLayout)
+    testImplementation(projects.reportRenderSvg)
+    testImplementation(projects.reportRenderPdf)
     testImplementation(libs.pdfbox)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)

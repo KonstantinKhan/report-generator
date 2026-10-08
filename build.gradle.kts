@@ -3,13 +3,13 @@ plugins {
 }
 
 subprojects {
-    apply(plugin = "org.jetbrains.kotlin.jvm")
-
-    extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
-        jvmToolchain(21)
-    }
-
     tasks.withType<Test> {
         useJUnitPlatform()
+    }
+
+    plugins.withId("org.jetbrains.kotlin.jvm") {
+        extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
+            jvmToolchain(21)
+        }
     }
 }

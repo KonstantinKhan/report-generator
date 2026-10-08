@@ -1,5 +1,7 @@
 rootProject.name = "report-engine"
 
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
 dependencyResolutionManagement {
     repositories {
         mavenCentral()

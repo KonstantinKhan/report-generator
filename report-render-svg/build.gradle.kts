@@ -1,8 +1,12 @@
-dependencies {
-    api(project(":report-layout-ir"))
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+}
 
-    testImplementation(project(":report-ir"))
-    testImplementation(project(":report-layout"))
+dependencies {
+    api(projects.reportLayoutIr)
+
+    testImplementation(projects.reportIr)
+    testImplementation(projects.reportLayout)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)
 }

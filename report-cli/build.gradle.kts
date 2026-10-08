@@ -1,4 +1,5 @@
 plugins {
+    alias(libs.plugins.kotlin.jvm)
     application
 }
 
@@ -7,11 +8,11 @@ application {
 }
 
 dependencies {
-    implementation(project(":reports:specification"))
-    implementation(project(":report-layout"))
-    implementation(project(":report-template"))
-    implementation(project(":report-render-svg"))
-    implementation(project(":report-render-pdf"))
+    implementation(projects.reports.specification)
+    implementation(projects.reportLayout)
+    implementation(projects.reportTemplate)
+    implementation(projects.reportRenderSvg)
+    implementation(projects.reportRenderPdf)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)

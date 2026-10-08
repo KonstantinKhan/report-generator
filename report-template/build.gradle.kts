@@ -1,5 +1,9 @@
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+}
+
 dependencies {
-    api(project(":report-geometry"))
+    api(projects.reportGeometry)
     implementation(libs.kaml)
 
     testImplementation(libs.kotlin.test)
