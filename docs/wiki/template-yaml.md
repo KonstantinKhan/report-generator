@@ -910,6 +910,10 @@ enum без тегов, его домен задаёт сам шаблон (`ord
 Это резервирование id только для шаблона основного движка спецификации (`PageSetup.staticTemplate`, `bindStaticSlots = true` по
 умолчанию): там блок с таким id получает размер своего `FrameSpec`, а при пустом слоте убирается. В своём YAML (`TemplateMain`,
 `bindStaticSlots = false`) id любые, `reserves` работает для любого.
+Область потока в `gost-spec.yaml`: все блоки слотов имеют `reserves: true`, действует правило объединения (`TemplateResolver.flowRegionFor`),
+поэтому на странице 1 и на страницах 2+ работают разные блоки. Страница 1: `stamp` 40 мм и `mainTitleRight` 120x22 мм со смещением `y: -40`
+(верх на 62 мм от низа рамки) дают ближайшую верхнюю грань 62 мм; `leftMargin`, `specLeft` лежат вне колонки контента, `belowFrame` вне рамки.
+Страницы 2+: только `continuationStamp` 15 мм.
 Таблица потока (тело спецификации) описана блоком `body` (см. «Таблица потока»); его id не слот.
 
 Соответствие слотов (`StaticSlot`) полям `PageSetup`: `frame` = `stamp`, `continuationFrame` = `continuationStamp`,

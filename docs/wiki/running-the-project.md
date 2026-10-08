@@ -8,10 +8,10 @@
 ## Сборка и тесты
 
 ```bash
-./gradlew build                       # весь проект, 13 модулей, 368 тестов (на 2026-10-03, 0 падений)
+./gradlew build                       # весь проект, 13 модулей, 387 тестов (на 2026-10-08, 0 падений)
 ./gradlew test --continue -q          # только тесты, не останавливаясь на первом упавшем модуле
-./gradlew :report-template:test       # тесты одного модуля (146)
-./gradlew :reports:specification:test # golden- и parity-тесты спецификации (44)
+./gradlew :report-template:test       # тесты одного модуля (149)
+./gradlew :reports:specification:test # golden- и parity-тесты спецификации (45)
 ./gradlew :report-cli:test            # TemplateMain: смоук --data, контракт, пагинация потока (13)
 ```
 
