@@ -137,9 +137,10 @@ class RemainderGoldenTest {
 
     @Test
     fun `two pages - page 1 is full without filler, page 2 ends at 269 mm in gap or 275 mm in stretch`() {
-        // page 1: 33 records, boundaries 5..269; the 6 mm left are less than a row, so there is no filler in either mode
+        // page 1: 33 records, boundaries 5..269; the 6 mm left are less than a row, so there is no filler in either mode;
+        // gap keeps the 6 mm gap, stretch grows the last data row to 261..275
         assertEquals(ys(34), boundaries("remainder-gap-two-pages", 1))
-        assertEquals(ys(34), boundaries("remainder-stretch-two-pages", 1))
+        assertEquals(ys(33) + 27500L, boundaries("remainder-stretch-two-pages", 1))
         // page 2: 7 records (5..61) + 26 filler rows -> 5 + 8k, k = 0..33
         assertEquals(ys(34), boundaries("remainder-gap-two-pages", 2))
         assertEquals(ys(33) + 27500L, boundaries("remainder-stretch-two-pages", 2))

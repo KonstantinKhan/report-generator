@@ -70,8 +70,9 @@ object GostSpecTemplate {
     private fun toFrameCell(cell: ResolvedCell, origin: Point): FrameCell? {
         val rect = Rect(cell.rect.x - origin.x, cell.rect.y - origin.y, cell.rect.width, cell.rect.height)
         val borders = cell.borders.toIr()
-        check(cell.fontSize == null) { "cell fontSize is not supported for frame cells, use 'style'" }
-        val style = cell.style?.let { STYLES[it] ?: error("unknown text style '$it' (${STYLES.keys.joinToString()})") } ?: Styles.frameText
+        val named = cell.style?.let { STYLES[it] ?: error("unknown text style '$it' (${STYLES.keys.joinToString()})") } ?: Styles.frameText
+        // fontSize in mm overrides the size of the chosen style (same unit as TextStyle.fontSizeMm)
+        val style = cell.fontSize?.let { named.copy(fontSizeMm = it) } ?: named
         val align = when (cell.align) {
             TemplateTextAlign.LEFT -> TextAlign.LEFT
             TemplateTextAlign.CENTER -> TextAlign.CENTER

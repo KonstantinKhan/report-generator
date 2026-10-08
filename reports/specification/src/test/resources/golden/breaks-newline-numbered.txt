@@ -1,28 +1,28 @@
 PAGE 1 A4 21000 29700
 R 2000 500 18500 28700 w=71 Color(r=0, g=0, b=0)
 R 2000 500 1000 1000 w=71 Color(r=0, g=0, b=0)
-T "Стр." 2189 790 622 420 gost-type-b 9.921259842519685 i=false HORIZONTAL
+T "Стр." 2196 790 607 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 R 3000 500 1000 1000 w=71 Color(r=0, g=0, b=0)
-T "Поз." 3207 790 586 420 gost-type-b 9.921259842519685 i=false HORIZONTAL
+T "Поз." 3214 790 572 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 R 4000 500 12500 1000 w=71 Color(r=0, g=0, b=0)
-T "Наименование" 9220 790 2059 420 gost-type-b 9.921259842519685 i=false HORIZONTAL
+T "Наименование" 9222 790 2055 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 R 16500 500 4000 1000 w=71 Color(r=0, g=0, b=0)
-T "Примечание" 17638 790 1724 420 gost-type-b 9.921259842519685 i=false HORIZONTAL
+T "Примечание" 17647 790 1705 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 2000 1500 3000 1500 w=25 Color(r=0, g=0, b=0)
 L 3000 1500 3000 2300 w=25 Color(r=0, g=0, b=0)
 L 2000 2300 3000 2300 w=25 Color(r=0, g=0, b=0)
 L 2000 1500 2000 2300 w=25 Color(r=0, g=0, b=0)
-T "1" 2404 1690 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "1" 2441 1690 117 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 3000 1500 4000 1500 w=25 Color(r=0, g=0, b=0)
 L 4000 1500 4000 2300 w=25 Color(r=0, g=0, b=0)
 L 3000 2300 4000 2300 w=25 Color(r=0, g=0, b=0)
 L 3000 1500 3000 2300 w=25 Color(r=0, g=0, b=0)
-T "1" 3404 1690 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "1" 3441 1690 117 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 4000 1500 16500 1500 w=25 Color(r=0, g=0, b=0)
 L 16500 1500 16500 2300 w=25 Color(r=0, g=0, b=0)
 L 4000 2300 16500 2300 w=25 Color(r=0, g=0, b=0)
 L 4000 1500 4000 2300 w=25 Color(r=0, g=0, b=0)
-T "Вал" 4100 1690 554 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Вал" 4100 1690 537 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 16500 1500 20500 1500 w=25 Color(r=0, g=0, b=0)
 L 20500 1500 20500 2300 w=25 Color(r=0, g=0, b=0)
 L 16500 2300 20500 2300 w=25 Color(r=0, g=0, b=0)
@@ -31,27 +31,27 @@ L 2000 2300 3000 2300 w=25 Color(r=0, g=0, b=0)
 L 3000 2300 3000 3100 w=25 Color(r=0, g=0, b=0)
 L 2000 3100 3000 3100 w=25 Color(r=0, g=0, b=0)
 L 2000 2300 2000 3100 w=25 Color(r=0, g=0, b=0)
-T "2" 2404 2490 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "2" 2418 2490 163 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 3000 2300 4000 2300 w=25 Color(r=0, g=0, b=0)
 L 4000 2300 4000 3100 w=25 Color(r=0, g=0, b=0)
 L 3000 3100 4000 3100 w=25 Color(r=0, g=0, b=0)
 L 3000 2300 3000 3100 w=25 Color(r=0, g=0, b=0)
-T "2" 3404 2490 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "2" 3418 2490 163 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 4000 2300 16500 2300 w=25 Color(r=0, g=0, b=0)
 L 16500 2300 16500 3100 w=25 Color(r=0, g=0, b=0)
 L 4000 3100 16500 3100 w=25 Color(r=0, g=0, b=0)
 L 4000 2300 4000 3100 w=25 Color(r=0, g=0, b=0)
-T "Ось" 4100 2490 560 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Ось" 4100 2490 490 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 16500 2300 20500 2300 w=25 Color(r=0, g=0, b=0)
 L 20500 2300 20500 3100 w=25 Color(r=0, g=0, b=0)
 L 16500 3100 20500 3100 w=25 Color(r=0, g=0, b=0)
 L 16500 2300 16500 3100 w=25 Color(r=0, g=0, b=0)
-T "Шлифованная сталь" 16600 2490 3068 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Шлифованная сталь" 16600 2490 2966 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 2000 3100 3000 3100 w=25 Color(r=0, g=0, b=0)
 L 3000 3100 3000 3900 w=25 Color(r=0, g=0, b=0)
 L 2000 3900 3000 3900 w=25 Color(r=0, g=0, b=0)
 L 2000 3100 2000 3900 w=25 Color(r=0, g=0, b=0)
-T "3" 2404 3290 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "3" 2418 3290 163 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 3000 3100 4000 3100 w=25 Color(r=0, g=0, b=0)
 L 4000 3100 4000 3900 w=25 Color(r=0, g=0, b=0)
 L 3000 3900 4000 3900 w=25 Color(r=0, g=0, b=0)
@@ -64,32 +64,32 @@ L 16500 3100 20500 3100 w=25 Color(r=0, g=0, b=0)
 L 20500 3100 20500 3900 w=25 Color(r=0, g=0, b=0)
 L 16500 3900 20500 3900 w=25 Color(r=0, g=0, b=0)
 L 16500 3100 16500 3900 w=25 Color(r=0, g=0, b=0)
-T "Оцинкованная" 16600 3290 2232 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Оцинкованная" 16600 3290 2055 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 2000 3900 3000 3900 w=25 Color(r=0, g=0, b=0)
 L 3000 3900 3000 4700 w=25 Color(r=0, g=0, b=0)
 L 2000 4700 3000 4700 w=25 Color(r=0, g=0, b=0)
 L 2000 3900 2000 4700 w=25 Color(r=0, g=0, b=0)
-T "4" 2404 4090 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "4" 2406 4090 187 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 3000 3900 4000 3900 w=25 Color(r=0, g=0, b=0)
 L 4000 3900 4000 4700 w=25 Color(r=0, g=0, b=0)
 L 3000 4700 4000 4700 w=25 Color(r=0, g=0, b=0)
 L 3000 3900 3000 4700 w=25 Color(r=0, g=0, b=0)
-T "3" 3404 4090 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "3" 3418 4090 163 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 4000 3900 16500 3900 w=25 Color(r=0, g=0, b=0)
 L 16500 3900 16500 4700 w=25 Color(r=0, g=0, b=0)
 L 4000 4700 16500 4700 w=25 Color(r=0, g=0, b=0)
 L 4000 3900 4000 4700 w=25 Color(r=0, g=0, b=0)
-T "Втулка" 4100 4090 1024 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Втулка" 4100 4090 1075 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 16500 3900 20500 3900 w=25 Color(r=0, g=0, b=0)
 L 20500 3900 20500 4700 w=25 Color(r=0, g=0, b=0)
 L 16500 4700 20500 4700 w=25 Color(r=0, g=0, b=0)
 L 16500 3900 16500 4700 w=25 Color(r=0, g=0, b=0)
-T "Нержавеющая сталь" 16600 4090 3117 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Нержавеющая сталь" 16600 4090 3024 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 2000 4700 3000 4700 w=25 Color(r=0, g=0, b=0)
 L 3000 4700 3000 5500 w=25 Color(r=0, g=0, b=0)
 L 2000 5500 3000 5500 w=25 Color(r=0, g=0, b=0)
 L 2000 4700 2000 5500 w=25 Color(r=0, g=0, b=0)
-T "5" 2404 4890 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "5" 2418 4890 163 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 3000 4700 4000 4700 w=25 Color(r=0, g=0, b=0)
 L 4000 4700 4000 5500 w=25 Color(r=0, g=0, b=0)
 L 3000 5500 4000 5500 w=25 Color(r=0, g=0, b=0)
@@ -102,12 +102,12 @@ L 16500 4700 20500 4700 w=25 Color(r=0, g=0, b=0)
 L 20500 4700 20500 5500 w=25 Color(r=0, g=0, b=0)
 L 16500 5500 20500 5500 w=25 Color(r=0, g=0, b=0)
 L 16500 4700 16500 5500 w=25 Color(r=0, g=0, b=0)
-T "Оцинкованная" 16600 4890 2232 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Оцинкованная" 16600 4890 2055 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 2000 5500 3000 5500 w=25 Color(r=0, g=0, b=0)
 L 3000 5500 3000 6300 w=25 Color(r=0, g=0, b=0)
 L 2000 6300 3000 6300 w=25 Color(r=0, g=0, b=0)
 L 2000 5500 2000 6300 w=25 Color(r=0, g=0, b=0)
-T "6" 2404 5690 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "6" 2418 5690 163 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 3000 5500 4000 5500 w=25 Color(r=0, g=0, b=0)
 L 4000 5500 4000 6300 w=25 Color(r=0, g=0, b=0)
 L 3000 6300 4000 6300 w=25 Color(r=0, g=0, b=0)
@@ -124,7 +124,7 @@ L 2000 6300 3000 6300 w=25 Color(r=0, g=0, b=0)
 L 3000 6300 3000 7100 w=25 Color(r=0, g=0, b=0)
 L 2000 7100 3000 7100 w=25 Color(r=0, g=0, b=0)
 L 2000 6300 2000 7100 w=25 Color(r=0, g=0, b=0)
-T "7" 2404 6490 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "7" 2418 6490 163 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 3000 6300 4000 6300 w=25 Color(r=0, g=0, b=0)
 L 4000 6300 4000 7100 w=25 Color(r=0, g=0, b=0)
 L 3000 7100 4000 7100 w=25 Color(r=0, g=0, b=0)
@@ -137,22 +137,22 @@ L 16500 6300 20500 6300 w=25 Color(r=0, g=0, b=0)
 L 20500 6300 20500 7100 w=25 Color(r=0, g=0, b=0)
 L 16500 7100 20500 7100 w=25 Color(r=0, g=0, b=0)
 L 16500 6300 16500 7100 w=25 Color(r=0, g=0, b=0)
-T "ГОСТ" 16600 6490 788 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "ГОСТ" 16600 6490 701 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 2000 7100 3000 7100 w=25 Color(r=0, g=0, b=0)
 L 3000 7100 3000 7900 w=25 Color(r=0, g=0, b=0)
 L 2000 7900 3000 7900 w=25 Color(r=0, g=0, b=0)
 L 2000 7100 2000 7900 w=25 Color(r=0, g=0, b=0)
-T "8" 2404 7290 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "8" 2418 7290 163 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 3000 7100 4000 7100 w=25 Color(r=0, g=0, b=0)
 L 4000 7100 4000 7900 w=25 Color(r=0, g=0, b=0)
 L 3000 7900 4000 7900 w=25 Color(r=0, g=0, b=0)
 L 3000 7100 3000 7900 w=25 Color(r=0, g=0, b=0)
-T "4" 3404 7290 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "4" 3406 7290 187 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 4000 7100 16500 7100 w=25 Color(r=0, g=0, b=0)
 L 16500 7100 16500 7900 w=25 Color(r=0, g=0, b=0)
 L 4000 7900 16500 7900 w=25 Color(r=0, g=0, b=0)
 L 4000 7100 4000 7900 w=25 Color(r=0, g=0, b=0)
-T "Болт" 4100 7290 695 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Болт" 4100 7290 724 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 16500 7100 20500 7100 w=25 Color(r=0, g=0, b=0)
 L 20500 7100 20500 7900 w=25 Color(r=0, g=0, b=0)
 L 16500 7900 20500 7900 w=25 Color(r=0, g=0, b=0)
@@ -161,7 +161,7 @@ L 2000 7900 3000 7900 w=25 Color(r=0, g=0, b=0)
 L 3000 7900 3000 8700 w=25 Color(r=0, g=0, b=0)
 L 2000 8700 3000 8700 w=25 Color(r=0, g=0, b=0)
 L 2000 7900 2000 8700 w=25 Color(r=0, g=0, b=0)
-T "9" 2404 8090 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "9" 2418 8090 163 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 3000 7900 4000 7900 w=25 Color(r=0, g=0, b=0)
 L 4000 7900 4000 8700 w=25 Color(r=0, g=0, b=0)
 L 3000 8700 4000 8700 w=25 Color(r=0, g=0, b=0)
@@ -174,22 +174,22 @@ L 16500 7900 20500 7900 w=25 Color(r=0, g=0, b=0)
 L 20500 7900 20500 8700 w=25 Color(r=0, g=0, b=0)
 L 16500 8700 20500 8700 w=25 Color(r=0, g=0, b=0)
 L 16500 7900 16500 8700 w=25 Color(r=0, g=0, b=0)
-T "сталь" 16600 8090 809 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "сталь" 16600 8090 864 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 2000 8700 3000 8700 w=25 Color(r=0, g=0, b=0)
 L 3000 8700 3000 9500 w=25 Color(r=0, g=0, b=0)
 L 2000 9500 3000 9500 w=25 Color(r=0, g=0, b=0)
 L 2000 8700 2000 9500 w=25 Color(r=0, g=0, b=0)
-T "10" 2309 8890 382 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "10" 2360 8890 280 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 3000 8700 4000 8700 w=25 Color(r=0, g=0, b=0)
 L 4000 8700 4000 9500 w=25 Color(r=0, g=0, b=0)
 L 3000 9500 4000 9500 w=25 Color(r=0, g=0, b=0)
 L 3000 8700 3000 9500 w=25 Color(r=0, g=0, b=0)
-T "5" 3404 8890 191 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "5" 3418 8890 163 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 4000 8700 16500 8700 w=25 Color(r=0, g=0, b=0)
 L 16500 8700 16500 9500 w=25 Color(r=0, g=0, b=0)
 L 4000 9500 16500 9500 w=25 Color(r=0, g=0, b=0)
 L 4000 8700 4000 9500 w=25 Color(r=0, g=0, b=0)
-T "Гайка" 4100 8890 860 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Гайка" 4100 8890 864 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 16500 8700 20500 8700 w=25 Color(r=0, g=0, b=0)
 L 20500 8700 20500 9500 w=25 Color(r=0, g=0, b=0)
 L 16500 9500 20500 9500 w=25 Color(r=0, g=0, b=0)

@@ -541,6 +541,8 @@ object TemplateValidator {
             }
             if (c.span < 1) errors += TemplateError("$cp.span", "must be >= 1")
             if (c.rowSpan < 1) errors += TemplateError("$cp.rowSpan", "must be >= 1")
+            val fs = c.fontSize
+            if (fs is Num.Lit && !(fs.value > 0.0 && fs.value.isFinite())) errors += TemplateError("$cp.fontSize", "must be > 0, got ${fs.value}")
             c.bind?.let { checkBind(it, "$cp.bind", errors) }
             checkBindOptions(c.bind, c.format != null, c.optional, cp, errors)
         }

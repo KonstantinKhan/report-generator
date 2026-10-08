@@ -73,7 +73,8 @@ data class IrTable(
     val rowHeight: Length? = null,
     val groupTitle: IrGroupTitle = IrGroupTitle(),   // заменил groupTitleColumn
     val fillBlank: Boolean = true,                   // только при rowHeight != null
-    val fillRemainder: IrFillRemainder = STRETCH,    // остаток высоты: STRETCH (в последнюю строку) | GAP (зазор)
+    val fillRemainder: IrFillRemainder = STRETCH,    // остаток высоты на странице 1: STRETCH (в последнюю строку) | GAP (зазор)
+    val fillRemainderRest: IrFillRemainder = fillRemainder, // то же для страниц 2+ (по умолчанию как на странице 1)
     val footer: List<IrTotalRow> = emptyList(),      // итоги таблицы, только при rowHeight != null
     val lineNumbers: IrLineNumbers? = null           // нумерация физических строк (`${line.number}`), только при rowHeight != null
 )
@@ -85,6 +86,10 @@ data class IrTable(
   (не full-width спан, это `column = null`), остальные колонки остаются пусты;
   `spacerBefore` / `spacerAfter` (по умолчанию 2 / 1), `style`, `align`, `keepWithRows` (цепочка заголовка)
 - `fillBlank` — дозаполнять страницу пустыми строками (`fill: blank` в YAML)
+- `fillRemainder` / `fillRemainderRest` — что делать с высотой страницы, оставшейся после последней целой пустой строки:
+  режим страницы 1 и страниц 2+ соответственно. В YAML `remainder: stretch|gap` (обе части сразу) или `remainder: {first, rest}`
+  (см. «Остаток высоты при `fill: blank`» в `template-yaml.md`). `STRETCH`: остаток уходит в последнюю строку страницы;
+  если места под пустую строку нет совсем, растягивается последняя строка данных страницы. `GAP`: последняя строка обычной высоты, под ней зазор
 - `IrGroup.footer` / `IrTable.footer` — строки итогов (`IrTotalRow(cells)`, по ячейке на колонку): подвал группы после
   её строк данных, подвал таблицы после последней группы и до пустого дозаполнения. Строка итога рисуется как обычная
   строка с границами; движок привязывает её цепочкой `keepWithNext` к последней строке, которую она итожит (см. «Итоги»

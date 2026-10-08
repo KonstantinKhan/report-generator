@@ -752,6 +752,7 @@ RUN $T/09b-groups.yaml output --data $T/09b-groups-data.yaml
       rowHeight: 8
       fill: blank
       remainder: gap        # stretch (по умолчанию) или gap; только вместе с fill: blank
+      # по страницам: remainder: {first: gap, rest: stretch}  (first = стр. 1, rest = стр. 2+; пропущенный ключ = stretch)
 ```
 
 Расчёт: шапка 15 мм (`y` 5..20), 6 записей кончаются на `20 + 6 * 8 = 68`, штамп начинается на `292 - 33 = 259`, `259 - 68 = 191 = 23 * 8 + 7`.

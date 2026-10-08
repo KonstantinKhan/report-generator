@@ -73,6 +73,18 @@ ${groups(grouped, titleStyle)}
     }
 
     @Test
+    fun `remainder object maps first and rest to separate modes`() {
+        fun modes(remainder: String) = FlowTables.build(spec("                  fill: blank\n                  remainder: $remainder"), schema, listOf(item(1, "Вал"))).let { it.fillRemainder to it.fillRemainderRest }
+
+        assertEquals(IrFillRemainder.GAP to IrFillRemainder.STRETCH, modes("{first: gap, rest: stretch}"))
+        assertEquals(IrFillRemainder.STRETCH to IrFillRemainder.GAP, modes("{first: stretch, rest: gap}"))
+        assertEquals(IrFillRemainder.GAP to IrFillRemainder.STRETCH, modes("{first: gap}"))
+        assertEquals(IrFillRemainder.STRETCH to IrFillRemainder.GAP, modes("{rest: gap}"))
+        assertEquals(IrFillRemainder.GAP to IrFillRemainder.GAP, modes("gap"))
+        assertEquals(IrFillRemainder.STRETCH to IrFillRemainder.STRETCH, modes("stretch"))
+    }
+
+    @Test
     fun `a missing optional value renders empty, a missing required one fails`() {
         val optional = spec(cell = "{bind: \"\${item.note}\", optional: true}")
         val row = (FlowTables.build(optional, schema, listOf(item(1, "a"))).content.single() as IrGroup).rows.single()

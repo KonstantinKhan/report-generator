@@ -91,7 +91,7 @@ header:
 - `groupHeader` → GOST Type B, 3.5mm, italic, underline
 - `totalText` → GOST Type B, 3.5mm, bold
 - `frameText` → GOST Type B, 3.5mm
-- `frameTextLarge` → GOST Type B, 7.0mm
+- `frameTextLarge` → GOST Type B, 7.0mm (в gost-spec.yaml не используется: «Обозначение» и «Наименование» заданы `style: frameText, fontSize: 7` = Type A Italic 7 мм)
 
 ### Опция 2: Кастомный TextStyle с fontFamily
 

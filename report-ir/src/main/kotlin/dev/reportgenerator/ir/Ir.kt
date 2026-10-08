@@ -29,7 +29,9 @@ data class IrTable(
     // rowHeight != null only: cover each page down to the frame with blank bordered rows.
     val fillBlank: Boolean = true,
     // fillBlank only: what becomes of the page height left after the last whole filler row (see IrFillRemainder).
+    // fillRemainder = page 1, fillRemainderRest = pages 2+ (default: same as page 1).
     val fillRemainder: IrFillRemainder = IrFillRemainder.STRETCH,
+    val fillRemainderRest: IrFillRemainder = fillRemainder,
     // rowHeight != null only: total rows after the last group / row, before the blank fill (see IrTotalRow).
     val footer: List<IrTotalRow> = emptyList(),
     // rowHeight != null only: number the physical rows of the data records (see IrLineNumbers).

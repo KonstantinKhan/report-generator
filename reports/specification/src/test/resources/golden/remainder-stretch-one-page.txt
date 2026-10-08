@@ -4,22 +4,22 @@ L 1965 27500 20535 27500 w=71 Color(r=0, g=0, b=0)
 L 20500 27465 20500 29235 w=71 Color(r=0, g=0, b=0)
 L 1965 29200 20535 29200 w=71 Color(r=0, g=0, b=0)
 L 2000 27465 2000 29235 w=71 Color(r=0, g=0, b=0)
-T "Штамп" 2100 28140 981 420 gost-type-b 9.921259842519685 i=false HORIZONTAL
+T "Штамп" 2100 28140 981 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 2000 500 20500 500 w=25 Color(r=0, g=0, b=0)
 L 20500 500 20500 1300 w=25 Color(r=0, g=0, b=0)
 L 2000 1300 20500 1300 w=25 Color(r=0, g=0, b=0)
 L 2000 500 2000 1300 w=25 Color(r=0, g=0, b=0)
-T "Деталь 1" 2100 690 1347 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Деталь 1" 2100 690 1354 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 2000 1300 20500 1300 w=25 Color(r=0, g=0, b=0)
 L 20500 1300 20500 2100 w=25 Color(r=0, g=0, b=0)
 L 2000 2100 20500 2100 w=25 Color(r=0, g=0, b=0)
 L 2000 1300 2000 2100 w=25 Color(r=0, g=0, b=0)
-T "Деталь 2" 2100 1490 1347 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Деталь 2" 2100 1490 1401 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 2000 2100 20500 2100 w=25 Color(r=0, g=0, b=0)
 L 20500 2100 20500 2900 w=25 Color(r=0, g=0, b=0)
 L 2000 2900 20500 2900 w=25 Color(r=0, g=0, b=0)
 L 2000 2100 2000 2900 w=25 Color(r=0, g=0, b=0)
-T "Деталь 3" 2100 2290 1347 420 gost-type-a 9.921259842519685 i=false HORIZONTAL
+T "Деталь 3" 2100 2290 1401 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
 L 2000 2900 20500 2900 w=25 Color(r=0, g=0, b=0)
 L 20500 2900 20500 3700 w=25 Color(r=0, g=0, b=0)
 L 2000 3700 20500 3700 w=25 Color(r=0, g=0, b=0)

@@ -6,6 +6,7 @@ import dev.reportgenerator.data.SpecificationItem
 import dev.reportgenerator.geometry.mm
 import dev.reportgenerator.ir.GroupBuilder
 import dev.reportgenerator.ir.IrCell
+import dev.reportgenerator.ir.IrFillRemainder
 import dev.reportgenerator.ir.IrTable
 import dev.reportgenerator.ir.TableBuilder
 import dev.reportgenerator.ir.TextAlign
@@ -59,6 +60,8 @@ object LegacySpecificationTable {
                 }
             }
         }.elements.filterIsInstance<IrTable>().single()
+            // Matches `remainder: {first: gap, rest: stretch}` in gost-spec.yaml (page 1 gap, pages 2+ stretch).
+            .copy(fillRemainder = IrFillRemainder.GAP, fillRemainderRest = IrFillRemainder.STRETCH)
     }
 
     private fun TableBuilder.groupIfNotEmpty(title: String, items: List<SpecificationItem>, block: GroupBuilder.(SpecificationItem) -> Unit) {

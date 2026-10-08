@@ -212,7 +212,16 @@ private fun renderPages(
     val pageContents = placements.mapIndexed { index, placed ->
         val content = mutableListOf<PageElement>()
         if (numbers != null && numbers.scope == IrLineScope.PAGE) counter = numbers.start
-        for ((block, top) in placed) {
+        val lastIndex = placed.lastIndex
+        val stretchBy = lastRowStretch(table, index, metrics.contentBottom(index == 0) - pageFinalY[index])
+        for ((blockIndex, placedBlock) in placed.withIndex()) {
+            val (placedRaw, top) = placedBlock
+            // STRETCH without whole filler rows: the page's last row absorbs the leftover so its bottom meets the flow bottom
+            val block = if (blockIndex == lastIndex && stretchBy > Length.ZERO && placedRaw is BorderedRowBlock) {
+                placedRaw.copy(rowHeight = placedRaw.rowHeight + stretchBy)
+            } else {
+                placedRaw
+            }
             content += when (block) {
                 is GroupHeaderBlock -> drawRow(block.row, top, fontResolver)
                 is DataRowBlock -> drawRow(block.row, top, fontResolver)
@@ -238,7 +247,7 @@ private fun renderPages(
             repeat(fullRowsCount) { rowIndex ->
                 val isLastRow = rowIndex == fullRowsCount - 1
                 // STRETCH: the last row includes the remainder height; GAP: it stays below the last row
-                val currentRowHeight = if (isLastRow && remainderHeight > Length.ZERO && table.fillRemainder == IrFillRemainder.STRETCH) {
+                val currentRowHeight = if (isLastRow && remainderHeight > Length.ZERO && table.remainderOn(index) == IrFillRemainder.STRETCH) {
                     rowHeight + remainderHeight
                 } else {
                     rowHeight
@@ -269,6 +278,20 @@ private fun renderPages(
     }
 
     return LaidOutDocument(pages)
+}
+
+// Leftover height (< rowHeight, so no whole filler row fits) the last real row of a page must absorb in STRETCH mode;
+// ZERO otherwise (GAP, no fill, a whole filler row fits and takes the leftover itself, nothing left over).
+// The last row is the last physical bordered row of the page whatever it is (data line, group title, spacer, total):
+// a bordered row is a fixed-height box with centered text, so a taller box never re-wraps or re-paginates, and the
+// page break rules (keep/keepWithNext) were decided before the stretch, on the original heights.
+private fun IrTable.remainderOn(pageIndex: Int): IrFillRemainder = if (pageIndex == 0) fillRemainder else fillRemainderRest
+
+private fun lastRowStretch(table: IrTable, pageIndex: Int, available: Length): Length {
+    val rowHeight = table.rowHeight ?: return Length.ZERO
+    if (!table.fillBlank || table.remainderOn(pageIndex) != IrFillRemainder.STRETCH) return Length.ZERO
+    if ((available.raw / rowHeight.raw).toInt() > 0) return Length.ZERO
+    return if (available > Length.ZERO) available else Length.ZERO
 }
 
 private fun describeConstraint(constraints: LayoutConstraints): String = when {

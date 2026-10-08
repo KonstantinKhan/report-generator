@@ -2,7 +2,9 @@ package dev.reportgenerator.ir.frames
 
 import dev.reportgenerator.geometry.mm
 import dev.reportgenerator.ir.BorderWeight
+import dev.reportgenerator.ir.FontFamilies
 import dev.reportgenerator.ir.FrameCell
+import dev.reportgenerator.ir.Styles
 import dev.reportgenerator.ir.TextOrientation
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -96,5 +98,16 @@ class FrameSpecsTest {
         val format = cells.single { it.text == "Формат" }
         assertEquals(90.mm, distanceFromSheetEdge(kopirovan))
         assertEquals(30.mm, distanceFromSheetEdge(format))
+    }
+
+    @Test
+    fun `designation and name cells are Type A Italic 7mm via fontSize override`() {
+        val dynamic = FrameSpecs.firstPageStamp.cells.filterIsInstance<FrameCell.Dynamic>()
+        for (path in listOf("doc.designation", "doc.name")) {
+            val style = dynamic.single { it.path == path }.style
+            assertEquals(Styles.frameText.copy(fontSizeMm = 7.0), style)
+            assertEquals(FontFamilies.GOST_TYPE_A_ITALIC, style.fontFamily)
+            assertEquals(7.0, style.fontSizeMm)
+        }
     }
 }

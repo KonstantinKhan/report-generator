@@ -132,7 +132,8 @@ object FlowTables {
             rowHeight = spec.rowHeight.mm,
             groupTitle = groupTitle,
             fillBlank = spec.fill == FlowFill.BLANK,
-            fillRemainder = if (spec.remainder == FlowRemainder.GAP) IrFillRemainder.GAP else IrFillRemainder.STRETCH,
+            fillRemainder = (spec.remainder?.first ?: FlowRemainder.STRETCH).toIr(),
+            fillRemainderRest = (spec.remainder?.rest ?: FlowRemainder.STRETCH).toIr(),
             footer = shaped.totals.map(::totalRow),
             lineNumbers = lineColumn?.let { id ->
                 val lines = spec.lines ?: FlowLines()
@@ -166,6 +167,8 @@ object FlowTables {
             )
         }
     }
+
+    private fun FlowRemainder.toIr(): IrFillRemainder = if (this == FlowRemainder.GAP) IrFillRemainder.GAP else IrFillRemainder.STRETCH
 
     private fun TemplateTextAlign.toIr(): TextAlign = when (this) {
         TemplateTextAlign.LEFT -> TextAlign.LEFT

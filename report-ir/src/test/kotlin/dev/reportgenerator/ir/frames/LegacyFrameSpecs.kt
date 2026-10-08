@@ -50,7 +50,7 @@ object LegacyFrameSpecs {
             FrameCell.Constant(rect(40, 10, 15, 5), "Подп.", align = TextAlign.CENTER),
             FrameCell.Constant(rect(55, 10, 10, 5), "Дата", align = TextAlign.CENTER),
 
-            FrameCell.Dynamic(rect(65, 0, 120, 15), "doc.designation", style = Styles.frameTextLarge, align = TextAlign.CENTER),
+            FrameCell.Dynamic(rect(65, 0, 120, 15), "doc.designation", style = Styles.frameText.copy(fontSizeMm = 7.0), align = TextAlign.CENTER),
 
             // Row 4 (y=15..20mm): signature label column + Наименование (spans rows 4-8) +
             // Лит./Лист/Листов.
@@ -58,7 +58,7 @@ object LegacyFrameSpecs {
             FrameCell.Constant(rect(17, 15, 23, 5), "", borders = CellBorders(bottom = BorderWeight.THIN)),
             FrameCell.Constant(rect(40, 15, 15, 5), "", borders = CellBorders(bottom = BorderWeight.THIN)),
             FrameCell.Constant(rect(55, 15, 10, 5), "", borders = CellBorders(bottom = BorderWeight.THIN)),
-            FrameCell.Dynamic(rect(65, 15, 70, 25), "doc.name", style = Styles.frameTextLarge, align = TextAlign.CENTER),
+            FrameCell.Dynamic(rect(65, 15, 70, 25), "doc.name", style = Styles.frameText.copy(fontSizeMm = 7.0), align = TextAlign.CENTER),
             FrameCell.Constant(rect(135, 15, 15, 5), "Лит.", align = TextAlign.CENTER),
             FrameCell.Constant(rect(150, 15, 15, 5), "Лист", align = TextAlign.CENTER),
             FrameCell.Constant(rect(165, 15, 20, 5), "Листов", align = TextAlign.CENTER),
@@ -196,7 +196,7 @@ object LegacyFrameSpecs {
             FrameCell.Constant(rect(40, 10, 15, 5), "Подп.", align = TextAlign.CENTER),
             FrameCell.Constant(rect(55, 10, 10, 5), "Дата", align = TextAlign.CENTER),
 
-            FrameCell.Dynamic(rect(65, 0, 120, 15), "doc.designation", style = Styles.frameTextLarge, align = TextAlign.CENTER),
+            FrameCell.Dynamic(rect(65, 0, 120, 15), "doc.designation", style = Styles.frameText.copy(fontSizeMm = 7.0), align = TextAlign.CENTER),
 
             // Right column: sheet number
             FrameCell.Constant(rect(175, 0, 10, 5), "Лист", align = TextAlign.CENTER),

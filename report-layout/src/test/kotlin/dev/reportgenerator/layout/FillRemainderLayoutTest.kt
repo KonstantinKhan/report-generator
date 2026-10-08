@@ -55,13 +55,14 @@ class FillRemainderLayoutTest {
     private fun table(
         content: List<IrTableElement>,
         remainder: IrFillRemainder,
+        rest: IrFillRemainder = remainder,
         rowHeight: Length = 8.mm,
         footer: List<IrTotalRow> = emptyList(),
         lineNumbers: IrLineNumbers? = null
     ) = IrTable(
         columns = columns, header = null, content = content, rowHeight = rowHeight,
         groupTitle = IrGroupTitle(column = "b", spacerBefore = 0, spacerAfter = 0),
-        fillBlank = true, fillRemainder = remainder, footer = footer, lineNumbers = lineNumbers
+        fillBlank = true, fillRemainder = remainder, fillRemainderRest = rest, footer = footer, lineNumbers = lineNumbers
     )
 
     private fun layOut(table: IrTable): LaidOutDocument =
@@ -125,16 +126,47 @@ class FillRemainderLayoutTest {
 
     @Test
     fun `continuation page is filled like the first, a full page leaves no filler`() {
-        // 20 rows: page 1 holds 13 (5..109, 6 mm left, less than a row -> no filler); page 2 holds 7 (5..61), 54 = 6 * 8 + 6
+        // 20 rows: page 1 holds 13 (5..109, 6 mm left, less than a row -> no filler row); page 2 holds 7 (5..61), 54 = 6 * 8 + 6
         val gap = layOut(table(rows(20), IrFillRemainder.GAP))
         val stretch = layOut(table(rows(20), IrFillRemainder.STRETCH))
 
         assertEquals(2, gap.pages.size)
         assertEquals(ys(5, 8, 14), boundaries(gap, 1))
-        assertEquals(boundaries(gap, 1), boundaries(stretch, 1))
+        // stretch: no filler fits, so the last data row 101..109 grows by 6 to 101..115
+        assertEquals(ys(5, 8, 13) + 115.0, boundaries(stretch, 1))
         // page 2: data 5..61, 6 filler rows 61..109, 6 mm gap; stretch: last filler row 101..115
         assertEquals(ys(5, 8, 14), boundaries(gap, 2))
         assertEquals(ys(5, 8, 13) + 115.0, boundaries(stretch, 2))
+    }
+
+    @Test
+    fun `first gap and rest stretch leave the gap on page 1 and close page 2 to the bottom`() {
+        // same 20 rows as above: page 1 has 6 mm to spare after 13 rows, page 2 data 5..61 then 6 fillers and a 6 mm leftover
+        val doc = layOut(table(rows(20), IrFillRemainder.GAP, rest = IrFillRemainder.STRETCH))
+
+        assertEquals(ys(5, 8, 14), boundaries(doc, 1))
+        assertEquals(109.0, boundaries(doc, 1).last())
+        assertEquals(ys(5, 8, 13) + 115.0, boundaries(doc, 2))
+    }
+
+    @Test
+    fun `first stretch and rest gap close page 1 to the bottom and leave the gap on page 2`() {
+        val doc = layOut(table(rows(20), IrFillRemainder.STRETCH, rest = IrFillRemainder.GAP))
+
+        assertEquals(ys(5, 8, 13) + 115.0, boundaries(doc, 1))
+        assertEquals(ys(5, 8, 14), boundaries(doc, 2))
+        assertEquals(109.0, boundaries(doc, 2).last())
+    }
+
+    @Test
+    fun `rest applies to every page after the first, also with no filler row fitting`() {
+        // 40 rows: pages of 13 / 13 / 13 / 1; first gap, rest stretch -> pages 2 and 3 end at 115 (last data row grows), page 1 at 109
+        val doc = layOut(table(rows(40), IrFillRemainder.GAP, rest = IrFillRemainder.STRETCH))
+
+        assertEquals(109.0, boundaries(doc, 1).last())
+        assertEquals(115.0, boundaries(doc, 2).last())
+        assertEquals(115.0, boundaries(doc, 3).last())
+        assertEquals(115.0, boundaries(doc, 4).last())
     }
 
     @Test
@@ -173,5 +205,38 @@ class FillRemainderLayoutTest {
         assertEquals(ys(5, 8, 14), boundaries(doc, 1))
         // number 13 sits in the last filler row 101..109, which is exactly rowHeight tall
         assertTrue(numbered.last().rect.y >= 101.mm && numbered.last().rect.y + numbered.last().rect.height <= 109.mm)
+    }
+
+    @Test
+    fun `stretch without a whole filler row grows the last data row to the page bottom, gap leaves the leftover`() {
+        // 13 rows end at 109, 6 mm left (< 8) -> no filler row; the 14th row goes to page 2
+        val gap = layOut(table(rows(14), IrFillRemainder.GAP))
+        val stretch = layOut(table(rows(14), IrFillRemainder.STRETCH))
+
+        assertEquals(ys(5, 8, 14), boundaries(gap, 1))
+        assertEquals(109.0, boundaries(gap, 1).last())
+        assertEquals(ys(5, 8, 13) + 115.0, boundaries(stretch, 1))
+        // the next page is untouched by the rule
+        assertEquals(boundaries(gap, 2).take(2), boundaries(stretch, 2).take(2))
+        assertEquals(2, stretch.pages.size)
+    }
+
+    @Test
+    fun `stretched last row keeps its right and left borders to the new bottom and the number text inside`() {
+        val numbers = IrLineNumbers(column = "a", fillBlank = true)
+        val doc = layOut(table(rows(14), IrFillRemainder.STRETCH, lineNumbers = numbers))
+
+        val verticals = doc.pages[0].elements.filterIsInstance<Line>().filter { it.from.x == it.to.x && it.from.y == 101.mm }
+        assertTrue(verticals.isNotEmpty() && verticals.all { it.to.y == 115.mm })
+        val n13 = doc.pages[0].elements.filterIsInstance<PositionedText>().single { it.text == "13" }
+        assertTrue(n13.rect.y >= 101.mm && n13.rect.y + n13.rect.height <= 115.mm)
+    }
+
+    @Test
+    fun `stretch grows the last row when a title chain was pushed to the next page`() {
+        // 12 rows end at 101; title + first row (keepWithNext chain) need 16, 14 left -> page 2; page 1 gets a filler row.
+        // 13 rows then a title row alone: title 109..117 does not fit -> moves; last row on page 1 is data 101..109, 6 left
+        val doc = layOut(table(rows(13) + IrGroup("Детали", rows(1, from = 14).map { it as IrRow }), IrFillRemainder.STRETCH))
+        assertEquals(ys(5, 8, 13) + 115.0, boundaries(doc, 1))
     }
 }

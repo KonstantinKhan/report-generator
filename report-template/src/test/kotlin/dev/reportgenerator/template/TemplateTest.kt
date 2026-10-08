@@ -625,4 +625,20 @@ class TemplateTest {
         )
         assertEquals(Rect(20.mm, 15.mm, 185.mm, 215.mm), region)
     }
+
+    @Test
+    fun `cell fontSize is resolved and must be positive`() {
+        val yaml = { size: String ->
+            """
+            blocks:
+              - id: t
+                type: table
+                columns: [10]
+                rows:
+                  - {height: 5, cells: [{text: a, fontSize: $size}]}
+            """
+        }
+        assertEquals(7.0, resolve(yaml("7")).block("t")!!.cells.single().fontSize)
+        assertTrue(errorOf(yaml("0")).contains("blocks[0].rows[0].cells[0].fontSize: must be > 0"))
+    }
 }

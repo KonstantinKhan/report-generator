@@ -96,8 +96,32 @@ class FlowTableTest {
         fun remainder(extra: String) = (TemplateLoader.load(yaml(ok.replace("fill: blank", "fill: blank$extra")), setOf("tableHeader", "tableText")).blocks.single() as FlowBlock).table!!.remainder
 
         assertEquals(null, remainder(""))
-        assertEquals(FlowRemainder.GAP, remainder("\n        remainder: gap"))
-        assertEquals(FlowRemainder.STRETCH, remainder("\n        remainder: Stretch"))
+        assertEquals(FlowRemainders(FlowRemainder.GAP, FlowRemainder.GAP), remainder("\n        remainder: gap"))
+        assertEquals(FlowRemainders(FlowRemainder.STRETCH, FlowRemainder.STRETCH), remainder("\n        remainder: Stretch"))
+    }
+
+    @Test
+    fun `remainder object sets first and rest separately, a missing key is stretch`() {
+        fun remainder(extra: String) = (TemplateLoader.load(yaml(ok.replace("fill: blank", "fill: blank$extra")), setOf("tableHeader", "tableText")).blocks.single() as FlowBlock).table!!.remainder
+
+        assertEquals(FlowRemainders(FlowRemainder.GAP, FlowRemainder.STRETCH), remainder("\n        remainder: {first: gap, rest: stretch}"))
+        assertEquals(FlowRemainders(FlowRemainder.STRETCH, FlowRemainder.GAP), remainder("\n        remainder: {first: stretch, rest: gap}"))
+        assertEquals(FlowRemainders(FlowRemainder.GAP, FlowRemainder.STRETCH), remainder("\n        remainder: {first: gap}"))
+        assertEquals(FlowRemainders(FlowRemainder.STRETCH, FlowRemainder.GAP), remainder("\n        remainder: {rest: GAP}"))
+        assertEquals(FlowRemainders(), remainder("\n        remainder: {}"))
+    }
+
+    @Test
+    fun `remainder object rejects an unknown key or value with a path, and needs fill blank`() {
+        val blank = "fill: blank\n        remainder: "
+        assertEquals("blocks[0].table.remainder.middle", parseError(ok.replace("fill: blank", blank + "{middle: gap}")).path)
+        assertEquals("blocks[0].table.remainder.first", parseError(ok.replace("fill: blank", blank + "{first: spread}")).path)
+        assertEquals("blocks[0].table.remainder.rest", parseError(ok.replace("fill: blank", blank + "{rest: 1x}")).path)
+        assertEquals(
+            "'remainder' needs 'fill: blank'",
+            errors(ok.replace("fill: blank", "fill: none\n        remainder: {first: gap}")).getValue("blocks[0].table.remainder")
+        )
+        assertEquals(emptyMap(), errors(ok.replace("fill: blank", blank + "{first: gap, rest: stretch}"), styles = setOf("tableHeader", "tableText")))
     }
 
     @Test

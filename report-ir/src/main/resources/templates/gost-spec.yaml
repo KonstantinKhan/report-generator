@@ -48,7 +48,7 @@ blocksets:
         columns: [120]
         rows:
           - height: 15
-            cells: [{bind: "${doc.designation}", align: center, style: frameTextLarge}]
+            cells: [{bind: "${doc.designation}", align: center, style: frameText, fontSize: 7}]
         attach: {self: topLeft, to: head.topRight}
       - id: signatures
         type: table
@@ -60,7 +60,7 @@ blocksets:
               - {borders: {bottom: thin}}
               - {borders: {bottom: thin}}
               - {borders: {bottom: thin}}
-              - {bind: "${doc.name}", rowSpan: 5, align: center, style: frameTextLarge}
+              - {bind: "${doc.name}", rowSpan: 5, align: center, style: frameText, fontSize: 7}
               - {text: "Лит.", span: 3, align: center}
               - {text: "Лист", align: center}
               - {text: "Листов", align: center}
@@ -106,7 +106,7 @@ blocksets:
         columns: [120]
         rows:
           - height: 15
-            cells: [{bind: "${doc.designation}", align: center, style: frameTextLarge}]
+            cells: [{bind: "${doc.designation}", align: center, style: frameText, fontSize: 7}]
         attach: {self: topLeft, to: head.topRight}
       - id: sheetColumn
         type: table
@@ -195,6 +195,7 @@ blocks:
     table:
       rowHeight: 8
       fill: blank                  # cover each page down to the frame with blank bordered rows
+      remainder: {first: gap, rest: stretch}
       keep: {titleChain: true}     # spacers + title + first data line are never split by a page break
       styles: {head: tableHeader, data: tableText, groupTitle: groupHeader}
       # GOST R 2.106-2019 p.1 order. A kind without items makes no group (skipEmpty), no sortBy = source order.

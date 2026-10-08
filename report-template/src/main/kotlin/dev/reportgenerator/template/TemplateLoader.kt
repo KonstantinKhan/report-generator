@@ -264,13 +264,7 @@ private class Reader {
                     else -> fail("$path.fill", n, "expected blank|none")
                 }
             } ?: FlowFill.NONE,
-            remainder = m.optional("remainder")?.let { n ->
-                when (n.scalar("$path.remainder").lowercase()) {
-                    "stretch" -> FlowRemainder.STRETCH
-                    "gap" -> FlowRemainder.GAP
-                    else -> fail("$path.remainder", n, "expected stretch|gap")
-                }
-            },
+            remainder = m.optional("remainder")?.let { flowRemainders(it, "$path.remainder") },
             keep = m.optional("keep")?.let { n ->
                 val k = n.asMap("$path.keep")
                 k.allow("$path.keep", "titleChain")
@@ -547,6 +541,23 @@ private class Reader {
     }
 
     // Flow table cells are drawn by the engine's bordered rows: left and center only.
+    // scalar = one mode for every page; {first, rest} = page 1 / pages 2+, a missing key is stretch
+    private fun flowRemainders(node: YamlNode, path: String): FlowRemainders {
+        if (node.unwrap() !is YamlMap) return flowRemainder(node, path).let { FlowRemainders(it, it) }
+        val m = node.asMap(path)
+        m.allow(path, "first", "rest")
+        return FlowRemainders(
+            first = m.optional("first")?.let { flowRemainder(it, "$path.first") } ?: FlowRemainder.STRETCH,
+            rest = m.optional("rest")?.let { flowRemainder(it, "$path.rest") } ?: FlowRemainder.STRETCH
+        )
+    }
+
+    private fun flowRemainder(node: YamlNode, path: String): FlowRemainder = when (node.scalar(path).lowercase()) {
+        "stretch" -> FlowRemainder.STRETCH
+        "gap" -> FlowRemainder.GAP
+        else -> fail(path, node, "expected stretch|gap")
+    }
+
     private fun flowAlign(node: YamlNode, path: String): TextAlign = when (node.scalar(path).lowercase()) {
         "left" -> TextAlign.LEFT
         "center" -> TextAlign.CENTER

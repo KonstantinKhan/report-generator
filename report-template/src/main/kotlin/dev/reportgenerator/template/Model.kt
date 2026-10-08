@@ -296,6 +296,10 @@ enum class FlowFill { NONE, BLANK }
 // row is exactly rowHeight and the leftover stays empty between the last row and whatever lies below.
 enum class FlowRemainder { STRETCH, GAP }
 
+// `remainder:` per page: `first` = page 1, `rest` = pages 2+. The scalar form (`remainder: gap`) sets both; in the object
+// form (`remainder: {first: gap, rest: stretch}`) a missing key is STRETCH.
+data class FlowRemainders(val first: FlowRemainder = FlowRemainder.STRETCH, val rest: FlowRemainder = FlowRemainder.STRETCH)
+
 // Bind of the row cell that shows the number of the physical line (layout-derived, see FlowLines).
 const val LINE_NUMBER_BIND = "\${line.number}"
 
@@ -371,7 +375,7 @@ data class FlowTableSpec(
     val rowCells: Map<String, FlowRowCell>,
     val fill: FlowFill = FlowFill.NONE,
     // null = not written (STRETCH applies); written only together with `fill: blank` (validator)
-    val remainder: FlowRemainder? = null,
+    val remainder: FlowRemainders? = null,
     val keep: FlowKeep = FlowKeep(),
     val styles: Map<String, FlowStyle> = emptyMap(),
     val where: Predicate? = null,
