@@ -35,10 +35,18 @@ class SpecificationQuantityFormatTest {
 
     @Test
     fun `yaml quantity format equals the legacy formatter for every kind`() {
-        for (kind in ItemKind.entries) for (v in values) {
+        for (kind in ItemKind.entries - ItemKind.DOCUMENTATION) for (v in values) {
             val i = item(kind, v)
             assertEquals(i.legacyFormattedQuantity(), quantity(i), "$kind $v")
         }
+    }
+
+    @Test
+    fun `documentation has empty quantity and the new whole-count kinds round like parts`() {
+        assertEquals("", quantity(item(ItemKind.DOCUMENTATION, 1.0)))
+        assertEquals("", quantity(item(ItemKind.DOCUMENTATION, 0.0)))
+        assertEquals("2", quantity(item(ItemKind.COMPLEX, 1.5)))
+        assertEquals("3", quantity(item(ItemKind.SET, 3.0)))
     }
 
     @Test

@@ -186,7 +186,7 @@ blocks:
   # drawn (columns, header, row cells, group title, spacers, styles) and WHICH data goes where (group order and
   # titles, numbering, how a value is shown); how it is measured, wrapped and paginated is the layout engine's
   # job. The code (reports/specification) only supplies the typed row record `item` (raw values):
-  #   item.designation String (absent = empty), item.name String, item.kind Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL),
+  #   item.designation String (absent = empty), item.name String, item.kind Enum(DOCUMENTATION|COMPLEX|ASSEMBLY|PART|SOFTWARE|STANDARD|OTHER|MATERIAL|SET),
   #   item.quantity Decimal, item.unit String (absent = empty); item.position is `computed` below.
   # Columns: 6+6+8+70+63+10+22 = 185 mm = the sheet's content width (checked, no tolerance).
   # `stick`: first / last = a single-line value sits on the first / last physical line of a wrapped row.
@@ -200,13 +200,17 @@ blocks:
       # GOST R 2.106-2019 p.1 order. A kind without items makes no group (skipEmpty), no sortBy = source order.
       groupBy:
         field: kind
-        order: [ASSEMBLY, PART, STANDARD, OTHER, MATERIAL]
+        order: [DOCUMENTATION, COMPLEX, ASSEMBLY, PART, SOFTWARE, STANDARD, OTHER, MATERIAL, SET]
         titles:
+          DOCUMENTATION: "Документация"
+          COMPLEX: "Комплексы"
           ASSEMBLY: "Сборочные единицы"
           PART: "Детали"
+          SOFTWARE: "Программные изделия и базы данных"
           STANDARD: "Стандартные изделия"
           OTHER: "Прочие изделия"
           MATERIAL: "Материалы"
+          SET: "Комплекты"
         skipEmpty: true
       # one running number over all groups (scope: table), 1, 2, 3, ...
       computed:
@@ -243,6 +247,8 @@ blocks:
           quantity:
             style: data
             cases:
+              - where: {field: kind, eq: DOCUMENTATION}   # документация: "Кол." пусто
+                text: ""
               - where: {field: kind, eq: MATERIAL}
                 bind: "${item.quantity}"
                 format: {pattern: "0.##", locale: ru, rounding: HALF_UP}

@@ -1,6 +1,8 @@
 package dev.reportgenerator.data
 
-enum class ItemKind { ASSEMBLY, PART, STANDARD, OTHER, MATERIAL }
+// Declaration order = group order of GOST R 2.106-2019 p.1 (the template's groupBy.order repeats it).
+// SOFTWARE is a stub: no Loodsman type is mapped to it yet.
+enum class ItemKind { DOCUMENTATION, COMPLEX, ASSEMBLY, PART, SOFTWARE, STANDARD, OTHER, MATERIAL, SET }
 
 data class SpecificationItem(
     val designation: String?,

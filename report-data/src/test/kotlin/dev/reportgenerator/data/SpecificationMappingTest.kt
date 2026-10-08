@@ -31,6 +31,18 @@ class SpecificationMappingTest {
     }
 
     @Test
+    fun `maps new kinds`() {
+        val dto = SpecificationDto(
+            "A.0", "Изделие",
+            listOf("DOCUMENTATION", "COMPLEX", "SOFTWARE", "SET").map { ItemDto("x", "y", it, 1.0) }
+        )
+
+        val kinds = mapToSpecificationData(dto).items.map { it.kind }
+
+        assertEquals(listOf(ItemKind.DOCUMENTATION, ItemKind.COMPLEX, ItemKind.SOFTWARE, ItemKind.SET), kinds)
+    }
+
+    @Test
     fun `carries document designation and name through unchanged`() {
         val dto = SpecificationDto(documentDesignation = "X.001", documentName = "Тест", items = emptyList())
         val data = mapToSpecificationData(dto)

@@ -19,7 +19,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 private const val ASSEMBLY_COMPOSITION_LINK_NAME = "Состоит из ..."
-private const val ATTR_DESIGNATION = "Обозначение"
+private const val DOCUMENTS_LINK_NAME = "Документы"
+private const val ATTR_PRODUCT_DESIGNATION = "Обозначение изделия" // нет атрибута в ответе = не заполнен (сервер не отдаёт пустые)
 private const val ATTR_NAME = "Наименование"
 private const val ATTR_QUANTITY = "Количество"
 
@@ -37,6 +38,8 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
 
     private var cachedSessionId: String? = null
     private var cachedAssemblyLinkTypeId: Int? = null
+    private var cachedDocumentsLinkTypeId: Int? = null
+    private var metaLoaded = false
 
     override fun fetchSpecification(documentId: String): SpecificationDto {
         val versionId = documentId.toIntOrNull()
@@ -61,23 +64,30 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         val documentDesignation = prop.product?.trim()
             ?: throw LoodsmanApiException("Document not found in Loodsman: no product (designation) for versionId=$versionId")
         // Key attribute (product) is Обозначение for Деталь/СЕ, Наименование for everything else.
-        val documentName = if (isDetailOrAssembly(prop.type)) {
+        val documentName = if (isDesignationKeyed(prop.type)) {
             docAttrMap[ATTR_NAME]?.value?.trim() ?: documentDesignation
         } else {
             documentDesignation
         }
 
-        // Get linked objects
-        val children = getLinkedObjects(versionId, linkTypeId).map {
+        // Linked objects: composition ("Состоит из ...") for everything except Документация, and the link
+        // "Документы" for Документация (Сборочный чертеж). Each link contributes only its own kinds.
+        val compositionChildren = getLinkedObjects(versionId, linkTypeId).map {
             ChildLink(it.idLink, it.idChild, it.idType, it.minQuantity, it.maxQuantity, it.unit)
         }
+        val documentChildren = cachedDocumentsLinkTypeId?.let { docLinkId ->
+            getLinkedObjects(versionId, docLinkId).map {
+                ChildLink(it.idLink, it.idChild, it.idType, it.minQuantity, it.maxQuantity, it.unit)
+            }
+        }.orEmpty()
 
-        // Get type, designation and name for all child objects
+        // Get type, key attribute (product) and attributes for all child objects
         val typeNameByObjectId = HashMap<Int, String>()
-        val designationByObjectId = HashMap<Int, String>()
+        val productByObjectId = HashMap<Int, String>()
         val nameByObjectId = HashMap<Int, String>()
+        val productDesignationByObjectId = HashMap<Int, String>()
 
-        children.forEach { child ->
+        (compositionChildren + documentChildren).distinctBy { it.idChild }.forEach { child ->
             val childProps = getJson<List<PropObjectDto>>(
                 get("/api/v4/ObjectInfo/get-prop-objects").withQuery("objectList" to child.idChild.toString())
             ).firstOrNull()
@@ -87,49 +97,72 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
                 typeNameByObjectId[child.idChild] = it
             }
 
-            designationByObjectId[child.idChild] = childProps.product?.trim()
-                ?: throw LoodsmanApiException("Child object ${child.idChild} missing product (designation)")
+            // Unrecognized types are skipped by buildItems: no product required, no attribute requests.
+            if (mapItemKind(childProps.type) == null) return@forEach
 
-            // Наименование is a separate attribute only for Деталь/СЕ; for other types
-            // it's already the product field fetched above, no attribute lookup needed.
-            if (isDetailOrAssembly(childProps.type)) {
+            productByObjectId[child.idChild] = childProps.product?.trim()
+                ?: throw LoodsmanApiException("Child object ${child.idChild} missing product (key attribute)")
+
+            // Наименование is a separate attribute for designation-keyed types (product = Обозначение);
+            // "Обозначение изделия" is a separate attribute for Стандартное/Прочее изделие.
+            val needsName = isDesignationKeyed(childProps.type)
+            val needsProductDesignation = hasProductDesignationAttr(childProps.type)
+            if (needsName || needsProductDesignation) {
                 val childAttrs = getJson<List<ObjectAttributeDto>>(
                     get("/api/v4/ObjectInfo/get-info-about-version-mode-3").withQuery("idVersion" to child.idChild.toString())
                 )
-                childAttrs.find { it.name == ATTR_NAME }?.value?.trim()?.let {
-                    nameByObjectId[child.idChild] = it
+                if (needsName) {
+                    childAttrs.find { it.name == ATTR_NAME }?.value?.trim()?.let {
+                        nameByObjectId[child.idChild] = it
+                    }
+                }
+                if (needsProductDesignation) {
+                    childAttrs.find { it.name?.trim() == ATTR_PRODUCT_DESIGNATION }?.value?.trim()
+                        ?.takeIf { it.isNotEmpty() }?.let { productDesignationByObjectId[child.idChild] = it }
                 }
             }
         }
 
-        // Get quantity from minQuantity/maxQuantity. Kept as Double: MATERIAL items can carry
-        // fractional amounts (e.g. 1.5 м materials by their unit); other kinds are always whole
-        // counts in Loodsman and get rounded at display time (see the `quantity` cell of the `body` table in gost-spec.yaml).
+        // Quantity from minQuantity/maxQuantity. Kept as Double: MATERIAL items can carry fractional amounts
+        // (e.g. 1.5 м); other kinds are whole counts rounded at display time (see the `quantity` cell of the
+        // `body` table in gost-spec.yaml). A link without quantity is absent here: buildItems rejects it
+        // (except Документация, whose "Кол." is not shown).
         val quantityByLinkId = HashMap<Int, Double>()
         val unitByLinkId = HashMap<Int, String?>()
-        children.forEach { child ->
+        (compositionChildren + documentChildren).forEach { child ->
             val quantity = if (child.minQuantity != null && child.minQuantity == child.maxQuantity) {
                 child.minQuantity
             } else {
                 child.minQuantity ?: child.maxQuantity
-                    ?: throw LoodsmanApiException("Attribute 'Количество' is missing for link ${child.idLink}")
             }
-            quantityByLinkId[child.idLink] = quantity
+            if (quantity != null) quantityByLinkId[child.idLink] = quantity
             unitByLinkId[child.idLink] = child.unit
         }
 
-        val items = buildItems(children, typeNameByObjectId, designationByObjectId, nameByObjectId, quantityByLinkId, unitByLinkId)
+        fun List<ChildLink>.ofKinds(documentation: Boolean) = filter {
+            (mapItemKind(typeNameByObjectId[it.idChild]) == "DOCUMENTATION") == documentation
+        }
+        val items = buildItems(
+            compositionChildren.ofKinds(documentation = false), typeNameByObjectId, productByObjectId, nameByObjectId,
+            quantityByLinkId, unitByLinkId, productDesignationByObjectId,
+        ) + buildItems(
+            documentChildren.ofKinds(documentation = true), typeNameByObjectId, productByObjectId, nameByObjectId,
+            quantityByLinkId, unitByLinkId, productDesignationByObjectId,
+        )
 
         return SpecificationDto(documentDesignation, documentName, items)
     }
 
     @Synchronized
     private fun ensureMetaLoaded() {
-        if (cachedAssemblyLinkTypeId != null) return
+        if (metaLoaded) return
 
         val linkTypes = getJson<List<LinkListEntry>>(get("/api/v4/MetaData/get-link-list"))
         cachedAssemblyLinkTypeId = linkTypes.firstOrNull { it.name?.trim() == ASSEMBLY_COMPOSITION_LINK_NAME }?.id
             ?: throw LoodsmanApiException("Link type '$ASSEMBLY_COMPOSITION_LINK_NAME' not found in Loodsman metadata")
+        // Optional: an instance without the link simply yields no Документация group.
+        cachedDocumentsLinkTypeId = linkTypes.firstOrNull { it.name?.trim() == DOCUMENTS_LINK_NAME }?.id
+        metaLoaded = true
     }
 
     private fun getLinkedObjects(objectId: Int, linkTypeId: Int): List<LinkedObjectDto> =

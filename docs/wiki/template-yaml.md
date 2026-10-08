@@ -491,7 +491,7 @@ styles:
 (`PageSetup`, например A3 альбомная) колонки сохраняют свою ширину, как и раньше.
 
 **Контракт.** Корень `item` в схеме данных это запись одной строки, поля объявляет адаптер (для спецификации
-`SpecificationData.toDataContext()`): `designation` String, `name` String, `kind` Enum(ASSEMBLY|PART|STANDARD|OTHER|MATERIAL),
+`SpecificationData.toDataContext()`): `designation` String, `name` String, `kind` Enum(DOCUMENTATION|COMPLEX|ASSEMBLY|PART|SOFTWARE|STANDARD|OTHER|MATERIAL|SET),
 `quantity` Decimal, `unit` String. Поле без значения в записи (нет обозначения, нет единицы) требует `optional: true`
 (в ячейке или в варианте `cases`), иначе ошибка раскладки. К полям записи добавляются `computed`: `sequence` это Integer, тип арифметики выводится (см. «Арифметика»).
 Контракт проверяет по схеме (пути `blocks[5].table...`): bind-ы ячеек и вариантов, поля и литералы в `where` / `sortBy` /
@@ -550,7 +550,7 @@ Date (ISO), String. Нет значения у поля: `eq` и `in` ложны
 ```yaml
 groupBy:
   field: kind
-  order: [ASSEMBLY, PART, STANDARD, OTHER, MATERIAL]   # порядок групп
+  order: [DOCUMENTATION, COMPLEX, ASSEMBLY, PART, SOFTWARE, STANDARD, OTHER, MATERIAL, SET]   # порядок групп
   titles: {ASSEMBLY: "Сборочные единицы", ...}          # заголовок каждого значения из order
   skipEmpty: true     # по умолчанию: значение без строк группы не даёт (нет заголовка и спейсеров); false оставляет пустую
   omit: []            # значения, которые сознательно отбрасываются
@@ -655,6 +655,8 @@ totals:
 quantity:
   style: data
   cases:
+    - where: {field: kind, eq: DOCUMENTATION}         # документация: пусто
+      text: ""
     - where: {field: kind, eq: MATERIAL}              # материалы: до 2 знаков, хвостовые нули срезаны, запятая
       bind: "${item.quantity}"
       format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
@@ -778,13 +780,17 @@ table:
     # GOST R 2.106-2019 p.1 order. A kind without items makes no group (skipEmpty), no sortBy = source order.
     groupBy:
       field: kind
-      order: [ASSEMBLY, PART, STANDARD, OTHER, MATERIAL]
+      order: [DOCUMENTATION, COMPLEX, ASSEMBLY, PART, SOFTWARE, STANDARD, OTHER, MATERIAL, SET]
       titles:
+        DOCUMENTATION: "Документация"
+        COMPLEX: "Комплексы"
         ASSEMBLY: "Сборочные единицы"
         PART: "Детали"
+        SOFTWARE: "Программные изделия и базы данных"
         STANDARD: "Стандартные изделия"
         OTHER: "Прочие изделия"
         MATERIAL: "Материалы"
+        SET: "Комплекты"
       skipEmpty: true
     # one running number over all groups (scope: table), 1, 2, 3, ...
     computed:
@@ -821,6 +827,8 @@ table:
         quantity:
           style: data
           cases:
+            - where: {field: kind, eq: DOCUMENTATION}   # документация: "Кол." пусто
+              text: ""
             - where: {field: kind, eq: MATERIAL}
               bind: "${item.quantity}"
               format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
