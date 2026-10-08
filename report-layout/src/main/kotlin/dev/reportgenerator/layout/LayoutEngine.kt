@@ -7,20 +7,24 @@ import dev.reportgenerator.geometry.Point
 import dev.reportgenerator.geometry.Rect
 import dev.reportgenerator.ir.BorderWeight
 import dev.reportgenerator.ir.FrameCell
-import dev.reportgenerator.ir.FrameBindings
-import dev.reportgenerator.ir.FrameField
 import dev.reportgenerator.ir.FrameSpec
 import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrColumn
 import dev.reportgenerator.ir.IrDocument
+import dev.reportgenerator.ir.IrFillRemainder
+import dev.reportgenerator.ir.IrLineScope
 import dev.reportgenerator.ir.IrRow
 import dev.reportgenerator.ir.IrTable
 import dev.reportgenerator.ir.IrTableHeader
 import dev.reportgenerator.ir.LayoutConstraints
 import dev.reportgenerator.ir.PageSetup
+import dev.reportgenerator.ir.StaticSlot
 import dev.reportgenerator.ir.Styles
 import dev.reportgenerator.ir.TextAlign
 import dev.reportgenerator.ir.TextStyle
+import dev.reportgenerator.template.Binding
+import dev.reportgenerator.template.DataContext
+import dev.reportgenerator.template.withPage
 import dev.reportgenerator.ir.BorderStyle as IrBorderStyle
 import dev.reportgenerator.ir.TextOrientation as IrTextOrientation
 import dev.reportgenerator.layoutir.BorderStyle as LayoutBorderStyle
@@ -35,6 +39,7 @@ import dev.reportgenerator.layoutir.PageElement
 import dev.reportgenerator.layoutir.PositionedText
 import dev.reportgenerator.layoutir.Rectangle
 import dev.reportgenerator.layoutir.ResolvedTextStyle
+import dev.reportgenerator.template.TemplateResolver
 
 private const val PT_TO_MM = 25.4 / 72.0
 
@@ -49,35 +54,27 @@ data class PageLayoutMetrics(
     val format: PageFormat,
     val margins: Insets,
     val headerHeight: Length,
-    // Resolved rects of every static block registered for this page type (stamp, leftMargin,
-    // belowFrame, ...) — see resolveAnchor()/Anchor.kt. Union-based reservation below replaces
-    // what used to be a single hardcoded frameHeight/continuationFrameHeight subtraction.
+    // Rects of the static blocks that reserve content space (template `reserves: true`) on first / later
+    // pages, resolved by layOutStaticBlocks from PageSetup.staticTemplate.
     val firstPageBlocks: List<Rect> = emptyList(),
-    val continuationPageBlocks: List<Rect> = emptyList()
+    val continuationPageBlocks: List<Rect> = emptyList(),
+    // false: the table header is drawn on the first page only, later pages start at the top margin.
+    val repeatHeader: Boolean = true
 ) {
-    val contentTop: Length get() = margins.top + headerHeight
+    fun contentTop(isFirstPage: Boolean): Length = margins.top + if (isFirstPage || repeatHeader) headerHeight else Length.ZERO
 
     val frameRect: Rect get() = frameRectOf(format, margins)
-    val pageRect: Rect get() = pageRectOf(format)
 
-    // Bottom of the content column = nearest top edge among static blocks that (a) horizontally
-    // overlap the content column [contentLeft, contentRight) AND (b) sit at or below contentTop.
-    // A block living entirely in the margin gutter (e.g. leftMarginTable, whose resolved rect sits
-    // left of contentLeft) doesn't participate — a geometric fact of its resolved rect, not an
-    // assumption baked in here. Condition (b) matters once a block is anchored ABOVE contentTop
-    // (e.g. a future TOP_LEFT/TOP_RIGHT block): without it, such a block's top edge (near y=0)
-    // would still count as a candidate and collapse contentBottom to near-zero, even though the
-    // block never actually occupies the content column's vertical range. This mechanism only
-    // reserves the BOTTOM of the content column; a symmetric contentTop() union would be needed
-    // before a real top-anchored block could reserve space of its own (not done — see wiki).
+    // Bottom of the content column = TemplateResolver.flowRegionFor on [contentTop, frame bottom): the
+    // nearest top edge among reserving blocks that horizontally overlap the content column AND sit at or
+    // below contentTop (a block in the margin gutter, e.g. leftMarginTable, doesn't participate - a
+    // geometric fact of its resolved rect). Only the BOTTOM of the column is reserved; see the TODO on
+    // flowRegionFor about a possible top case.
     fun contentBottom(isFirstPage: Boolean): Length {
         val blocks = if (isFirstPage) firstPageBlocks else continuationPageBlocks
-        val contentLeft = margins.left
-        val contentRight = format.width - margins.right
-        val reservedTops = blocks
-            .filter { it.left < contentRight && it.right > contentLeft && it.top >= contentTop }
-            .map { it.top }
-        return (reservedTops + frameRect.bottom).min()
+        val top = contentTop(isFirstPage)
+        val content = Rect(margins.left, top, format.width - margins.left - margins.right, frameRect.bottom - top)
+        return TemplateResolver.flowRegionFor(content, blocks).bottom
     }
 }
 
@@ -88,33 +85,6 @@ private fun frameRectOf(format: PageFormat, margins: Insets): Rect = Rect(
     height = format.height - margins.top - margins.bottom
 )
 
-private fun pageRectOf(format: PageFormat): Rect = Rect(Length.ZERO, Length.ZERO, format.width, format.height)
-
-private fun staticBlockRect(spec: FrameSpec, base: Rect, baseCorner: Corner, blockCorner: Corner = baseCorner): Rect {
-    val origin = resolveAnchor(base, baseCorner, blockCorner, spec.size)
-    return Rect(origin.x, origin.y, spec.size.width, spec.size.height)
-}
-
-private fun staticBlockRect(spec: FrameSpec, base: Rect, baseCorner: Corner, blockCorner: Corner, offset: Point): Rect {
-    val origin = resolveAnchor(base, baseCorner, blockCorner, spec.size, offset)
-    return Rect(origin.x, origin.y, spec.size.width, spec.size.height)
-}
-
-// One registration per static block = one line here; a new block needs no new origin function,
-// just a (spec, base, corner) entry — see Anchor.kt / docs/wiki/architecture-improvements.md.
-private fun firstPageBlockRects(setup: PageSetup, frameRect: Rect, pageRect: Rect): List<Rect> = buildList {
-    setup.frame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_RIGHT)) }
-    setup.leftMarginFrame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
-    setup.specLeftTable?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
-    setup.mainTitleRightTable?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_RIGHT, Corner.BOTTOM_RIGHT, Point(Length.ZERO, Length.ofMillimeters(40.0)))) }
-    setup.belowFrame?.let { add(staticBlockRect(it, pageRect, Corner.BOTTOM_RIGHT)) }
-}
-
-private fun continuationPageBlockRects(setup: PageSetup, frameRect: Rect): List<Rect> = buildList {
-    setup.continuationFrame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_RIGHT)) }
-    setup.leftMarginFrame?.let { add(staticBlockRect(it, frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)) }
-}
-
 fun layOut(
     document: IrDocument,
     textMeasurer: TextMeasurer,
@@ -122,25 +92,15 @@ fun layOut(
 ): LaidOutDocument {
     val setup = document.pageSetup
     val table = document.elements.filterIsInstance<IrTable>().firstOrNull()
-    val frameRect = frameRectOf(setup.format, setup.margins)
-    val pageRect = pageRectOf(setup.format)
-    val firstPageBlocks = firstPageBlockRects(setup, frameRect, pageRect)
-    val continuationPageBlocks = continuationPageBlockRects(setup, frameRect)
+    val staticBlocks = layOutStaticBlocks(setup)
 
     if (table == null) {
-        val metrics = PageLayoutMetrics(setup.format, setup.margins, Length.ZERO, firstPageBlocks, continuationPageBlocks)
+        val metrics = PageLayoutMetrics(setup.format, setup.margins, Length.ZERO, staticBlocks.firstReserved, staticBlocks.continuationReserved)
         val elements = mutableListOf<PageElement>()
         elements += frameRectangle(metrics, setup.frameStyle)
-        setup.frame?.let { spec ->
-            val bindings = resolveBindings(setup.frameBindings, pageNumber = 1, totalPages = 1)
-            elements += drawFrame(spec, frameOrigin(metrics, spec), bindings, textMeasurer, fontResolver)
-        }
-        setup.leftMarginFrame?.let { spec ->
-            elements += drawFrame(spec, leftMarginFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
-        }
-        setup.belowFrame?.let { spec ->
-            elements += drawFrame(spec, belowFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
-        }
+        // A table-less document has always drawn only these three blocks (not specLeft / mainTitleRight).
+        val bindings = pageData(setup.dataContext, pageNumber = 1, totalPages = 1)
+        elements += drawStaticBlocks(staticBlocks.first, TABLELESS_SLOTS, bindings, textMeasurer, fontResolver)
         return LaidOutDocument(listOf(Page(1, setup.format, elements)))
     }
 
@@ -157,11 +117,12 @@ fun layOut(
         format = setup.format,
         margins = setup.margins,
         headerHeight = headerLayout.height,
-        firstPageBlocks = firstPageBlocks,
-        continuationPageBlocks = continuationPageBlocks
+        firstPageBlocks = staticBlocks.firstReserved,
+        continuationPageBlocks = staticBlocks.continuationReserved,
+        repeatHeader = table.header?.repeat ?: true
     )
 
-    return renderPages(units, metrics, headerLayout.elements, setup, textMeasurer, fontResolver, table, offsets)
+    return renderPages(units, metrics, staticBlocks, headerLayout.elements, setup, textMeasurer, fontResolver, table, offsets)
 }
 
 private data class HeaderLayout(val elements: List<PageElement>, val height: Length)
@@ -178,19 +139,20 @@ private fun buildHeaderLayout(
 
     val fixedHeight = header.height
     return if (fixedHeight != null) {
-        HeaderLayout(drawRichHeader(header, columns, offsets, top, fixedHeight, textMeasurer, fontResolver), fixedHeight)
+        HeaderLayout(drawRichHeader(header, columns, offsets, top, textMeasurer, fontResolver), fixedHeight)
     } else {
         val row = measureRow(IrRow(header.cells), columns, offsets, textMeasurer)
         HeaderLayout(drawRow(row, top, fontResolver), row.height)
     }
 }
 
-// Two passes: content first, chrome (frame/header/stamp) second. The stamp's SHEET_NUMBER/
-// SHEETS_TOTAL bindings need the final page count, which isn't known until pagination finishes —
+// Two passes: content first, chrome (frame/header/stamp) second. The stamp's page.number/
+// page.total bindings need the final page count, which isn't known until pagination finishes —
 // drawing chrome per-page as each page closed (the old approach) couldn't supply that on page 1.
 private fun renderPages(
     units: List<List<LayoutBlock>>,
     metrics: PageLayoutMetrics,
+    staticBlocks: StaticLayout,
     headerElements: List<PageElement>,
     setup: PageSetup,
     textMeasurer: TextMeasurer,
@@ -198,24 +160,27 @@ private fun renderPages(
     table: IrTable,
     offsets: List<Length>
 ): LaidOutDocument {
-    val pageContents = mutableListOf(mutableListOf<PageElement>())
+    // Pagination only decides WHERE every block goes (page, y); the elements are drawn afterwards, page by page in
+    // document order, so the line numbers (IrTable.lineNumbers) follow the final placement, not the order the
+    // units were tried in.
+    val placements = mutableListOf(mutableListOf<Pair<LayoutBlock, Length>>())
     // Final `y` of each page at the moment it closes — needed after the loop to know how much
     // space is left to fill with blank bordered rows (fixed-rowHeight tables only, see below).
     val pageFinalY = mutableListOf<Length>()
-    var y = metrics.contentTop
+    var y = metrics.contentTop(isFirstPage = true)
 
-    fun isFirstPage() = pageContents.size == 1
+    fun isFirstPage() = placements.size == 1
 
     fun startNewPage() {
         pageFinalY += y
-        pageContents.add(mutableListOf())
-        y = metrics.contentTop
+        placements.add(mutableListOf())
+        y = metrics.contentTop(isFirstPage = false)
     }
     for (unit in units) {
         val unitHeight = unit.fold(Length.ZERO) { acc, block -> acc + block.height }
 
         if (y + unitHeight > metrics.contentBottom(isFirstPage())) {
-            if (pageContents.last().isNotEmpty() || isFirstPage()) {
+            if (placements.last().isNotEmpty() || isFirstPage()) {
                 startNewPage()
             }
         }
@@ -225,31 +190,51 @@ private fun renderPages(
             throw LayoutOverflowException(
                 elementPath = first.path,
                 constraint = describeConstraint(first.constraints),
-                pageNumber = pageContents.size,
-                message = "Block '${first.path}' height ${unitHeight.toMillimeters()}mm exceeds available content height on page ${pageContents.size}"
+                pageNumber = placements.size,
+                message = "Block '${first.path}' height ${unitHeight.toMillimeters()}mm exceeds available content height on page ${placements.size}"
             )
         }
 
         for (block in unit) {
-            val elements = when (block) {
-                is GroupHeaderBlock -> drawRow(block.row, y, fontResolver)
-                is DataRowBlock -> drawRow(block.row, y, fontResolver)
-                is BorderedRowBlock -> drawBorderedRow(block, y, textMeasurer, fontResolver)
-            }
-            pageContents.last() += elements
+            placements.last() += block to y
             y += block.height
         }
     }
 
     pageFinalY += y
 
-    // Fixed-rowHeight tables (IrTable.rowHeight != null): the page must be fully covered with
-    // bordered rows down to the frame/margin, even past the last real row (or with zero elements
-    // at all) — not just as far as content happened to reach.
-    val rowHeight = table.rowHeight
-    if (rowHeight != null) {
-        pageContents.forEachIndexed { index, content ->
-            val pageNumber = index + 1
+    // IrTable.lineNumbers: the running number, written into the numbered column of every data line (and, with
+    // fillBlank, of every filler row) in document order; PAGE scope restarts it on each page.
+    val numbers = table.lineNumbers
+    val numberColumn = numbers?.let { n -> table.columns.indexOfFirst { it.id == n.column } } ?: -1
+    var counter = numbers?.start ?: 0L
+
+    val pageContents = placements.mapIndexed { index, placed ->
+        val content = mutableListOf<PageElement>()
+        if (numbers != null && numbers.scope == IrLineScope.PAGE) counter = numbers.start
+        val lastIndex = placed.lastIndex
+        val stretchBy = lastRowStretch(table, index, metrics.contentBottom(index == 0) - pageFinalY[index])
+        for ((blockIndex, placedBlock) in placed.withIndex()) {
+            val (placedRaw, top) = placedBlock
+            // STRETCH without whole filler rows: the page's last row absorbs the leftover so its bottom meets the flow bottom
+            val block = if (blockIndex == lastIndex && stretchBy > Length.ZERO && placedRaw is BorderedRowBlock) {
+                placedRaw.copy(rowHeight = placedRaw.rowHeight + stretchBy)
+            } else {
+                placedRaw
+            }
+            content += when (block) {
+                is GroupHeaderBlock -> drawRow(block.row, top, fontResolver)
+                is DataRowBlock -> drawRow(block.row, top, fontResolver)
+                is BorderedRowBlock ->
+                    drawBorderedRow(if (numbers != null && block.numbered) block.withLineNumber(numberColumn, counter++) else block, top, textMeasurer, fontResolver)
+            }
+        }
+
+        // Fixed-rowHeight tables (IrTable.rowHeight != null, IrTable.fillBlank): the page must be fully
+        // covered with bordered rows down to the frame/margin, even past the last real row (or with zero
+        // elements at all) — not just as far as content happened to reach.
+        val rowHeight = table.rowHeight
+        if (rowHeight != null && table.fillBlank) {
             val bottom = metrics.contentBottom(index == 0)
             val contentStart = pageFinalY[index]
             val available = bottom - contentStart
@@ -258,28 +243,25 @@ private fun renderPages(
             val fullRowsCount = (available.raw / rowHeight.raw).toInt()
             val remainderHeight = available - (rowHeight * fullRowsCount)
 
-            // Determine if this page has a bottom frame
-            val hasBottomFrame = if (pageNumber == 1) setup.frame != null else setup.continuationFrame != null
-
             var fillY = contentStart
             repeat(fullRowsCount) { rowIndex ->
                 val isLastRow = rowIndex == fullRowsCount - 1
-                // Last row includes the remainder height
-                val currentRowHeight = if (isLastRow && remainderHeight > Length.ZERO) {
+                // STRETCH: the last row includes the remainder height; GAP: it stays below the last row
+                val currentRowHeight = if (isLastRow && remainderHeight > Length.ZERO && table.remainderOn(index) == IrFillRemainder.STRETCH) {
                     rowHeight + remainderHeight
                 } else {
                     rowHeight
                 }
-                content += drawBorderedRow(
-                    blankBorderedRow(table.columns, offsets, currentRowHeight, "Document/Table/Filler"),
-                    fillY,
-                    textMeasurer,
-                    fontResolver,
-                    removeBottomBorder = isLastRow && hasBottomFrame
-                )
+                val filler = if (numbers != null && numbers.fillBlank) {
+                    numberedFillerRow(table.columns, offsets, currentRowHeight, "Document/Table/Filler", numberColumn, counter++, numbers)
+                } else {
+                    blankBorderedRow(table.columns, offsets, currentRowHeight, "Document/Table/Filler")
+                }
+                content += drawBorderedRow(filler, fillY, textMeasurer, fontResolver)
                 fillY += currentRowHeight
             }
         }
+        content
     }
 
     val totalPages = pageContents.size
@@ -287,37 +269,29 @@ private fun renderPages(
         val pageNumber = index + 1
         val chrome = mutableListOf<PageElement>()
         chrome += frameRectangle(metrics, setup.frameStyle)
-        chrome += headerElements
-        if (pageNumber == 1) {
-            setup.frame?.let { spec ->
-                val bindings = resolveBindings(setup.frameBindings, pageNumber, totalPages)
-                chrome += drawFrame(spec, frameOrigin(metrics, spec), bindings, textMeasurer, fontResolver)
-            }
-            setup.leftMarginFrame?.let { spec ->
-                chrome += drawFrame(spec, leftMarginFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
-            }
-            setup.specLeftTable?.let { spec ->
-                chrome += drawFrame(spec, specLeftTableOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
-            }
-            setup.mainTitleRightTable?.let { spec ->
-                chrome += drawFrame(spec, mainTitleRightTableOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
-            }
-            setup.belowFrame?.let { spec ->
-                chrome += drawFrame(spec, belowFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
-            }
-        } else {
-            setup.continuationFrame?.let { spec ->
-                val bindings = resolveBindings(setup.frameBindings, pageNumber, totalPages)
-                chrome += drawFrame(spec, frameOrigin(metrics, spec), bindings, textMeasurer, fontResolver)
-            }
-            setup.leftMarginFrame?.let { spec ->
-                chrome += drawFrame(spec, leftMarginFrameOrigin(metrics, spec), emptyMap(), textMeasurer, fontResolver)
-            }
-        }
+        if (pageNumber == 1 || metrics.repeatHeader) chrome += headerElements
+        // which blocks appear on which pages, and where, is the static template's business
+        val bindings = pageData(setup.dataContext, pageNumber, totalPages)
+        val blocks = if (pageNumber == 1) staticBlocks.first else staticBlocks.continuation
+        chrome += drawStaticBlocks(blocks, null, bindings, textMeasurer, fontResolver)
         Page(pageNumber, metrics.format, chrome + content)
     }
 
     return LaidOutDocument(pages)
+}
+
+// Leftover height (< rowHeight, so no whole filler row fits) the last real row of a page must absorb in STRETCH mode;
+// ZERO otherwise (GAP, no fill, a whole filler row fits and takes the leftover itself, nothing left over).
+// The last row is the last physical bordered row of the page whatever it is (data line, group title, spacer, total):
+// a bordered row is a fixed-height box with centered text, so a taller box never re-wraps or re-paginates, and the
+// page break rules (keep/keepWithNext) were decided before the stretch, on the original heights.
+private fun IrTable.remainderOn(pageIndex: Int): IrFillRemainder = if (pageIndex == 0) fillRemainder else fillRemainderRest
+
+private fun lastRowStretch(table: IrTable, pageIndex: Int, available: Length): Length {
+    val rowHeight = table.rowHeight ?: return Length.ZERO
+    if (!table.fillBlank || table.remainderOn(pageIndex) != IrFillRemainder.STRETCH) return Length.ZERO
+    if ((available.raw / rowHeight.raw).toInt() > 0) return Length.ZERO
+    return if (available > Length.ZERO) available else Length.ZERO
 }
 
 private fun describeConstraint(constraints: LayoutConstraints): String = when {
@@ -349,8 +323,7 @@ private fun drawBorderedRow(
     block: BorderedRowBlock,
     top: Length,
     textMeasurer: TextMeasurer,
-    fontResolver: (TextStyle) -> FontRef,
-    removeBottomBorder: Boolean = false
+    fontResolver: (TextStyle) -> FontRef
 ): List<PageElement> = block.cells.mapIndexed { index, cell ->
     val x = block.offsets[index]
     val width = block.columns[index].width
@@ -364,18 +337,18 @@ private fun drawBorderedRow(
         add(Line(Point(x, top), Point(x + width, top), lineStyle))
         // Right border
         add(Line(Point(x + width, top), Point(x + width, top + block.rowHeight), lineStyle))
-        // Bottom border (unless removeBottomBorder is true)
-        if (!removeBottomBorder) {
-            add(Line(Point(x, top + block.rowHeight), Point(x + width, top + block.rowHeight), lineStyle))
-        }
+        // Bottom border
+        add(Line(Point(x, top + block.rowHeight), Point(x + width, top + block.rowHeight), lineStyle))
         // Left border
         add(Line(Point(x, top), Point(x, top + block.rowHeight), lineStyle))
     }
 
     // Left-aligned text sits flush against the column's left border without this — only LEFT
-    // needs it, CENTER already keeps clear of both edges on its own.
+    // needs the offset, CENTER already keeps clear of both edges on its own. The width is the
+    // same one splitRowIntoPhysicalRows wrapped against (cellTextWidth), so a pre-wrapped line is
+    // never re-wrapped here.
     val (textX, textWidth) = if (cell.align == TextAlign.LEFT) {
-        (x + FRAME_CELL_PADDING) to (width - FRAME_CELL_PADDING)
+        (x + FRAME_CELL_PADDING) to cellTextWidth(width)
     } else {
         x to width
     }
@@ -426,33 +399,41 @@ private fun underlineElements(
     }
 }
 
+// Every header cell is one thick-bordered rectangle over its grid area: the widths of the spanned columns, the
+// heights of the spanned rows. A single-row header is the one-row grid of its cells (IrTableHeader.asGrid).
 private fun drawRichHeader(
     header: IrTableHeader,
     columns: List<IrColumn>,
     offsets: List<Length>,
     top: Length,
-    height: Length,
     textMeasurer: TextMeasurer,
     fontResolver: (TextStyle) -> FontRef
-): List<PageElement> =
-    header.cells.mapIndexed { index, cell ->
-        val columnWidth = columns[index].width
-        val x = offsets[index]
+): List<PageElement> {
+    val grid = requireNotNull(header.asGrid())
+    val rowTops = grid.rowHeights.runningFold(top) { y, h -> y + h }
+    return grid.cells.flatMap { placed ->
+        val cell = placed.cell
+        val x = offsets[placed.col]
+        val width = columns.subList(placed.col, placed.col + placed.span).map { it.width }.reduce { a, b -> a + b }
+        val y = rowTops[placed.row]
+        val endRow = minOf(placed.row + placed.rowSpan, grid.rowHeights.size)
+        val height = rowTops[endRow] - y
 
         val border = Rectangle(
-            rect = Rect(x, top, columnWidth, height),
+            rect = Rect(x, y, width, height),
             style = LayoutBorderStyle(width = ptToLength(Styles.tableBorder.widthPt))
         )
 
         val text = when (cell.orientation) {
             IrTextOrientation.HORIZONTAL ->
-                drawHorizontalHeaderCell(cell, x, top, columnWidth, height, textMeasurer, fontResolver)
+                drawHorizontalHeaderCell(cell, x, y, width, height, textMeasurer, fontResolver)
             IrTextOrientation.VERTICAL_BOTTOM_TO_TOP ->
-                drawVerticalHeaderCell(cell, x, top, columnWidth, height, textMeasurer, fontResolver)
+                drawVerticalHeaderCell(cell, x, y, width, height, textMeasurer, fontResolver)
         }
 
         listOf<PageElement>(border) + text
-    }.flatten()
+    }
+}
 
 // Fixed row height (unlike data rows): text is vertically centered within it rather than
 // driving the height, since the header's own IrTableHeader.height is the source of truth.
@@ -532,42 +513,22 @@ private fun frameRectangle(metrics: PageLayoutMetrics, style: IrBorderStyle): Re
         style = LayoutBorderStyle(width = ptToLength(style.widthPt))
     )
 
-// The stamp nests inside the frame's own bottom-right corner.
-private fun frameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
-    resolveAnchor(metrics.frameRect, Corner.BOTTOM_RIGHT, size = spec.size)
+// Frame/stamp bindings go to every block (cells of the other blocks are plain constants today).
+private val TABLELESS_SLOTS = setOf(StaticSlot.FRAME, StaticSlot.LEFT_MARGIN, StaticSlot.BELOW_FRAME)
 
-// Outside the main frame, in the left margin gutter: anchored to the frame's bottom-LEFT corner
-// with an opposite (BOTTOM_RIGHT) block corner — the strip's right edge touches the frame's left
-// border from the outside, its bottom lines up with the frame's own bottom. Being outside the
-// frame (x < margins.left), it doesn't eat into the content area — a geometric consequence of the
-// anchor choice, not a separate rule.
-private fun leftMarginFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
-    resolveAnchor(metrics.frameRect, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT, spec.size)
+private fun drawStaticBlocks(
+    blocks: List<PlacedStaticBlock>,
+    only: Set<StaticSlot>?,
+    bindings: DataContext,
+    textMeasurer: TextMeasurer,
+    fontResolver: (TextStyle) -> FontRef
+): List<PageElement> = blocks
+    .filter { only == null || it.slot in only }
+    .flatMap { drawFrame(it.spec, it.origin, bindings, textMeasurer, fontResolver) }
 
-// Below the frame's bottom line, in the sheet's own bottom-right margin gutter (between the
-// frame and the physical page edge) — anchored to the PAGE's corner, not the frame's, since
-// "Копировал"/"Формат" notes sit outside the frame entirely.
-private fun belowFrameOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
-    resolveAnchor(metrics.pageRect, Corner.BOTTOM_RIGHT, size = spec.size)
-
-// Specification left table: anchored to the frame's TOP-LEFT corner with TOP-RIGHT block corner.
-// Top edge at 292mm from page bottom (= 5mm from top on A4), right edge at frame's left margin.
-private fun specLeftTableOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
-    resolveAnchor(metrics.frameRect, Corner.TOP_LEFT, Corner.TOP_RIGHT, spec.size)
-
-// Main title right table: anchored to the frame's BOTTOM-RIGHT corner with BOTTOM-LEFT block corner.
-// Positioned above firstPageStamp (offset up by its height + 40mm of stamp).
-private fun mainTitleRightTableOrigin(metrics: PageLayoutMetrics, spec: FrameSpec): Point =
-    resolveAnchor(metrics.frameRect, Corner.BOTTOM_RIGHT, Corner.BOTTOM_RIGHT, spec.size,
-                  Point(Length.ZERO, Length.ofMillimeters(40.0)))
-
-private fun resolveBindings(bindings: FrameBindings?, pageNumber: Int, totalPages: Int): Map<FrameField, String> =
-    buildMap {
-        bindings?.designation?.let { put(FrameField.DESIGNATION, it) }
-        bindings?.name?.let { put(FrameField.NAME, it) }
-        put(FrameField.SHEET_NUMBER, pageNumber.toString())
-        put(FrameField.SHEETS_TOTAL, totalPages.toString())
-    }
+// Document data of the page setup with the layout-derived page.number / page.total laid over it.
+private fun pageData(data: DataContext?, pageNumber: Int, totalPages: Int): DataContext =
+    (data ?: DataContext.EMPTY).withPage(pageNumber, totalPages)
 
 private fun borderLineStyle(weight: BorderWeight): LineStyle {
     val widthPt = when (weight) {
@@ -582,12 +543,12 @@ private fun halfWidth(weight: BorderWeight): Length = borderLineStyle(weight).wi
 
 // Keeps left-aligned text (e.g. "Разраб.") off the cell border it would otherwise touch exactly;
 // applied uniformly (also to centered cells) rather than only for LEFT, since it's harmless there.
-private val FRAME_CELL_PADDING: Length = Length.ofMillimeters(1.0)
+internal val FRAME_CELL_PADDING: Length = Length.ofMillimeters(1.0)
 
-private fun drawFrame(
+internal fun drawFrame(
     spec: FrameSpec,
     origin: Point,
-    bindings: Map<FrameField, String>,
+    bindings: DataContext,
     textMeasurer: TextMeasurer,
     fontResolver: (TextStyle) -> FontRef
 ): List<PageElement> = spec.cells.flatMap { cell ->
@@ -595,9 +556,7 @@ private fun drawFrame(
 
     val text = when (cell) {
         is FrameCell.Constant -> cell.text
-        is FrameCell.Dynamic -> checkNotNull(bindings[cell.field]) {
-            "FrameSpec references ${cell.field} but no value was supplied"
-        }
+        is FrameCell.Dynamic -> Binding.render(cell.path, cell.format, cell.optional, bindings)
     }
 
     // Each side is stretched by half its own width beyond the corner (a manual square line cap —

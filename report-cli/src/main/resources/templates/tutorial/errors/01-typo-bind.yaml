@@ -1,0 +1,11 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: опечатка в bind
+name: e01
+sheet:
+  format: A4
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: t
+    type: text
+    bind: "${doc.designaton}"
+    size: {width: 100, height: 6}

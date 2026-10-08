@@ -1,0 +1,245 @@
+# Minimal sheet template: A4 portrait sheet with the GOST frame. Edit and re-run:
+#   ./gradlew :report-cli:runTemplate -Pargs="path/to/your.yaml output"
+# Units: mm. Axes: x right, y down, origin = sheet top-left. Full schema: docs/wiki/template-yaml.md
+name: sheet-frame
+
+sheet:
+  format: A3                # A4|A3|A2|A1|A0, or `width:` + `height:` instead
+  orientation: landscape     # portrait|landscape
+  margins: { left: 20, top: 5, right: 5, bottom: 5 }   # defines the content area (anchors sheet.content*)
+
+blocksets:
+  organizationSet:
+    blocks:
+      - id: organization
+        type: rect
+        size: { width: 50, height: 15 }
+        thickness: thick
+  parametersSet:
+    blocks:
+      - id: parameters
+        type: table
+        columns: [ 5, 5, 5 , 17, 18 ]
+        rows:
+          - height: 5
+            cells:
+              - { text: "Лит.", span: 3, align: center }
+              - { text: "Масса", align: center }
+              - { text: "Масштаб", align: center }
+          - height: 5
+            cells:
+              - ~
+              - ~
+              - ~
+              - ~
+              - ~
+  nameSet:
+    blocks:
+      - id: name
+        type: rect
+        size: { width: 70, height: 25 }
+        thickness: thick
+  designationSet:
+    blocks:
+      - id: designation
+        type: rect
+        size: { width: 120, height: 15 }
+        thickness: thick
+  signSet:
+    blocks:
+      - id: sign
+        type: table
+        columns: [ 7, 10, 23, 15, 10 ]
+        rows:
+          - height: 5
+            cells: [ { borders: { bottom: thin } }, { borders: { bottom: thin } },{ borders: { bottom: thin } },{ borders: { bottom: thin } },{ borders: { bottom: thin } }, ]
+          - height: 5
+            cells: [ { borders: { top: thin } },{ borders: { top: thin } },{ borders: { top: thin } },{ borders: { top: thin } },{ borders: { top: thin } }, ]
+          - height: 5
+            cells:
+              - { text: "Изм", align: center }
+              - { text: "Лист", align: center }
+              - { text: "№ докум.", align: center }
+              - { text: "Подп.", align: center }
+              - { text: "Дата", align: center }
+          - height: 5
+            cells:
+              - { text: "Разраб.", span: 2, borders: { bottom: thin } }
+              - { borders: { bottom: thin } }
+              - { borders: { bottom: thin } }
+              - { borders: { bottom: thin } }
+          - height: 5
+            cells:
+              - { text: "Пров.", span: 2, borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+          - height: 5
+            cells:
+              - { span: 2, borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+          - height: 5
+            cells:
+              - { text: "Н. контр.", span: 2, borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+          - height: 5
+            cells:
+              - { text: "Утв.", span: 2, borders: { top: thin } }
+              - { borders: { top: thin } }
+              - { borders: { top: thin } }
+              - { borders: { top: thin } }
+  mainInscriptionSet:
+    blocks:
+      - { id: organization, use: organizationSet }
+      - id: parameters
+        use: parametersSet
+        attach: { self: bottomRight, to: organization.topRight }
+      - id: name
+        use: nameSet
+        attach: { self: bottomRight, to: organization.bottomLeft }
+      - id: designation
+        use: designationSet
+        attach: { self: bottomRight, to: parameters.topRight }
+      - id: sign
+        use: signSet
+        attach: { self: bottomRight, to: name.bottomLeft }
+
+  bottomLeftTableSet:
+    blocks:
+      - id: bottomLeftTable
+        type: table
+        rotate: 90
+        columns: [ 25, 35, 25, 25, 35 ]
+        rows:
+          - height: 5
+            cells:
+              - { text: "Инв. № подл.", align: center }
+              - { text: "Подп. и дата", align: center }
+              - { text: "Взам. инв. №", align: center }
+              - { text: "Инв. № дубл.", align: center }
+              - { text: "Подп. и дата", align: center }
+          - height: 5
+            cells: [ ~,~,~,~,~ ]
+  topLeftTableSet:
+    blocks:
+      - id: topLeftTable
+        type: table
+        rotate: 90
+        columns: [ 60, 60 ]
+        rows:
+          - height: 5
+            cells:
+              - { text: "Справ. №", align: center }
+              - { text: "Перв. примен.", align: center }
+          - height: 7
+            cells: [ ~, ~ ]
+blocks:
+  # frame nested into the content area: 210-20-5 = 185 wide, 297-5-5 = 287 high
+  - id: frame
+    type: frame             # frame (default thick) | rect (default thin) | table | text | flow
+    thickness: thick        # thin (0.25) | thick (0.71) | number in mm
+    size: { width: 395, height: 287 }
+    # Привязка: точка `self` этого блока ставится в точку `to` (+ необязательный offset {x, y} в мм, оси листа).
+    #
+    # self — якоря самого блока (у любого блока считаются автоматически от его size):
+    #   topLeft      topCenter      topRight
+    #   middleLeft   center         middleRight
+    #   bottomLeft   bottomCenter   bottomRight
+    #
+    # to — формат `id.якорь`, где id: `sheet` (лист) или id другого блока:
+    #   sheet.<9 стандартных якорей>      углы, середины сторон и центр ПОЛНОГО листа (без учёта margins)
+    #                                     sheet.topLeft, sheet.topCenter, sheet.topRight,
+    #                                     sheet.middleLeft, sheet.center, sheet.middleRight,
+    #                                     sheet.bottomLeft, sheet.bottomCenter, sheet.bottomRight
+    #   sheet.contentTopLeft              4 угла области внутри полей (лист минус margins)
+    #   sheet.contentTopRight
+    #   sheet.contentBottomLeft
+    #   sheet.contentBottomRight
+    #   sheet.<имя>                       свои точки из `sheet.anchors` (мм от левого верхнего угла листа)
+    #   <idБлока>.<9 стандартных якорей>  якоря другого блока, например frame.bottomRight
+    #   <idТаблицы>.col[i].left|right     у таблиц ещё: границы колонок и рядов, ячейки (индексы с 0):
+    #   <idТаблицы>.row[j].top|bottom       stamp.col[1].left, stamp.row[0].bottom,
+    #   <idТаблицы>.cell[r,c].<якорь>       stamp.cell[2,3].topLeft
+    #
+    # Раздельно по осям (из якоря берётся только нужная координата, offset здесь число):
+    #   attach:
+    #     x: {self: topLeft,    to: a.topRight,    offset: 3}
+    #     y: {self: bottomLeft, to: c.bottomLeft,  offset: -1}
+    attach: { self: topLeft, to: sheet.contentTopLeft }
+  - id: mainInscription
+    use: mainInscriptionSet
+    when: first
+    reserves: true          # без этого таблица-поток пойдёт под основную надпись
+    attach: { self: bottomRight, to: frame.bottomRight }
+  - id: bottomLeftTable
+    use: bottomLeftTableSet
+    attach: { self: bottomRight, to: frame.bottomLeft }
+  - id: topLeftTable
+    use: topLeftTableSet
+    attach: { self: topRight, to: frame.topLeft }
+  - id: content
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank
+      remainder: gap
+      keep: { titleChain: true }
+      styles:
+        head: { base: tableHeader, size: 7 }
+        data: tableText
+        headSmall: {base: tableHeader, size: 4.5}
+      # Вычисляемые поля (доступны в ячейках как ${item.<имя>}): сквозной номер строки и сумма количеств.
+      computed:
+        pos: { sequence: { scope: table, start: 1, step: 1 } }
+        total: { add: [ countPerProduct, countPerSet, countPerSetting ] }
+      columns:
+        - { id: n, width: 7, align: center }
+        - { id: name, width: 60, align: left }
+        - { id: productCode, width: 45, align: center }
+        - { id: docDesignation, width: 70, align: center }
+        - { id: contractor, width: 55, align: center }
+        - { id: inclusion, width: 70, align: center }
+        - { id: countPerProduct, width: 16, align: center }
+        - { id: countPerSet, width: 16, align: center }
+        - { id: countPerSetting, width: 16, align: center }
+        - { id: total, width: 16, align: center }
+        - { id: note, width: 24, align: center }
+      header:
+        repeat: true
+        rows:
+          - height: 9
+            cells:
+              - { text: "№ строки", rowSpan: 2, rotate: 90, style: headSmall }
+              - { text: "Наименование", rowSpan: 2, align: center, style: head }
+              - { text: "Код\nпродукции", rowSpan: 2, style: head }
+              - { text: "Обозначение документа\nна поставку", rowSpan: 2, style: head }
+              - { text: "Поставщик", rowSpan: 2, style: head }
+              - { text: "Куда входит (обозначение)", rowSpan: 2, lines: [ "Куда входит", "(обозначение)" ], style: head }
+              - {text: "Количество", span: 4, style: head}
+              - { text: "Приме-\nчание", rowSpan: 2, style: head }
+          - height: 18
+            cells:
+              - { text: "на из-\nделие", style: headSmall }
+              - { text: "в комп-\nлекты", style: headSmall }
+              - { text: "на ре-\nгулир.", style: headSmall }
+              - { text: "всего", style: headSmall }
+      row:
+        # Ячейки задаются картой по id колонки и должны покрывать ВСЕ колонки. Значения берутся из `item`
+        # (файл данных: sheet-frame-data.yaml). `optional: true` — если значения нет, ячейка пустая, а не ошибка.
+        cells:
+          n: { bind: "${line.number}", style: data }
+          name: { bind: "${item.name}", style: data }
+          productCode: { bind: "${item.productCode}", optional: true, style: data }
+          docDesignation: { bind: "${item.docDesignation}", optional: true, style: data }
+          contractor: { bind: "${item.contractor}", optional: true, style: data }
+          inclusion: { bind: "${item.inclusion}", optional: true, style: data }
+          countPerProduct: { bind: "${item.countPerProduct}", optional: true, style: data }
+          countPerSet: { bind: "${item.countPerSet}", optional: true, style: data }
+          countPerSetting: { bind: "${item.countPerSetting}", optional: true, style: data }
+          total: { bind: "${item.total}", optional: true, style: data }
+          note: { bind: "${item.note}", optional: true, style: data }
+

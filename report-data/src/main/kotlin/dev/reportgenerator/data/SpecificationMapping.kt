@@ -18,9 +18,13 @@ fun mapToSpecificationData(dto: SpecificationDto): SpecificationData =
     )
 
 private fun mapKind(raw: String): ItemKind = when (raw.uppercase()) {
+    "DOCUMENTATION" -> ItemKind.DOCUMENTATION
+    "COMPLEX" -> ItemKind.COMPLEX
     "ASSEMBLY" -> ItemKind.ASSEMBLY
+    "SOFTWARE" -> ItemKind.SOFTWARE
     "STANDARD" -> ItemKind.STANDARD
     "OTHER" -> ItemKind.OTHER
     "MATERIAL" -> ItemKind.MATERIAL
+    "SET" -> ItemKind.SET
     else -> ItemKind.PART
 }

@@ -1,0 +1,78 @@
+# Шаг 4: приёмы привязки. Каждый блок: что стоит, куда, как.
+name: t04-attach
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: frame
+    type: frame
+    size: {width: 185, height: 287}
+    attach: {self: topLeft, to: sheet.contentTopLeft}
+
+  # базовый блок: ВНУТРЬ рамки (одинаковый угол) с отступом 10 мм
+  - id: a
+    type: rect
+    size: {width: 60, height: 30}
+    attach: {self: topLeft, to: frame.topLeft, offset: {x: 10, y: 10}}
+
+  # НАРУЖУ (противоположный угол): b стоит справа от a, впритык; offset x: 5 даёт зазор
+  - id: b
+    type: rect
+    size: {width: 40, height: 30}
+    attach: {self: topLeft, to: a.topRight, offset: {x: 5, y: 0}}
+
+  # ниже a: нижний край a = верхний край c
+  - id: c
+    type: rect
+    size: {width: 60, height: 20}
+    attach: {self: topLeft, to: a.bottomLeft, offset: {x: 0, y: 5}}
+
+  # по осям отдельно: x от b (левый край в b.left), y от c (низ в низ c)
+  - id: d
+    type: rect
+    size: {width: 20, height: 8}
+    attach:
+      x: {self: topLeft, to: b.topLeft}
+      y: {self: bottomLeft, to: c.bottomLeft}
+
+  # надпись по центру прямоугольника: блок text центром в a.center
+  - id: aLabel
+    type: text
+    text: "A"
+    size: {width: 60, height: 10}
+    align: center
+    attach: {self: center, to: a.center}
+
+  # таблица и её якоря: колонки/ряды/ячейки
+  - id: grid
+    type: table
+    columns: [20, 30, 30]
+    rows:
+      - {height: 8, cells: ["x", "y", "z"]}
+      - {height: 8, cells: ["1", "2", "3"]}
+    attach: {self: topLeft, to: c.bottomLeft, offset: {x: 0, y: 10}}
+
+  # к ячейке: внутри {...} ссылку с квадратной скобкой надо брать в кавычки (иначе invalid YAML)
+  - id: e
+    type: rect
+    size: {width: 10, height: 10}
+    attach: {self: topLeft, to: "grid.cell[1,2].bottomLeft", offset: {x: 0, y: 3}}
+
+  # к границе колонки и ряда: col[i].left лежит на верхней грани таблицы, row[j].bottom на левой
+  - id: f
+    type: rect
+    size: {width: 10, height: 10}
+    attach:
+      x: {self: topLeft, to: "grid.col[1].left"}      # и col[i], и row[j] в {...} тоже в кавычках: виновата скобка [
+      y: {self: topLeft, to: "grid.row[0].bottom"}
+
+  # без кавычек, в столбик
+  - id: g
+    type: rect
+    size: {width: 10, height: 10}
+    attach:
+      self: bottomRight
+      to: grid.cell[0,1].topLeft

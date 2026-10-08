@@ -1,0 +1,82 @@
+# Шаг 9в: арифметика computed и итоги totals. Колонки: 10+70+20+15+30+40 = 185 мм.
+name: t09c-totals
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: body
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank
+      styles: {head: tableHeader, data: tableText, title: groupHeader}
+      groupBy:
+        field: kind
+        order: [FASTENER, CABLE]
+        titles: {FASTENER: "Крепёж", CABLE: "Кабели"}
+      computed:
+        pos: {sequence: {scope: group}}
+        cost: {multiply: [qty, price], scale: 2, rounding: HALF_UP}   # стоимость; нет цены, нет и стоимости
+      groupTitle: {column: name, style: title, align: center}
+      columns:
+        - {id: pos, width: 10, align: center}
+        - {id: name, width: 70}
+        - {id: qty, width: 20, align: center}
+        - {id: unit, width: 15, align: center}
+        - {id: price, width: 30, align: center}
+        - {id: cost, width: 40, align: center}
+      header:
+        height: 10
+        cells:
+          pos: {text: "№", style: head}
+          name: {text: "Наименование", style: head}
+          qty: {text: "Кол.", style: head}
+          unit: {text: "Ед.", style: head}
+          price: {text: "Цена", style: head}
+          cost: {text: "Сумма", style: head}
+      row:
+        cells:
+          pos: {bind: "${item.pos}", style: data}
+          name: {bind: "${item.name}", style: data}
+          qty: {bind: "${item.qty}", style: data}
+          unit: {bind: "${item.unit}", style: data}
+          price:
+            style: data
+            cases:
+              - where: {field: price, isNull: true}
+                text: "по запросу"
+            bind: "${item.price}"
+            format: {pattern: "0.00", locale: ru, rounding: HALF_UP}
+          cost: {bind: "${item.cost}", optional: true, style: data, format: {pattern: "0.00", locale: ru, rounding: HALF_UP}}
+      totals:                                  # строки итогов: подвал группы и подвал таблицы
+        - id: groupCost
+          scope: group                         # по строкам каждой группы
+          agg: sum
+          field: cost
+          label: "Итого по группе"
+          labelColumn: name
+          valueColumn: cost
+          format: {pattern: "0.00", locale: ru, rounding: HALF_UP}
+        - id: totalCost
+          scope: table                         # по всей таблице
+          agg: sum
+          field: cost
+          label: "Всего"
+          labelColumn: name
+          valueColumn: cost
+          format: {pattern: "0.00", locale: ru, rounding: HALF_UP}
+        - {id: positions, scope: table, agg: count, label: "Позиций", labelColumn: name, valueColumn: qty}
+        - id: avgPrice                         # среднее по строкам, у которых цена есть
+          scope: table
+          agg: avg
+          field: price
+          label: "Средняя цена"
+          labelColumn: name
+          valueColumn: price
+          scale: 2
+          rounding: HALF_UP
+          where: {field: price, notNull: true}
+          format: {pattern: "0.00", locale: ru}

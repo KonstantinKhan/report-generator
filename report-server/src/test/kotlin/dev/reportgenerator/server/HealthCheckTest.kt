@@ -7,6 +7,9 @@ import dev.reportgenerator.layout.DefaultFontRegistry
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
+import io.ktor.client.statement.readBytes
 import io.ktor.server.testing.testApplication
 import java.io.File
 import java.nio.file.Files
@@ -41,5 +44,30 @@ class HealthCheckTest {
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("OK", response.bodyAsText())
+    }
+
+    @Test
+    fun `report download returns generated pdf`() = testApplication {
+        application {
+            reportServerModule(StubPdmClient(), tempDir, DefaultFontRegistry.load())
+        }
+        val id = "123e4567-e89b-12d3-a456-426614174000"
+        File(tempDir, "$id.pdf").writeBytes("%PDF-test".toByteArray())
+
+        val response = client.get("/reports/$id")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals(ContentType.Application.Pdf, response.contentType()?.withoutParameters())
+        assertEquals("%PDF-test", String(response.readBytes()))
+    }
+
+    @Test
+    fun `report download rejects non-uuid id and unknown id`() = testApplication {
+        application {
+            reportServerModule(StubPdmClient(), tempDir, DefaultFontRegistry.load())
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, client.get("/reports/not-a-uuid").status)
+        assertEquals(HttpStatusCode.NotFound, client.get("/reports/123e4567-e89b-12d3-a456-426614174000").status)
     }
 }

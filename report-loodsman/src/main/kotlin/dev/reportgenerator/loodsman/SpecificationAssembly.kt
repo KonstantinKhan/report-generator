@@ -12,50 +12,64 @@ internal data class ChildLink(
 )
 
 internal fun mapItemKind(typeName: String?): String? = when (typeName?.trim()?.lowercase()) {
+    "сборочный чертеж", "сборочный чертёж" -> "DOCUMENTATION"
+    "комплекс" -> "COMPLEX"
+    "сборочная единица" -> "ASSEMBLY"
     "деталь" -> "PART"
+    // SOFTWARE (программные изделия и базы данных): Loodsman type not defined yet, nothing maps to it.
     "стандартное изделие" -> "STANDARD"
     "прочее изделие" -> "OTHER"
     "материал по кд" -> "MATERIAL"
+    "комплект" -> "SET"
     else -> null
 }
 
-// Loodsman's "key attribute" in свойства (get-prop-objects.product) means different things
-// per object type: Обозначение for Деталь/Сборочная единица, Наименование for everything else.
-internal fun isDetailOrAssembly(typeName: String?): Boolean =
-    typeName?.trim()?.lowercase() in setOf("деталь", "сборочная единица")
+// Loodsman's "key attribute" (get-prop-objects.product) means different things per object type:
+//  * Обозначение for Сборочный чертеж/Комплекс/Сборочная единица/Деталь/Комплект (Наименование is a separate attribute);
+//  * Наименование for Стандартное изделие/Прочее изделие/Материал по КД
+//    (their Обозначение for the report is the separate attribute "Обозначение изделия", not for Материал).
+private val DESIGNATION_KEYED_KINDS = setOf("DOCUMENTATION", "COMPLEX", "ASSEMBLY", "PART", "SET")
+private val KINDS_WITH_PRODUCT_DESIGNATION_ATTR = setOf("STANDARD", "OTHER")
 
+internal fun isDesignationKeyed(typeName: String?): Boolean = mapItemKind(typeName) in DESIGNATION_KEYED_KINDS
+
+// Whether the report designation of this type comes from the attribute "Обозначение изделия".
+internal fun hasProductDesignationAttr(typeName: String?): Boolean =
+    mapItemKind(typeName) in KINDS_WITH_PRODUCT_DESIGNATION_ATTR
+
+// `productByObjectId` = key attribute (PropObjectDto.product). `nameByObjectId` = attribute Наименование,
+// `productDesignationByObjectId` = attribute "Обозначение изделия".
 internal fun buildItems(
     children: List<ChildLink>,
     typeNameByObjectId: Map<Int, String>,
-    designationByObjectId: Map<Int, String>,
+    productByObjectId: Map<Int, String>,
     nameByObjectId: Map<Int, String>,
     quantityByLinkId: Map<Int, Double>,
     unitByLinkId: Map<Int, String?> = emptyMap(),
+    productDesignationByObjectId: Map<Int, String> = emptyMap(),
 ): List<ItemDto> = children.mapNotNull { child ->
     val typeName = typeNameByObjectId[child.idChild] ?: return@mapNotNull null
     val kind = mapItemKind(typeName) ?: return@mapNotNull null
 
-    val isDetailOrAssembly = isDetailOrAssembly(typeName)
+    val designationKeyed = kind in DESIGNATION_KEYED_KINDS
 
-    // For Деталь/СЕ the key attribute (product) is Обозначение.
-    // For Стандартное/Прочее/Материал the key attribute (product) IS Наименование —
-    // there is no separate Обозначение for these types, so the "Обозначение" column
-    // stays empty and only "Наименование" is filled.
-    val productValue = designationByObjectId[child.idChild]
+    val productValue = productByObjectId[child.idChild]
         ?: throw LoodsmanApiException(
-            "Attribute '${if (isDetailOrAssembly) "Обозначение" else "Наименование"}' is missing for object ${child.idChild}"
+            "Key attribute is missing for object ${child.idChild}"
         )
 
-    val designation = if (isDetailOrAssembly) productValue else null
-
-    val name = if (isDetailOrAssembly) {
-        nameByObjectId[child.idChild] ?: productValue
-    } else {
-        productValue
+    val designation = when {
+        designationKeyed -> productValue
+        kind in KINDS_WITH_PRODUCT_DESIGNATION_ATTR -> productDesignationByObjectId[child.idChild]
+        else -> null // Материал: Обозначение не заполняется
     }
 
+    val name = if (designationKeyed) nameByObjectId[child.idChild] ?: productValue else productValue
+
+    // Документация: the column "Кол." stays empty, a missing link quantity is fine.
     val quantity = quantityByLinkId[child.idLink]
-        ?: throw LoodsmanApiException("Attribute 'Количество' is missing for link ${child.idLink}")
+        ?: if (kind == "DOCUMENTATION") 0.0
+        else throw LoodsmanApiException("Attribute 'Количество' is missing for link ${child.idLink}")
     val unit = unitByLinkId[child.idLink]
 
     ItemDto(designation = designation, name = name, kind = kind, quantity = quantity, unit = unit)

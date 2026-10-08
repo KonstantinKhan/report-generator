@@ -1,0 +1,121 @@
+# Шаг 10: сквозной пример. «Ведомость покупных изделий»: лист + рамка (рисует движок) + штамп первой и следующих страниц
+# + боковая надпись + таблица-поток с группами, нумерацией, суммой и итогами. Не точная форма ЕСКД.
+# Колонки потока: 10+70+30+15+15+20+25 = 185 мм = ширина области контента.
+name: t10-complete
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocksets:
+  # общая часть штампа: обозначение и номер листа; высота 10 мм
+  stampBase:
+    blocks:
+      - id: grid
+        type: table
+        columns: [120, 40, 25]
+        rows:
+          - height: 10
+            cells:
+              - {bind: "${doc.designation}", align: center, fontSize: 14}
+              - {text: "Лист", align: center}
+              - {bind: "${page.number}", align: center}
+
+blocks:
+  # первая страница: наименование документа над общей частью, итого 25 мм (reserves: вычитается из потока)
+  - id: firstStamp
+    type: table
+    when: first
+    reserves: true
+    columns: [185]
+    rows:
+      - {height: 15, cells: [{bind: "${doc.name}", align: center, fontSize: 14}]}
+    attach: {self: bottomRight, to: firstBase.topRight}      # над общей частью
+
+  - id: firstBase
+    use: stampBase
+    when: first
+    reserves: true
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  # страницы 2+: только общая часть, 10 мм
+  - id: restBase
+    use: stampBase
+    when: rest
+    reserves: true
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  # боковая подпись снаружи рамки, на всех страницах
+  - id: side
+    type: table
+    rotate: 90
+    columns: [40, 40]
+    rows:
+      - height: 5
+        cells: [{text: "Инв. № подл.", align: center}, {text: "Подп. и дата", align: center}]
+      - {height: 7, cells: [~, ~]}
+    attach: {self: bottomRight, to: sheet.contentBottomLeft}
+
+  - id: body
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank
+      keep: {titleChain: true}
+      styles: {head: tableHeader, data: tableText, title: groupHeader}
+      groupBy:
+        field: category
+        order: [FASTENER, BEARING, ELECTRIC]
+        titles: {FASTENER: "Крепёж", BEARING: "Подшипники", ELECTRIC: "Электроизделия"}
+      sortBy:
+        - {field: name, order: asc, nulls: last}
+      computed:
+        pos: {sequence: {scope: group}}
+        cost: {multiply: [qty, price], scale: 2, rounding: HALF_UP}
+      groupTitle: {column: name, style: title, align: center, spacerBefore: 1, spacerAfter: 1}
+      columns:
+        - {id: pos, width: 10, align: center}
+        - {id: name, width: 70}
+        - {id: supplier, width: 30}
+        - {id: qty, width: 15, align: center}
+        - {id: unit, width: 15, align: center}
+        - {id: price, width: 20, align: center}
+        - {id: cost, width: 25, align: center}
+      header:
+        height: 12
+        cells:
+          pos: {text: "№", style: head}
+          name: {text: "Наименование", style: head}
+          supplier: {text: "Поставщик", style: head}
+          qty: {text: "Кол.", style: head}
+          unit: {text: "Ед.", style: head}
+          price: {text: "Цена", style: head}
+          cost: {text: "Сумма", style: head}
+      row:
+        cells:
+          pos: {bind: "${item.pos}", style: data}
+          name: {bind: "${item.name}", style: data}
+          supplier: {bind: "${item.supplier}", optional: true, style: data}
+          qty:
+            style: data
+            cases:
+              - where: {field: unit, in: [шт, компл]}
+                bind: "${item.qty}"
+                format: {pattern: "0", rounding: HALF_UP}
+            bind: "${item.qty}"
+            format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
+          unit: {bind: "${item.unit}", style: data}
+          price:
+            style: data
+            cases:
+              - {where: {field: price, isNull: true}, text: "по запросу"}
+            bind: "${item.price}"
+            format: {pattern: "0.00", locale: ru, rounding: HALF_UP}
+          cost: {bind: "${item.cost}", optional: true, style: data, format: {pattern: "0.00", locale: ru, rounding: HALF_UP}}
+      totals:
+        - {id: groupCost, scope: group, agg: sum, field: cost, label: "Итого по группе", labelColumn: name, valueColumn: cost,
+           format: {pattern: "0.00", locale: ru, rounding: HALF_UP}}
+        - {id: totalCost, scope: table, agg: sum, field: cost, label: "Всего", labelColumn: name, valueColumn: cost,
+           format: {pattern: "0.00", locale: ru, rounding: HALF_UP}}
+        - {id: positions, scope: table, agg: count, label: "Позиций", labelColumn: name, valueColumn: qty}

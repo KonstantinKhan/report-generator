@@ -1,0 +1,16 @@
+# Шаг 1: пустой лист. A4 книжная, поля 20/5/5/5.
+name: t01-sheet
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+  anchors:
+    mark: {x: 100, y: 50}      # своя точка: 100 мм вправо, 50 мм вниз от левого верхнего угла листа
+
+blocks:
+  # маркер, чтобы увидеть якорь глазами: квадрат 10x10, центр которого стоит в sheet.mark
+  - id: marker
+    type: rect
+    size: {width: 10, height: 10}
+    attach: {self: center, to: sheet.mark}

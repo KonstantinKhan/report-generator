@@ -1,0 +1,9 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: блок виден на меньшем числе страниц
+name: e04
+sheet:
+  format: A4
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - {id: first, type: rect, when: first, size: {width: 10, height: 10}}
+  - {id: always, type: rect, size: {width: 10, height: 10}, attach: {self: topLeft, to: first.topRight}}

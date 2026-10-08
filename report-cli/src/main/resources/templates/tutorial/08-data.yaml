@@ -1,0 +1,58 @@
+# Шаг 8: данные. Каждый bind это путь doc.* / page.* ; тип поля определяет вывод и допустимый format.
+name: t08-data
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: frame
+    type: frame
+    size: {width: 185, height: 287}
+    attach: {self: topLeft, to: sheet.contentTopLeft}
+
+  - id: designation                      # String: как есть
+    type: text
+    bind: "${doc.designation}"
+    size: {width: 100, height: 6}
+    attach: {self: topLeft, to: frame.topLeft, offset: {x: 10, y: 10}}
+
+  - id: mass                             # Decimal + format: до 2 знаков, запятая
+    type: text
+    bind: "${doc.mass}"
+    format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
+    size: {width: 100, height: 6}
+    attach: {self: topLeft, to: designation.bottomLeft}
+
+  - id: issued                           # Date + format
+    type: text
+    bind: "${doc.issued}"
+    format: {pattern: "dd.MM.yyyy"}
+    size: {width: 100, height: 6}
+    attach: {self: topLeft, to: mass.bottomLeft}
+
+  - id: code                             # !str "007": без тега было бы Integer 7
+    type: text
+    bind: "${doc.code}"
+    size: {width: 100, height: 6}
+    attach: {self: topLeft, to: issued.bottomLeft}
+
+  - id: status                           # Enum: имя значения
+    type: text
+    bind: "${doc.status}"
+    size: {width: 100, height: 6}
+    attach: {self: topLeft, to: code.bottomLeft}
+
+  - id: checker                          # поле объявлено (~), значения нет: optional даёт пустую строку
+    type: text
+    bind: "${doc.checker}"
+    optional: true
+    size: {width: 100, height: 6}
+    attach: {self: topLeft, to: status.bottomLeft}
+
+  - id: pageNo                           # page.number / page.total есть всегда
+    type: text
+    bind: "${page.number}"
+    size: {width: 100, height: 6}
+    attach: {self: topLeft, to: checker.bottomLeft}

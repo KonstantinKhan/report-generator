@@ -1,9 +1,13 @@
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+}
+
 dependencies {
-    api(project(":report-layout-ir"))
-    implementation(project(":report-layout"))
+    api(projects.reportLayoutIr)
+    implementation(projects.reportLayout)
     implementation(libs.pdfbox)
 
-    testImplementation(project(":report-ir"))
+    testImplementation(projects.reportIr)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)
 }

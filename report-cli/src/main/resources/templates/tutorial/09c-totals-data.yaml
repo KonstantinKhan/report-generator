@@ -1,0 +1,5 @@
+item:
+  - {kind: FASTENER, name: "Болт М6x20", qty: 24, unit: шт, price: 3.2}
+  - {kind: FASTENER, name: "Шайба 6", qty: 48, unit: шт, price: 0.45}
+  - {kind: FASTENER, name: "Смазка", qty: 0.35, unit: кг}
+  - {kind: CABLE, name: "Кабель ВВГ 3x1,5", qty: 12.5, unit: м, price: 64}

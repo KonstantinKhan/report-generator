@@ -1,0 +1,16 @@
+# Шаг 3б: эксперимент с границами. Таблица без рамки по умолчанию (borders: none), стороны заданы точечно.
+# Таблица без attach встаёт в sheet.topLeft (0, 0), поля листа не учитываются.
+name: t03b-borders
+
+sheet: {format: A4, margins: {top: 5, right: 5, bottom: 5, left: 20}}
+
+blocks:
+  - id: t
+    type: table
+    columns: [20, 20, 20]
+    borders: none
+    rows:
+      - {height: 10, cells: [{borders: {right: thin}}, {borders: {left: thick}}, ~]}   # тонкая | толстая на одном ребре
+      - {height: 10, cells: [{borders: {right: thick}}, {borders: {left: thin}}, ~]}   # наоборот
+      - {height: 10, cells: [{borders: {right: thick}}, ~, ~]}                         # толстая только слева, у соседа none
+      - {height: 10, cells: [~, {borders: {left: thin}}, ~]}                           # тонкая только справа, у соседа none

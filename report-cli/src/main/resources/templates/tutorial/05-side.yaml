@@ -1,0 +1,30 @@
+# Шаг 5: боковая повёрнутая таблица. Описываем её как обычную (колонки слева направо), rotate: 90 поворачивает блок
+# против часовой стрелки: первая колонка оказывается ВНИЗУ, ряды идут справа налево, текст читается снизу вверх.
+name: t05-side
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: frame
+    type: frame
+    size: {width: 185, height: 287}
+    attach: {self: topLeft, to: sheet.contentTopLeft}
+
+  # без поворота: 60+40+35 = 135 мм в длину, 5+7 = 12 мм в высоту. После rotate: 90 блок 12 мм шириной и 135 мм высотой
+  - id: side
+    type: table
+    rotate: 90
+    columns: [60, 40, 35]
+    rows:
+      - height: 5
+        cells:
+          - {text: "Инв. № подл.", align: center}
+          - {text: "Подп. и дата", align: center}
+          - {text: "Взам. инв. №", align: center}
+      - height: 7
+        cells: [~, ~, ~]
+    # правый край стоит на левом крае рамки, низ совпадает с низом рамки: блок висит снаружи слева
+    attach: {self: bottomRight, to: frame.bottomLeft}

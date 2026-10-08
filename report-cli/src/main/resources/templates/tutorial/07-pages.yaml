@@ -1,0 +1,40 @@
+# Шаг 7: страницы. when: first / rest / all. Страница 1 строится как first, остальные как rest.
+# reserves: true вычитает блок из области потока (на этом шаге потока нет, смысл reserves виден в шаге 9).
+name: t07-pages
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: frame                          # when не указан = all: на всех страницах
+    type: frame
+    size: {width: 185, height: 287}
+    attach: {self: topLeft, to: sheet.contentTopLeft}
+
+  - id: firstStamp                     # только первая страница: высокий штамп 40 мм
+    type: table
+    when: first
+    reserves: true
+    columns: [100, 85]
+    rows:
+      - {height: 25, cells: [{bind: "${doc.designation}", align: center}, {text: "Первый лист", align: center}]}
+      - {height: 15, cells: [{bind: "${doc.name}"}, {bind: "${page.number}", align: center}]}
+    attach: {self: bottomRight, to: frame.bottomRight}
+
+  - id: restStamp                      # страницы 2+: низкий штамп 15 мм
+    type: table
+    when: rest
+    reserves: true
+    columns: [100, 75, 10]
+    rows:
+      - height: 15
+        cells:
+          - {bind: "${doc.designation}", align: center}
+          - {text: "Продолжение", align: center}
+          - {bind: "${page.number}", align: center}
+    attach: {self: bottomRight, to: frame.bottomRight}
+
+  # привязаться к блоку, который есть не на всех страницах, нельзя: note видна на all, firstStamp только на first
+  # (проверка в шаге 11, там реальный текст ошибки)

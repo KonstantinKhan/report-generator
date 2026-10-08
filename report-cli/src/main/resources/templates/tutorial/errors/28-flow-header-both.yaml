@@ -1,0 +1,72 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: две формы шапки сразу: height и rows. Данные: ../09f-multi-header-data.yaml
+name: t09f-multi-header
+
+sheet:
+  format: A3
+  orientation: landscape
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: titleBlock
+    type: table
+    reserves: true
+    columns: [395]
+    rows:
+      - {height: 15, cells: [{bind: "${doc.designation}", align: center, fontSize: 14}]}
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  - id: body
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank
+      styles:
+        head: {base: tableHeader, size: 3.5}
+        headSmall: {base: tableHeader, size: 3}
+        data: tableText
+      lines: {}
+      columns:                                    # id колонок нужны для строк данных; ячейки шапки по ним не адресуются
+        - {id: n, width: 7, align: center}
+        - {id: name, width: 60}
+        - {id: productCode, width: 45}
+        - {id: docDesignation, width: 70}
+        - {id: contractor, width: 55}
+        - {id: inclusion, width: 70}
+        - {id: countPerProduct, width: 16, align: center}
+        - {id: countPerSet, width: 16, align: center}
+        - {id: countPerSetting, width: 16, align: center}
+        - {id: total, width: 16, align: center}
+        - {id: note, width: 24}
+      header:
+        repeat: true
+        height: 27
+        rows:                                     # вместо height + cells; взаимоисключающие формы
+          - height: 9
+            cells:                                # список по порядку колонок, как в блоке table
+              - {text: "№ строки", rowSpan: 2, rotate: 90, style: headSmall}
+              - {text: "Наименование", rowSpan: 2, style: head}
+              - {text: "Код продукции", rowSpan: 2, style: head}
+              - {text: "Обозначение документа", rowSpan: 2, style: head}
+              - {text: "Подрядчик", rowSpan: 2, style: head}
+              - {text: "Входимость", rowSpan: 2, style: head}
+              - {text: "Количество", span: 4, style: head}          # объединяет 4 колонки
+              - {text: "Примечание", rowSpan: 2, style: head}
+          - height: 18
+            cells:                                # только колонки, не занятые rowSpan сверху: здесь 4 (колонки 6..9)
+              - {text: "на изделие", lines: ["на из-", "делие"], style: headSmall}
+              - {text: "на комплект", lines: ["на", "комплект"], style: headSmall}
+              - {text: "на регулировку", lines: ["на регу-", "лиров."], style: headSmall}
+              - {text: "всего", style: headSmall}
+      row:
+        cells:
+          n: {bind: "${line.number}", style: data}
+          name: {bind: "${item.name}", style: data}
+          productCode: {bind: "${item.productCode}", optional: true, style: data}
+          docDesignation: {bind: "${item.docDesignation}", optional: true, style: data}
+          contractor: ~
+          inclusion: ~
+          countPerProduct: {bind: "${item.qty}", style: data}
+          countPerSet: ~
+          countPerSetting: ~
+          total: {bind: "${item.qty}", style: data}
+          note: ~

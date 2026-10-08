@@ -1,0 +1,24 @@
+PAGE 1 A4 21000 29700
+R 2000 500 18500 28700 w=71 Color(r=0, g=0, b=0)
+R 2000 500 1000 2000 w=71 Color(r=0, g=0, b=0)
+T "Позиция" 2290 910 420 1180 gost-type-a-italic 9.921259842519685 i=false VERTICAL_BOTTOM_TO_TOP
+R 3000 500 17500 800 w=71 Color(r=0, g=0, b=0)
+T "Группа" 11248 690 1004 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
+R 3000 1300 3000 1200 w=71 Color(r=0, g=0, b=0)
+T "Имя" 4231 1690 537 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
+R 6000 1300 14500 1200 w=71 Color(r=0, g=0, b=0)
+T "Кол." 12958 1690 584 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
+L 2000 2500 3000 2500 w=25 Color(r=0, g=0, b=0)
+L 3000 2500 3000 3300 w=25 Color(r=0, g=0, b=0)
+L 2000 3300 3000 3300 w=25 Color(r=0, g=0, b=0)
+L 2000 2500 2000 3300 w=25 Color(r=0, g=0, b=0)
+L 3000 2500 6000 2500 w=25 Color(r=0, g=0, b=0)
+L 6000 2500 6000 3300 w=25 Color(r=0, g=0, b=0)
+L 3000 3300 6000 3300 w=25 Color(r=0, g=0, b=0)
+L 3000 2500 3000 3300 w=25 Color(r=0, g=0, b=0)
+T "Вал" 3100 2690 537 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL
+L 6000 2500 20500 2500 w=25 Color(r=0, g=0, b=0)
+L 20500 2500 20500 3300 w=25 Color(r=0, g=0, b=0)
+L 6000 3300 20500 3300 w=25 Color(r=0, g=0, b=0)
+L 6000 2500 6000 3300 w=25 Color(r=0, g=0, b=0)
+T "2" 6100 2690 163 420 gost-type-a-italic 9.921259842519685 i=false HORIZONTAL

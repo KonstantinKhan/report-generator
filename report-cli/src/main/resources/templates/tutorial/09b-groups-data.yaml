@@ -1,0 +1,8 @@
+# kind и status читаются как строки; kind (поле groupBy) шаблон превращает в enum сам.
+item:
+  - {kind: CABLE, name: "Кабель ВВГ 3x1,5", qty: 12.5, unit: м, status: активно}
+  - {kind: FASTENER, name: "Болт 10", qty: 8, unit: шт, status: активно, note: "оцинк."}
+  - {kind: FASTENER, name: "Болт 2", qty: 2.5, unit: компл, status: активно}
+  - {kind: FASTENER, name: "Шайба", qty: 48, unit: шт, status: отменено}
+  - {kind: CABLE, name: "Кабель КГ 2x1", qty: 0.35, unit: км, status: активно}
+  - {kind: DISCONTINUED, name: "Старый крепёж", qty: 1, unit: шт, status: активно}

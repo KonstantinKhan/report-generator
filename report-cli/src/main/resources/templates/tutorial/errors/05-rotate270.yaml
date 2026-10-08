@@ -1,0 +1,8 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: поворот текста 270
+name: e05
+sheet:
+  format: A4
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - {id: t, type: text, text: "x", rotate: 270, size: {width: 10, height: 10}}

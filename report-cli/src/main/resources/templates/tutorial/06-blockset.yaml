@@ -1,0 +1,49 @@
+# Шаг 6: наборы (blocksets). Один раз описали, много раз вызвали; параметры и порты; вложенность.
+name: t06-blockset
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocksets:
+  # подписанная коробка: размер и подпись параметрами, наружу выставлен порт tail (низ коробки)
+  labelBox:
+    params: {w: 40, h: 12, label: null}      # null = параметр обязателен, остальные имеют умолчание
+    ports: {tail: box.bottomLeft}
+    blocks:
+      - {id: box, type: rect, size: {width: "${param.w}", height: "${param.h}"}}
+      - id: caption
+        type: text
+        text: "${param.label}"
+        align: center
+        size: {width: "${param.w}", height: 6}
+        attach: {self: center, to: box.center}
+
+  # набор из двух вызовов labelBox: вложенность. Внутри набора блоки видят только друг друга.
+  pair:
+    params: {left: null, right: null}
+    blocks:
+      - {id: l, use: labelBox, args: {label: "${param.left}"}}
+      - {id: r, use: labelBox, args: {label: "${param.right}", w: 60}, attach: {self: topLeft, to: l.topRight}}
+
+blocks:
+  - id: frame
+    type: frame
+    size: {width: 185, height: 287}
+    attach: {self: topLeft, to: sheet.contentTopLeft}
+
+  - id: one
+    use: labelBox
+    args: {label: "Один"}                    # w и h берутся из умолчаний: 40 x 12
+    attach: {self: topLeft, to: frame.topLeft, offset: {x: 10, y: 10}}
+
+  - id: two
+    use: labelBox
+    args: {label: "Два", w: 70, h: 20}
+    attach: {self: topLeft, to: one.tail, offset: {x: 0, y: 5}}      # порт набора как обычный якорь
+
+  - id: both
+    use: pair
+    args: {left: "Лево", right: "Право"}
+    attach: {self: topLeft, to: two.bottomLeft, offset: {x: 0, y: 5}}

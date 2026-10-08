@@ -1,0 +1,14 @@
+# Data for purchased-list.yaml: `item` is the list of rows (source order is not important: the template groups
+# and sorts). `category` is read as an enum, its domain is groupBy.order of the template; a category the template
+# does not list is an error (nothing is dropped silently). 2 and 2.5 in one column make it Decimal.
+doc: {designation: "ВП.00.000"}
+item:
+  - {category: BEARING, name: "Подшипник 6204 ГОСТ 8338-75", supplier: "ПодшипникТорг", qty: 4, unit: шт, price: 312.5}
+  - {category: FASTENER, name: "Болт М6x20 ГОСТ 7798-70", supplier: "Метиз", qty: 24, unit: шт, price: 3.2}
+  - {category: ELECTRIC, name: "Кабель ВВГнг 3x1,5", supplier: "ЭлектроСнаб", qty: 12.5, unit: м}
+  - {category: FASTENER, name: "Болт М6x100 ГОСТ 7798-70", supplier: "Метиз", qty: 8, unit: шт, price: 5}
+  - {category: FASTENER, name: "Шайба 6 ГОСТ 11371-78", qty: 48, unit: шт, price: 0.45}
+  - {category: ELECTRIC, name: "Автомат ABB S201 C16", supplier: "ЭлектроСнаб", qty: 1, unit: шт, price: 640}
+  - {category: BEARING, name: "Подшипник 6000 ГОСТ 8338-75", supplier: "ПодшипникТорг", qty: 2, unit: шт, price: 180}
+  - {category: FASTENER, name: "Болт М6x8 ГОСТ 7798-70", supplier: "Метиз", qty: 2.5, unit: компл, price: 2.8}
+  - {category: FASTENER, name: "Смазка Литол-24", qty: 0.35, unit: кг, price: 410}

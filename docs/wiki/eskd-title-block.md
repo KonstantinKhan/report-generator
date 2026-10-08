@@ -1,5 +1,11 @@
 # Основная надпись и доп. графы (ЕСКД / ГОСТ 2.104)
 
+> **Частично устарело (2026-10-03).** Геометрия и состав ячеек пресетов и два прохода `renderPages()` остались верными.
+> Изменилось: пресеты `FrameSpecs` строятся из `gost-spec.yaml`; динамические ячейки несут путь бинда вместо enum
+> `FrameField`; расстановка блоков считается `TemplateResolver` (функции `frameOrigin()`, `leftMarginFrameOrigin()`,
+> `belowFrameOrigin()` удалены). Актуальное описание: [template-yaml.md](template-yaml.md). Историческое описание
+> ниже сохранено, устаревшие места помечены.
+
 Как устроена рамка/штамп после реализации `FrameSpec` (architecture-0.2.md
 §34) — модель, геометрия двух конкретных пресетов, и два реальных бага,
 найденных и исправленных в процессе (см. `git log` коммит
@@ -10,7 +16,6 @@
 `report-ir/Frame.kt`:
 
 ```kotlin
-enum class FrameField { DESIGNATION, NAME, SHEET_NUMBER, SHEETS_TOTAL }
 enum class BorderWeight { NONE, THIN, THICK }
 
 data class CellBorders(
@@ -28,11 +33,14 @@ sealed interface FrameCell {
     val orientation: TextOrientation
 
     data class Constant(..., val text: String) : FrameCell
-    data class Dynamic(..., val field: FrameField) : FrameCell
+    // text из DataContext страницы: `path` = путь бинда без `${}` ("doc.designation", "page.number"),
+    // плюс format / optional (раньше было поле enum FrameField, удалено в ветке engine)
+    data class Dynamic(..., val path: String, val format: FormatSpec? = null, val optional: Boolean = false) : FrameCell
 }
 
 data class FrameSpec(val size: Size, val cells: List<FrameCell>)
-data class FrameBindings(val designation: String? = null, val name: String? = null)
+// готовый DataContext на два поля классического штампа (doc.designation, doc.name)
+data class FrameBindings(val designation: String? = null, val name: String? = null) : DataContext
 ```
 
 Отличие от наброска в architecture-0.2.md §34: там был отдельный
@@ -40,11 +48,17 @@ data class FrameBindings(val designation: String? = null, val name: String? = nu
 общий для `report-ir`/`report-layout-ir` (см. §21/§23 архитектуры), заводить
 для рамки ещё один прямоугольный тип избыточно.
 
-`SHEET_NUMBER`/`SHEETS_TOTAL` **не** входят в `FrameBindings` — их считает
-Layout Engine (см. ниже), это не входные данные отчёта, а результат
-пагинации.
+Номер листа и число листов (`page.number` / `page.total`) **не** входят в данные отчёта (`FrameBindings`,
+`DataContext` адаптера) — их накладывает Layout Engine при раскладке каждой страницы (`DataContext.withPage`,
+см. ниже), это не входные данные, а результат пагинации.
 
 ## Пресеты (`report-ir/frames/FrameSpecs.kt`)
+
+> **Обновление (2026-10-03).** Геометрия пресетов больше не зашита в `FrameSpecs.kt`:
+> `FrameSpecs` берёт ячейки из `report-ir/src/main/resources/templates/gost-spec.yaml`
+> (`GostSpecTemplate`). Размеры и состав ячеек ниже остались верными (их проверяет
+> `FrameSpecsTemplateParityTest`), но править их надо в YAML. Старый хардкод сохранён
+> только в тестовом `LegacyFrameSpecs.kt`. Формат YAML: [template-yaml.md](template-yaml.md).
 
 ### `firstPageStamp` — основная надпись, 185×40мм
 
@@ -52,16 +66,16 @@ Layout Engine (см. ниже), это не входные данные отчё
 
 - **Заголовочная полоса** (0–15мм): `Изм`/`Лист`/`№ докум.`/`Подп.`/`Дата` —
   каждая колонка физически СВОЯ ОДНА ячейка на все 15мм (не три ряда), плюс
-  `Dynamic(DESIGNATION)` на 120мм, тоже на все 15мм.
+  `Dynamic("doc.designation")` на 120мм, тоже на все 15мм.
 - **Сигнатурный блок** (15–40мм): `Разраб.`/`Пров.`/`Н. контр.`/`Утв.` в
-  первой колонке (17мм), `Dynamic(NAME)` — одна ячейка 70×25мм (строки 4–8),
-  `Лит.`/`Лист`/`Листов` в строке 4, `Dynamic(SHEET_NUMBER)`/`Dynamic(SHEETS_TOTAL)`
+  первой колонке (17мм), `Dynamic("doc.name")` — одна ячейка 70×25мм (строки 4–8),
+  `Лит.`/`Лист`/`Листов` в строке 4, `Dynamic("page.number")`/`Dynamic("page.total")`
   в строке 5. Границы между строками 4–8 внутри первых 4 колонок —
   тонкие сверху/снизу, толстые слева/справа (ГОСТ 2.303); все прочие толстые.
 
-Якорь — правый нижний угол ОСНОВНОЙ РАМКИ (не страницы): `frameOrigin()` в
-`LayoutEngine.kt` считает `x = format.width - margins.right - size.width`,
-`y = format.height - margins.bottom - size.height`. Для A4 с полями отчёта
+Якорь — правый нижний угол ОСНОВНОЙ РАМКИ (не страницы) (в `gost-spec.yaml`: `attach` к `sheet.contentBottomRight`;
+раньше `frameOrigin()` в `LayoutEngine.kt`, удалена, считала `x = format.width - margins.right - size.width`,
+`y = format.height - margins.bottom - size.height`). Для A4 с полями отчёта
 (20/5/5/5мм слева/сверху/справа/снизу) содержательная ширина ровно 185мм —
 поэтому штамп занимает всю ширину, не только "правый" визуально.
 
@@ -82,8 +96,8 @@ Layout Engine (см. ниже), это не входные данные отчё
 `Подл. и дата`(25) → `Инв. № подл.`(25). Поперёк: подписанная 5мм-колонка
 первая (у края листа), пустая 7мм-колонка за ней, у самой рамки.
 
-**Якорь — снаружи основной рамки**, не внутри: `leftMarginFrameOrigin()`
-даёт `x = margins.left - size.width` (полоса торчит в левое поле, правым
+**Якорь — снаружи основной рамки**, не внутри (сейчас задан `attach` в YAML, прежняя функция `leftMarginFrameOrigin()`
+удалена; её результат): `x = margins.left - size.width` (полоса торчит в левое поле, правым
 краем впритык к рамке СНАРУЧИ) и `y = format.height - margins.bottom -
 size.height` — низ полосы совпадает с низом самой рамки (5мм от края
 листа), тем же способом, что и у штампа. Так как полоса снаружи рамки, она
@@ -101,7 +115,7 @@ size.height` — низ полосы совпадает с низом самой
 `margins.bottom`). В отличие от всех прочих ячеек рамки — **без бордера
 совсем**, отсюда `BorderWeight.NONE` (см. ниже).
 
-Якорь `belowFrameOrigin()` — правый край блока у правого края ЛИСТА
+Якорь (в YAML; прежняя `belowFrameOrigin()` удалена) — правый край блока у правого края ЛИСТА
 (`x = format.width - size.width`), низ блока у низа листа
 (`y = format.height - size.height`). Локальные координаты внутри блока
 читаются как "расстояние от правого края листа, зеркально": ячейка на
@@ -136,7 +150,7 @@ size.height` — низ полосы совпадает с низом самой
    отрисовки рамки/штампа.
 2. После цикла `totalPages` известен. Второй проход добавляет chrome
    каждой странице; штамп и доп.графы — только на странице 1, с
-   `resolveBindings(bindings, pageNumber, totalPages)`.
+   `DataContext.withPage(pageNumber, totalPages)` (раньше `resolveBindings(...)`).
 
 ## Баг: маленький квадратный вырез на внешних углах ячеек
 
@@ -170,9 +184,8 @@ size.height` — низ полосы совпадает с низом самой
 ## Что не входит
 
 - `leftMarginTable`/`firstPageStamp`/`belowFrameNotes` — только первая
-  страница. Рамка для
-  continuation-страниц (§34.3 архитектуры — независимый пресет) не
-  запрошена и не сделана.
+  страница. Для страниц 2+ есть отдельный блок `continuationStamp` в `gost-spec.yaml`
+  (`FrameSpecs.continuationPageStamp`); подробности — в [template-yaml.md](template-yaml.md#слоты-gost-specyaml).
 - Толщина линии (`BorderWeight`) смоделирована только в `FrameCell`. Сетка
   заголовка спецификации (`drawRichHeader`) и внешняя рамка страницы
   (`frameRectangle`) по-прежнему рисуются одной толщиной

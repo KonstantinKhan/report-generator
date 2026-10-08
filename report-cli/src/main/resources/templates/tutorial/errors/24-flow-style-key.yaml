@@ -1,0 +1,50 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: неизвестный ключ стиля. Данные: ../09e-styles-and-breaks-data.yaml
+name: t09e-styles-and-breaks
+
+sheet:
+  format: A4
+  orientation: portrait
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: titleBlock
+    type: table
+    reserves: true
+    columns: [185]
+    rows:
+      - {height: 15, cells: [{bind: "${doc.designation}", align: center, fontSize: 14}]}
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  - id: body
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank
+      styles:
+        data: tableText                                   # строка: просто имя встроенного стиля
+        head: {base: tableHeader, sise: 4.5}              # объект: копия tableHeader, кегль 4,5 мм
+        note: {base: tableText, size: 3, italic: true}    # неуказанное (шрифт, bold, underline) берётся из base
+      computed:
+        pos: {sequence: {}}
+      lines: {fill: true}
+      columns:
+        - {id: line, width: 10, align: center}
+        - {id: pos, width: 10, align: center}
+        - {id: name, width: 105}
+        - {id: qty, width: 20, align: center}
+        - {id: note, width: 40}
+      header:
+        height: 20                                        # кегль крупнее: "№ строки" при 4,5 мм не влезает в 15 мм (повёрнутый текст не переносится: виден только первый кусок)
+        cells:
+          line: {text: "№ строки", rotate: 90, style: head}
+          pos: {text: "№ п/п", rotate: 90, style: head}
+          name: {text: "Наименование", style: head}
+          qty: {text: "Кол.", style: head}
+          note: {text: "Примечание", style: head}
+      row:
+        cells:
+          line: {bind: "${line.number}", style: data}
+          pos: {bind: "${item.pos}", style: data}
+          name: {bind: "${item.name}", style: data}
+          qty: {bind: "${item.qty}", style: data}
+          note: {bind: "${item.note}", optional: true, style: note}   # \n в значении = принудительный перенос

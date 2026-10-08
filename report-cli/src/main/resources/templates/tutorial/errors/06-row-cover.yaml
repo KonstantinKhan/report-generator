@@ -1,0 +1,12 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: ряд не покрывает колонки
+name: e06
+sheet:
+  format: A4
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - id: t
+    type: table
+    columns: [10, 10, 10]
+    rows:
+      - {height: 5, cells: ["a", "b"]}

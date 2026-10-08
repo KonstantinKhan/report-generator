@@ -1,0 +1,9 @@
+# Намеренно сломанный шаблон для главы «Типичные ошибки»: цикл привязок
+name: e03
+sheet:
+  format: A4
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocks:
+  - {id: a, type: rect, size: {width: 10, height: 10}, attach: {self: topLeft, to: b.topRight}}
+  - {id: b, type: rect, size: {width: 10, height: 10}, attach: {self: topLeft, to: a.topRight}}

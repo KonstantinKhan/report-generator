@@ -2,6 +2,7 @@ package dev.reportgenerator.ir
 
 import dev.reportgenerator.geometry.PageFormat
 import dev.reportgenerator.ir.frames.FrameSpecs
+import dev.reportgenerator.template.DataValue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -24,12 +25,12 @@ class PageSetupTest {
             pageSetup(
                 format = PageFormat.A3,
                 frame = FrameSpecs.firstPageStamp,
-                frameBindings = FrameBindings(designation = "X.001", name = "Test")
+                dataContext = FrameBindings(designation = "X.001", name = "Test")
             )
             table { columns { } }
         }
 
         assertEquals(PageFormat.A3, doc.pageSetup.format)
-        assertEquals("X.001", doc.pageSetup.frameBindings?.designation)
+        assertEquals(DataValue.of("X.001"), doc.pageSetup.dataContext?.get("doc.designation"))
     }
 }

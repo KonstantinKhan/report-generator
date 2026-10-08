@@ -2,7 +2,15 @@
 
 Потенциальные архитектурные рефакторинги и улучшения. Идеи, которые стоят обсуждения и валидации перед реализацией.
 
+Статус разделов на 2026-10-03: «Упразднить report-api» остаётся идеей (условие реализации наступило, решение не принято);
+«Универсальный механизм привязки статических блоков» и рецепт ручной проверки блоков **УСТАРЕЛИ** (реализовано в
+`report-template`, см. [template-yaml.md](template-yaml.md), хронология в [changelog-engine.md](changelog-engine.md)).
+
 ## Упразднить report-api модуль, объединить с report-data
+
+> **Статус (2026-10-03).** Условие реализации («появится реальный HTTP-клиент к PDM») наступило: `report-loodsman`
+> реализует `PdmClient` из `report-api`, `report-server` собирает его с рендером. Модуль `report-api` сохранён как контракт
+> между клиентом и `report-data`; решение об упразднении не принималось, раздел остаётся идеей.
 
 **Текущее состояние:**
 - `report-api`: DTO контракт с PDM (`SpecificationDto`, `ItemDto`) + интерфейс `PdmClient`
@@ -41,7 +49,14 @@
 - **Область контента** — остаток листа после вычитания рамки и всех статических блоков
 - **Динамический контент** — заполнение области контента по правилам (пагинация, sticky-колонки)
 
-**Текущее состояние:**
+> **УСТАРЕЛО (2026-10-03).** Описание ниже относится к состоянию до модуля `report-template`.
+> Статические блоки теперь заданы в `report-ir/src/main/resources/templates/gost-spec.yaml`,
+> привязка и резерв места считает `TemplateResolver`, а `Corner`/`resolveAnchor` перенесены
+> в `report-geometry`. Функции `frameOrigin()`, `leftMarginFrameOrigin()`, `belowFrameOrigin()`
+> и `firstPageBlockRects`/`continuationPageBlockRects` удалены. Актуальное описание:
+> [template-yaml.md](template-yaml.md). Раздел сохранён как история решения.
+
+**Текущее состояние (на момент ADR, устарело):**
 - Статические блоки описаны как `FrameSpec`/`FrameCell` (`report-ir/.../ir/Frame.kt`, конкретные инстансы в `frames/FrameSpecs.kt`): `firstPageStamp`, `leftMarginTable`, `belowFrameNotes`, `continuationPageStamp`. Ячейки — плоский список с абсолютными `rect(x,y,w,h)` в мм, без DSL.
 - Привязка к рамке — 3 отдельные функции в `LayoutEngine.kt` с зашитой формулой каждая: `frameOrigin()` (bottom-right), `leftMarginFrameOrigin()` (left), `belowFrameOrigin()` (bottom-right, другой вариант). Нет enum якорей и общей `resolve(corner, offset, spec) -> Point`.
 - Стыковка блоков по нижней линии — структурная (обе origin-функции используют общий `margins.bottom` из `PageLayoutMetrics`), но размеры самих блоков (185×40, 12×135, 120×5 мм) — хардкод без формулы к высоте страницы. Инвариант «сумма высот = высота страницы − margins» нигде не проверяется.
@@ -69,6 +84,11 @@
 **Статус:** ADR принят 2026-09-18, реализация в ветке `feature/static-block-anchoring`
 
 ## Как вручную протестировать механизм создания блоков
+
+> **УСТАРЕЛО (2026-10-03).** Рецепт ниже требует правки `LayoutEngine.kt` (`firstPageBlockRects`,
+> `staticBlockRect`, ручные вызовы `resolveAnchor`). Этих мест больше нет: блоки добавляются
+> в YAML. Чтобы попробовать новый блок, возьмите свой YAML и запустите
+> `./gradlew :report-cli:runTemplate -Pargs="your.yaml output"`, см. [template-yaml.md](template-yaml.md).
 
 Публичного API для регистрации произвольного блока пока нет — 4 именованных слота `PageSetup` (`frame`/`continuationFrame`/`leftMarginFrame`/`belowFrame`) жёстко привязаны к своим углам внутри `LayoutEngine.kt` (`firstPageBlockRects`/`continuationPageBlockRects`). Добавление блока в НОВЫЙ угол — временная правка этого файла. Ниже — проверенный на практике рецепт (все шаги реально прогнаны при подготовке этого раздела, включая найденный по ходу баг, см. конец).
 

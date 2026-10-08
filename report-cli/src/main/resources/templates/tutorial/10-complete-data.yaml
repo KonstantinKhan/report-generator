@@ -1,0 +1,41 @@
+# Данные к 10-complete.yaml: 38 строк, чтобы таблица заняла две страницы.
+doc: {designation: "ВП.00.001", name: "Ведомость покупных изделий"}
+item:
+  - {category: FASTENER, name: "Болт М5x15 ГОСТ 7798-70", supplier: "Метиз", qty: 11, unit: шт, price: 2.35}
+  - {category: FASTENER, name: "Болт М6x20 ГОСТ 7798-70", supplier: "Метиз", qty: 12, unit: шт, price: 2.70}
+  - {category: FASTENER, name: "Болт М7x25 ГОСТ 7798-70", supplier: "Метиз", qty: 13, unit: шт, price: 3.05}
+  - {category: FASTENER, name: "Болт М8x30 ГОСТ 7798-70", supplier: "Метиз", qty: 14, unit: шт, price: 3.40}
+  - {category: FASTENER, name: "Болт М4x35 ГОСТ 7798-70", supplier: "Метиз", qty: 15, unit: шт, price: 3.75}
+  - {category: FASTENER, name: "Болт М5x40 ГОСТ 7798-70", supplier: "Метиз", qty: 16, unit: шт, price: 4.10}
+  - {category: FASTENER, name: "Болт М6x45 ГОСТ 7798-70", supplier: "Метиз", qty: 17, unit: шт, price: 4.45}
+  - {category: FASTENER, name: "Болт М7x50 ГОСТ 7798-70", supplier: "Метиз", qty: 18, unit: шт, price: 4.80}
+  - {category: FASTENER, name: "Болт М8x55 ГОСТ 7798-70", supplier: "Метиз", qty: 19, unit: шт, price: 5.15}
+  - {category: FASTENER, name: "Болт М4x60 ГОСТ 7798-70", supplier: "Метиз", qty: 20, unit: шт, price: 5.50}
+  - {category: FASTENER, name: "Болт М5x65 ГОСТ 7798-70", supplier: "Метиз", qty: 21, unit: шт, price: 5.85}
+  - {category: FASTENER, name: "Болт М6x70 ГОСТ 7798-70", supplier: "Метиз", qty: 22, unit: шт, price: 6.20}
+  - {category: FASTENER, name: "Болт М7x75 ГОСТ 7798-70", supplier: "Метиз", qty: 23, unit: шт, price: 6.55}
+  - {category: FASTENER, name: "Болт М8x80 ГОСТ 7798-70", supplier: "Метиз", qty: 24, unit: шт, price: 6.90}
+  - {category: FASTENER, name: "Болт М4x85 ГОСТ 7798-70", supplier: "Метиз", qty: 25, unit: шт, price: 7.25}
+  - {category: FASTENER, name: "Болт М5x90 ГОСТ 7798-70", supplier: "Метиз", qty: 26, unit: шт, price: 7.60}
+  - {category: FASTENER, name: "Болт М6x95 ГОСТ 7798-70", supplier: "Метиз", qty: 27, unit: шт, price: 7.95}
+  - {category: FASTENER, name: "Болт М7x100 ГОСТ 7798-70", supplier: "Метиз", qty: 28, unit: шт, price: 8.30}
+  - {category: FASTENER, name: "Болт М8x105 ГОСТ 7798-70", supplier: "Метиз", qty: 29, unit: шт, price: 8.65}
+  - {category: FASTENER, name: "Болт М4x110 ГОСТ 7798-70", supplier: "Метиз", qty: 30, unit: шт, price: 9.00}
+  - {category: BEARING, name: "Подшипник 6002", supplier: "ПодшипникТорг", qty: 1, unit: шт, price: 117}
+  - {category: BEARING, name: "Подшипник 6004", supplier: "ПодшипникТорг", qty: 2, unit: шт, price: 134}
+  - {category: BEARING, name: "Подшипник 6006", supplier: "ПодшипникТорг", qty: 3, unit: шт, price: 151}
+  - {category: BEARING, name: "Подшипник 6008", supplier: "ПодшипникТорг", qty: 4, unit: шт, price: 168}
+  - {category: BEARING, name: "Подшипник 6010", supplier: "ПодшипникТорг", qty: 5, unit: шт, price: 185}
+  - {category: BEARING, name: "Подшипник 6012", supplier: "ПодшипникТорг", qty: 6, unit: шт, price: 202}
+  - {category: BEARING, name: "Подшипник 6014", supplier: "ПодшипникТорг", qty: 7, unit: шт, price: 219}
+  - {category: BEARING, name: "Подшипник 6016", supplier: "ПодшипникТорг", qty: 8, unit: шт, price: 236}
+  - {category: BEARING, name: "Подшипник 6018", supplier: "ПодшипникТорг", qty: 9, unit: шт, price: 253}
+  - {category: BEARING, name: "Подшипник 6020", supplier: "ПодшипникТорг", qty: 10, unit: шт, price: 270}
+  - {category: ELECTRIC, name: "Кабель ВВГнг 2x1,5", supplier: "ЭлектроСнаб", qty: 3.5, unit: м, price: 43}
+  - {category: ELECTRIC, name: "Кабель ВВГнг 3x1,5", supplier: "ЭлектроСнаб", qty: 6.5, unit: м, price: 46}
+  - {category: ELECTRIC, name: "Кабель ВВГнг 4x1,5", supplier: "ЭлектроСнаб", qty: 9.5, unit: м, price: 49}
+  - {category: ELECTRIC, name: "Кабель ВВГнг 5x1,5", supplier: "ЭлектроСнаб", qty: 12.5, unit: м}
+  - {category: ELECTRIC, name: "Кабель ВВГнг 6x1,5", supplier: "ЭлектроСнаб", qty: 15.5, unit: м, price: 55}
+  - {category: ELECTRIC, name: "Кабель ВВГнг 7x1,5", supplier: "ЭлектроСнаб", qty: 18.5, unit: м, price: 58}
+  - {category: ELECTRIC, name: "Кабель ВВГнг 8x1,5", supplier: "ЭлектроСнаб", qty: 21.5, unit: м, price: 61}
+  - {category: ELECTRIC, name: "Кабель ВВГнг 9x1,5", supplier: "ЭлектроСнаб", qty: 24.5, unit: м}

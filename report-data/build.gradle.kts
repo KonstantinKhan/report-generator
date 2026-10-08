@@ -1,5 +1,9 @@
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+}
+
 dependencies {
-    api(project(":report-api"))
+    api(projects.reportApi)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)

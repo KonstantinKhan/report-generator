@@ -1,9 +1,10 @@
 plugins {
+    alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
 }
 
 dependencies {
-    implementation(project(":report-api"))
+    implementation(projects.reportApi)
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.kotlin.test)

@@ -139,6 +139,27 @@ class SpecificationBuilderTest {
     }
 
     @Test
+    fun `unit is dropped for non-material kinds even when the source provides one`() {
+        val data = SpecificationData(
+            documentDesignation = "AAA.00.000",
+            documentName = "Тестовое изделие",
+            items = listOf(
+                SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0, "шт"),
+                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 1.0, "шт"),
+                SpecificationItem("", "Болт", ItemKind.STANDARD, 1.0, "шт"),
+                SpecificationItem("", "Пломба", ItemKind.OTHER, 1.0, "шт"),
+                SpecificationItem("", "Сталь 45", ItemKind.MATERIAL, 0.35, "кг")
+            )
+        )
+
+        val doc = specification(data)
+        val table = doc.elements.filterIsInstance<IrTable>().single()
+        val rows = table.content.filterIsInstance<IrGroup>().flatMap { it.rows }
+
+        assertEquals(listOf("", "", "", "", "кг"), rows.map { it.cells[6].text })
+    }
+
+    @Test
     fun `header has seven ESKD columns with correct orientation and manual note break`() {
         val data = SpecificationData(documentDesignation = "AAA.00.000", documentName = "Тест", items = emptyList())
 
