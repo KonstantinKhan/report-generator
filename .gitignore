@@ -13,6 +13,7 @@ report-cli/output/
 
 # docker image export
 /report-server.tar
+*.tar.gz
 
 # font sources (processed files in report-layout/src/main/resources/fonts/)
 /fonts-GOST/
