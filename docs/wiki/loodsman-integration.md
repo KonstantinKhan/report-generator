@@ -1,9 +1,10 @@
 # Loodsman API интеграция
 
-`report-loodsman` (`dev.reportgenerator.loodsman`) — клиент Loodsman PDM API v4,
-реализует `PdmClient` из `report-api`. `report-server` (`dev.reportgenerator.server`) —
-Ktor REST-обёртка вокруг него: `POST /specifications/{versionId}` тянет спецификацию из
-Loodsman и рендерит PDF.
+`report-loodsman` (`dev.reportgenerator.loodsman`) — реализация интерфейса `PdmClient`
+поверх Loodsman PDM API v4. Содержит два клиента: `LoodsmanPdmClient` (java.net.http)
+и `LoodsmanKtorPdmClient` (Ktor). `report-server` (`dev.reportgenerator.server`) —
+Ktor REST-обёртка вокруг них: `POST /specifications/{versionId}` тянет спецификацию из
+Loodsman через `PdmClient` и рендерит PDF.
 
 Этот документ — не общее описание модуля, а список конкретных грабель API, на которые
 уже наступили. Каждый пункт стоил минимум одной сессии отладки.
@@ -55,7 +56,7 @@ Loodsman хранит данные об объекте в **двух не свя
 обязательны** — баг уже был в том, что правило реализовали для детей, но забыли про
 корневой документ, и любой корневой документ не-Деталь/СЕ падал с той же ошибкой.
 
-Маппинг типа Loodsman -> `ItemDto.kind` (`mapItemKind`): Сборочный чертеж -> DOCUMENTATION, Комплекс -> COMPLEX,
+Маппинг типа Loodsman -> `ItemKind` (`mapItemKind`, internal в `SpecificationAssembly`): Сборочный чертеж -> DOCUMENTATION, Комплекс -> COMPLEX,
 Сборочная единица -> ASSEMBLY, Деталь -> PART, Стандартное изделие -> STANDARD, Прочее изделие -> OTHER,
 Материал по КД -> MATERIAL, Комплект -> SET. Дети других типов молча пропускаются.
 

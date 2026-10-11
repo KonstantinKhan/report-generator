@@ -3,7 +3,7 @@ plugins {
 }
 
 dependencies {
-    api(projects.reportData)
+    api(projects.reportDomain)
     api(projects.reportIr)
     implementation(projects.reportGeometry)
 

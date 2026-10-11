@@ -1,8 +1,9 @@
 package dev.reportgenerator.server
 
-import dev.reportgenerator.api.ItemDto
-import dev.reportgenerator.api.PdmClient
-import dev.reportgenerator.api.SpecificationDto
+import dev.reportgenerator.domain.ItemKind
+import dev.reportgenerator.domain.PdmClient
+import dev.reportgenerator.domain.SpecificationData
+import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.layout.DefaultFontRegistry
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
@@ -18,11 +19,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 private class StubPdmClient : PdmClient {
-    override fun fetchSpecification(documentId: String): SpecificationDto =
-        SpecificationDto(
+    override fun fetchSpecification(documentId: String): SpecificationData =
+        SpecificationData(
             documentDesignation = "AAA.00.000",
             documentName = "Test",
-            items = listOf(ItemDto("AAA.01.000", "Part", "PART", 1.0)),
+            items = listOf(SpecificationItem("AAA.01.000", "Part", ItemKind.PART, 1.0)),
         )
 }
 

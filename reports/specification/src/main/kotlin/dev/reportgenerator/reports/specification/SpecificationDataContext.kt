@@ -1,8 +1,8 @@
 package dev.reportgenerator.reports.specification
 
-import dev.reportgenerator.data.ItemKind
-import dev.reportgenerator.data.SpecificationData
-import dev.reportgenerator.data.SpecificationItem
+import dev.reportgenerator.domain.ItemKind
+import dev.reportgenerator.domain.SpecificationData
+import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.template.DataContext
 import dev.reportgenerator.template.DataValue
 import dev.reportgenerator.template.RecordBuilder

@@ -1,7 +1,6 @@
 package dev.reportgenerator.server
 
-import dev.reportgenerator.api.PdmClient
-import dev.reportgenerator.data.mapToSpecificationData
+import dev.reportgenerator.domain.PdmClient
 import dev.reportgenerator.layout.DefaultFontRegistry
 import dev.reportgenerator.layout.PdfBoxTextMeasurer
 import dev.reportgenerator.layout.layOut
@@ -110,9 +109,8 @@ fun Application.reportServerModule(
 
             val id = UUID.randomUUID().toString()
             val file = withContext(Dispatchers.IO) {
-                val dto = pdmClient.fetchSpecification(versionId.toString())
+                val data = pdmClient.fetchSpecification(versionId.toString())
 
-                val data = mapToSpecificationData(dto)
                 val document = specification(data, customerRepresentative = customerRepresentative)
                 val laidOut = layOut(document, textMeasurer, fonts::resolve)
                 val pdfBytes = renderToPdf(laidOut, fonts.registry)

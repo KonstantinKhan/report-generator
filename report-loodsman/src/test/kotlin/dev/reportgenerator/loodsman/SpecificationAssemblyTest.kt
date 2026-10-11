@@ -1,5 +1,6 @@
 package dev.reportgenerator.loodsman
 
+import dev.reportgenerator.domain.ItemKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -9,21 +10,21 @@ class SpecificationAssemblyTest {
 
     @Test
     fun `maps known Loodsman type names to item kinds`() {
-        assertEquals("PART", mapItemKind("Деталь"))
-        assertEquals("ASSEMBLY", mapItemKind("Сборочная единица"))
-        assertEquals("STANDARD", mapItemKind("Стандартное изделие"))
-        assertEquals("OTHER", mapItemKind("Прочее изделие"))
-        assertEquals("MATERIAL", mapItemKind("Материал по КД"))
-        assertEquals("DOCUMENTATION", mapItemKind("Сборочный чертеж"))
-        assertEquals("COMPLEX", mapItemKind("Комплекс"))
-        assertEquals("SET", mapItemKind("Комплект"))
+        assertEquals(ItemKind.PART, mapItemKind("Деталь"))
+        assertEquals(ItemKind.ASSEMBLY, mapItemKind("Сборочная единица"))
+        assertEquals(ItemKind.STANDARD, mapItemKind("Стандартное изделие"))
+        assertEquals(ItemKind.OTHER, mapItemKind("Прочее изделие"))
+        assertEquals(ItemKind.MATERIAL, mapItemKind("Материал по КД"))
+        assertEquals(ItemKind.DOCUMENTATION, mapItemKind("Сборочный чертеж"))
+        assertEquals(ItemKind.COMPLEX, mapItemKind("Комплекс"))
+        assertEquals(ItemKind.SET, mapItemKind("Комплект"))
     }
 
     @Test
     fun `mapping is case and whitespace insensitive`() {
-        assertEquals("PART", mapItemKind("  деталь  "))
-        assertEquals("STANDARD", mapItemKind("СТАНДАРТНОЕ ИЗДЕЛИЕ"))
-        assertEquals("ASSEMBLY", mapItemKind(" Сборочная Единица "))
+        assertEquals(ItemKind.PART, mapItemKind("  деталь  "))
+        assertEquals(ItemKind.STANDARD, mapItemKind("СТАНДАРТНОЕ ИЗДЕЛИЕ"))
+        assertEquals(ItemKind.ASSEMBLY, mapItemKind(" Сборочная Единица "))
     }
 
     @Test
@@ -52,19 +53,19 @@ class SpecificationAssemblyTest {
         assertEquals(3, items.size)
         assertEquals("A.1", items[0].designation)
         assertEquals("Болт", items[0].name)
-        assertEquals("PART", items[0].kind)
+        assertEquals(ItemKind.PART, items[0].kind)
         assertEquals(4.0, items[0].quantity)
         assertNull(items[0].unit)
         // Material: "Обозначение" column stays empty, only "Наименование" is filled.
         assertNull(items[1].designation)
         assertEquals("Клей", items[1].name)
-        assertEquals("MATERIAL", items[1].kind)
+        assertEquals(ItemKind.MATERIAL, items[1].kind)
         assertEquals(1.5, items[1].quantity)
         assertEquals("кг", items[1].unit)
         // Assembly: key attribute is Обозначение, name comes from the separate Наименование attribute.
         assertEquals("A.3", items[2].designation)
         assertEquals("Подсборка", items[2].name)
-        assertEquals("ASSEMBLY", items[2].kind)
+        assertEquals(ItemKind.ASSEMBLY, items[2].kind)
         assertEquals(1.0, items[2].quantity)
     }
 
@@ -128,10 +129,10 @@ class SpecificationAssemblyTest {
 
         assertEquals("ГОСТ 7798-70", items[0].designation)
         assertEquals("Болт М6", items[0].name)
-        assertEquals("STANDARD", items[0].kind)
+        assertEquals(ItemKind.STANDARD, items[0].kind)
         assertEquals("ТУ 1-2-3", items[1].designation)
         assertEquals("Пломба", items[1].name)
-        assertEquals("OTHER", items[1].kind)
+        assertEquals(ItemKind.OTHER, items[1].kind)
         assertNull(items[2].designation, "missing attribute leaves the designation empty")
         assertEquals("Шайба", items[2].name)
     }
@@ -147,6 +148,7 @@ class SpecificationAssemblyTest {
 
         assertNull(items[0].designation)
         assertEquals("Сталь 45", items[0].name)
+        assertEquals(ItemKind.MATERIAL, items[0].kind)
     }
 
     @Test
@@ -163,7 +165,7 @@ class SpecificationAssemblyTest {
         // the drawing link carries no quantity
         val items = buildItems(children, types, products, names, mapOf(10 to 1.0, 11 to 2.0))
 
-        assertEquals(listOf("COMPLEX", "SET", "DOCUMENTATION"), items.map { it.kind })
+        assertEquals(listOf(ItemKind.COMPLEX, ItemKind.SET, ItemKind.DOCUMENTATION), items.map { it.kind })
         assertEquals(listOf("К.1", "КТ.1", "СБ.1"), items.map { it.designation })
         assertEquals(listOf("Комплекс А", "Комплект Б", "Сборочный чертёж В"), items.map { it.name })
         assertEquals(2.0, items[1].quantity)

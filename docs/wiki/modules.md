@@ -1,6 +1,6 @@
 # Модули
 
-13 Gradle-модулей (12 верхнего уровня + `reports:specification`), `settings.gradle.kts` — источник истины по списку. См.
+11 Gradle-модулей (10 верхнего уровня + `reports:specification`), `settings.gradle.kts` — источник истины по списку. См.
 [architecture.md](architecture.md) для графа зависимостей целиком.
 
 | Модуль | Пакет | Назначение | Зависит от (main) |
@@ -12,12 +12,11 @@
 | `report-layout` | `dev.reportgenerator.layout` | Layout Engine: `layOut()`, `layOutTemplate()` (рисует блоки шаблона примитивами), `TextMeasurer`/`PdfBoxTextMeasurer`, `FontRegistry`, `DefaultFontRegistry` (PT Sans + GOST Type B из ресурсов модуля), пагинация, дозаполнение страницы (`fill: blank`, `remainder`), нумерация физических строк, `LayoutOverflowException`; расстановка и резерв статических блоков из `PageSetup.staticTemplate` (`StaticBlocks.kt`) | `report-ir`, `report-layout-ir`, PDFBox |
 | `report-render-svg` | `dev.reportgenerator.rendersvg` | `render()`/`renderPage()`: Layout IR → SVG-строка | `report-layout-ir` только |
 | `report-render-pdf` | `dev.reportgenerator.renderpdf` | `renderToPdf()`: Layout IR → байты PDF через PDFBox | `report-layout-ir`, `report-layout` (только `FontRegistry`) |
-| `report-api` | `dev.reportgenerator.api` | DTO (`ItemDto`, `SpecificationDto`), интерфейс `PdmClient`, `InMemoryPdmClient` для тестов | — (контракт, без HTTP-библиотеки; реальная реализация: `report-loodsman`) |
-| `report-data` | `dev.reportgenerator.data` | `ItemKind`, `SpecificationItem`, `SpecificationData`, `mapToSpecificationData()` | `report-api` |
-| `reports/specification` | `dev.reportgenerator.reports.specification` | Report Builder спецификации: `specification()` = адаптер `SpecificationData.toDataContext()` / `itemRecords()` + `FlowTables.build` по `gost-spec.yaml`; правил таблицы в коде нет. Тесты: golden-эталоны раскладки, parity со старым кодом | `report-data`, `report-ir`, `report-geometry` |
+| `report-domain` | `dev.reportgenerator.domain` | Доменная модель: `SpecificationData`, `SpecificationItem`, `ItemKind`; интерфейс `PdmClient`; реализация `InMemoryPdmClient` для тестов | — |
+| `reports/specification` | `dev.reportgenerator.reports.specification` | Report Builder спецификации: `specification()` = адаптер `SpecificationData.toDataContext()` / `itemRecords()` + `FlowTables.build` по `gost-spec.yaml`; правил таблицы в коде нет. Тесты: golden-эталоны раскладки, parity со старым кодом | `report-domain`, `report-ir`, `report-geometry` |
 | `report-cli` | `dev.reportgenerator.cli` | Раннеры: `Main.kt` (`./gradlew :report-cli:run`, спецификация на зашитой фикстуре) и `TemplateMain.kt` (`./gradlew :report-cli:runTemplate`, свой YAML + `--data`), пишут `.svg`/`.pdf`; шаблоны `src/main/resources/templates/` (`tutorial/`, `purchased-list.yaml`, `sheet-frame.yaml`, `table-demo.yaml`). См. [running-the-project.md](running-the-project.md) | `reports/specification`, `report-layout`, `report-template`, рендереры, Kotlin `application` plugin |
-| `report-loodsman` | `dev.reportgenerator.loodsman` | Реализация `PdmClient` поверх реального Loodsman API v4 (HTTP, авторизация по сессии). См. [loodsman-integration.md](loodsman-integration.md) | `report-api` |
-| `report-server` | `dev.reportgenerator.server` | Ktor REST-сервер: `POST /specifications/{versionId}` — тянет данные из Loodsman, рендерит PDF | `report-api`, `report-loodsman`, `report-data`, `reports/specification`, `report-layout`, `report-render-pdf` |
+| `report-loodsman` | `dev.reportgenerator.loodsman` | Реализация `PdmClient` поверх реального Loodsman API v4 (HTTP, авторизация по сессии): `LoodsmanPdmClient` (java.net.http) и `LoodsmanKtorPdmClient` (Ktor). Маппинг типов Loodsman → `ItemKind` (`mapItemKind`, internal). См. [loodsman-integration.md](loodsman-integration.md) | `report-domain` |
+| `report-server` | `dev.reportgenerator.server` | Ktor REST-сервер: `POST /specifications/{versionId}` — тянет данные из Loodsman через `PdmClient`, рендерит PDF | `report-domain`, `report-loodsman`, `reports/specification`, `report-layout`, `report-render-pdf` |
 
 ## Тестовые (не main) зависимости стоит знать
 

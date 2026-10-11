@@ -1,6 +1,6 @@
 package dev.reportgenerator.server
 
-import dev.reportgenerator.api.PdmClient
+import dev.reportgenerator.domain.PdmClient
 import dev.reportgenerator.layout.DefaultFontRegistry
 import dev.reportgenerator.loodsman.LoodsmanConfig
 import dev.reportgenerator.loodsman.LoodsmanPdmClient

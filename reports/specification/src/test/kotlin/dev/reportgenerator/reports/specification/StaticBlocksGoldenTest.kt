@@ -1,8 +1,8 @@
 package dev.reportgenerator.reports.specification
 
-import dev.reportgenerator.api.ItemDto
-import dev.reportgenerator.api.SpecificationDto
-import dev.reportgenerator.data.mapToSpecificationData
+import dev.reportgenerator.domain.ItemKind
+import dev.reportgenerator.domain.SpecificationData
+import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.geometry.Length
 import dev.reportgenerator.geometry.PageFormat
 import dev.reportgenerator.geometry.Rect
@@ -37,49 +37,43 @@ class StaticBlocksGoldenTest {
     private val fonts = DefaultFontRegistry.load()
     private val measurer = PdfBoxTextMeasurer(fonts.registry, fonts::resolve)
 
-    private fun data(items: Int) = mapToSpecificationData(
-        SpecificationDto(
-            documentDesignation = "AAA.00.000",
-            documentName = "Тестовое изделие",
-            items = buildList {
-                add(ItemDto("AAA.01.000", "Корпус", "ASSEMBLY", 1.0))
-                add(ItemDto("AAA.02.001", "Вал", "PART", 2.0))
-                add(ItemDto("AAA.02.003", "Втулка распределительная консольная весовая", "PART", 5.0))
-                repeat(items) { add(ItemDto(null, "Болт М6 ГОСТ 7798-70", "STANDARD", 8.0)) }
-                add(ItemDto(null, "Сталь 45", "MATERIAL", 0.35, "кг"))
-            }
-        )
+    private fun data(items: Int) = SpecificationData(
+        documentDesignation = "AAA.00.000",
+        documentName = "Тестовое изделие",
+        items = buildList {
+            add(SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0))
+            add(SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 2.0))
+            add(SpecificationItem("AAA.02.003", "Втулка распределительная консольная весовая", ItemKind.PART, 5.0))
+            repeat(items) { add(SpecificationItem(null, "Болт М6 ГОСТ 7798-70", ItemKind.STANDARD, 8.0)) }
+            add(SpecificationItem(null, "Сталь 45", ItemKind.MATERIAL, 0.35, "кг"))
+        }
     )
 
     // 1 assembly + 13 parts + 3 standard bolts: on A4 the first page holds exactly 26 flow rows, so
     // "Стандартные изделия" (2 blanks, title, blank) ends flush with the page bottom and its first
     // bolt does not fit. Before the orphan fix the title stranded there; now it moves to page 2.
-    private fun groupBoundaryData() = mapToSpecificationData(
-        SpecificationDto(
-            documentDesignation = "AAA.00.000",
-            documentName = "Тестовое изделие",
-            items = buildList {
-                add(ItemDto("AAA.01.000", "Корпус", "ASSEMBLY", 1.0))
-                repeat(13) { add(ItemDto("AAA.02.${100 + it}", "Вал $it", "PART", 2.0)) }
-                repeat(3) { add(ItemDto(null, "Болт М6 ГОСТ 7798-70", "STANDARD", 8.0)) }
-            }
-        )
+    private fun groupBoundaryData() = SpecificationData(
+        documentDesignation = "AAA.00.000",
+        documentName = "Тестовое изделие",
+        items = buildList {
+            add(SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0))
+            repeat(13) { add(SpecificationItem("AAA.02.${100 + it}", "Вал $it", ItemKind.PART, 2.0)) }
+            repeat(3) { add(SpecificationItem(null, "Болт М6 ГОСТ 7798-70", ItemKind.STANDARD, 8.0)) }
+        }
     )
 
     // All five groups; a designation too long for its 70mm column (hard-broken by characters), a
     // name that word-wraps, a unit on a non-material (dropped) and on a material (shown in note).
-    private fun allKindsData() = mapToSpecificationData(
-        SpecificationDto(
-            documentDesignation = "AAA.00.000",
-            documentName = "Тестовое изделие",
-            items = listOf(
-                ItemDto("AAA.01.000", "Корпус", "ASSEMBLY", 1.0),
-                ItemDto("AAA.01.001-ОченьДлиннаяНеделимаяСтрокаОбозначенияБезПробеловИРазделителей", "Вал", "PART", 2.0),
-                ItemDto("AAA.02.002", "Втулка распределительная  консольная весовая сборная", "PART", 5.0),
-                ItemDto(null, "Болт М6 ГОСТ 7798-70", "STANDARD", 8.0, "шт"),
-                ItemDto(null, "Пломба", "OTHER", 1.0),
-                ItemDto(null, "Сталь 45", "MATERIAL", 0.35, "кг")
-            )
+    private fun allKindsData() = SpecificationData(
+        documentDesignation = "AAA.00.000",
+        documentName = "Тестовое изделие",
+        items = listOf(
+            SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0),
+            SpecificationItem("AAA.01.001-ОченьДлиннаяНеделимаяСтрокаОбозначенияБезПробеловИРазделителей", "Вал", ItemKind.PART, 2.0),
+            SpecificationItem("AAA.02.002", "Втулка распределительная  консольная весовая сборная", ItemKind.PART, 5.0),
+            SpecificationItem(null, "Болт М6 ГОСТ 7798-70", ItemKind.STANDARD, 8.0, "шт"),
+            SpecificationItem(null, "Пломба", ItemKind.OTHER, 1.0),
+            SpecificationItem(null, "Сталь 45", ItemKind.MATERIAL, 0.35, "кг")
         )
     )
 

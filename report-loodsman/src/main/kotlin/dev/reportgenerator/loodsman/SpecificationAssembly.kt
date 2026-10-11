@@ -1,6 +1,7 @@
 package dev.reportgenerator.loodsman
 
-import dev.reportgenerator.api.ItemDto
+import dev.reportgenerator.domain.ItemKind
+import dev.reportgenerator.domain.SpecificationItem
 
 internal data class ChildLink(
     val idLink: Int,
@@ -11,16 +12,16 @@ internal data class ChildLink(
     val unit: String? = null
 )
 
-internal fun mapItemKind(typeName: String?): String? = when (typeName?.trim()?.lowercase()) {
-    "сборочный чертеж", "сборочный чертёж" -> "DOCUMENTATION"
-    "комплекс" -> "COMPLEX"
-    "сборочная единица" -> "ASSEMBLY"
-    "деталь" -> "PART"
+internal fun mapItemKind(typeName: String?): ItemKind? = when (typeName?.trim()?.lowercase()) {
+    "сборочный чертеж", "сборочный чертёж" -> ItemKind.DOCUMENTATION
+    "комплекс" -> ItemKind.COMPLEX
+    "сборочная единица" -> ItemKind.ASSEMBLY
+    "деталь" -> ItemKind.PART
     // SOFTWARE (программные изделия и базы данных): Loodsman type not defined yet, nothing maps to it.
-    "стандартное изделие" -> "STANDARD"
-    "прочее изделие" -> "OTHER"
-    "материал по кд" -> "MATERIAL"
-    "комплект" -> "SET"
+    "стандартное изделие" -> ItemKind.STANDARD
+    "прочее изделие" -> ItemKind.OTHER
+    "материал по кд" -> ItemKind.MATERIAL
+    "комплект" -> ItemKind.SET
     else -> null
 }
 
@@ -28,8 +29,8 @@ internal fun mapItemKind(typeName: String?): String? = when (typeName?.trim()?.l
 //  * Обозначение for Сборочный чертеж/Комплекс/Сборочная единица/Деталь/Комплект (Наименование is a separate attribute);
 //  * Наименование for Стандартное изделие/Прочее изделие/Материал по КД
 //    (their Обозначение for the report is the separate attribute "Обозначение изделия", not for Материал).
-private val DESIGNATION_KEYED_KINDS = setOf("DOCUMENTATION", "COMPLEX", "ASSEMBLY", "PART", "SET")
-private val KINDS_WITH_PRODUCT_DESIGNATION_ATTR = setOf("STANDARD", "OTHER")
+private val DESIGNATION_KEYED_KINDS = setOf(ItemKind.DOCUMENTATION, ItemKind.COMPLEX, ItemKind.ASSEMBLY, ItemKind.PART, ItemKind.SET)
+private val KINDS_WITH_PRODUCT_DESIGNATION_ATTR = setOf(ItemKind.STANDARD, ItemKind.OTHER)
 
 internal fun isDesignationKeyed(typeName: String?): Boolean = mapItemKind(typeName) in DESIGNATION_KEYED_KINDS
 
@@ -47,7 +48,7 @@ internal fun buildItems(
     quantityByLinkId: Map<Int, Double>,
     unitByLinkId: Map<Int, String?> = emptyMap(),
     productDesignationByObjectId: Map<Int, String> = emptyMap(),
-): List<ItemDto> = children.mapNotNull { child ->
+): List<SpecificationItem> = children.mapNotNull { child ->
     val typeName = typeNameByObjectId[child.idChild] ?: return@mapNotNull null
     val kind = mapItemKind(typeName) ?: return@mapNotNull null
 
@@ -68,9 +69,9 @@ internal fun buildItems(
 
     // Документация: the column "Кол." stays empty, a missing link quantity is fine.
     val quantity = quantityByLinkId[child.idLink]
-        ?: if (kind == "DOCUMENTATION") 0.0
+        ?: if (kind == ItemKind.DOCUMENTATION) 0.0
         else throw LoodsmanApiException("Attribute 'Количество' is missing for link ${child.idLink}")
     val unit = unitByLinkId[child.idLink]
 
-    ItemDto(designation = designation, name = name, kind = kind, quantity = quantity, unit = unit)
+    SpecificationItem(designation = designation, name = name, kind = kind, quantity = quantity, unit = unit)
 }

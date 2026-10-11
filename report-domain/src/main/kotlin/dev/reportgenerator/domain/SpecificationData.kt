@@ -1,4 +1,4 @@
-package dev.reportgenerator.data
+package dev.reportgenerator.domain
 
 // Declaration order = group order of GOST R 2.106-2019 p.1 (the template's groupBy.order repeats it).
 // SOFTWARE is a stub: no Loodsman type is mapped to it yet.

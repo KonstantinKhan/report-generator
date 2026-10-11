@@ -1,7 +1,9 @@
 package dev.reportgenerator.loodsman
 
-import dev.reportgenerator.api.PdmClient
-import dev.reportgenerator.api.SpecificationDto
+import dev.reportgenerator.domain.ItemKind
+import dev.reportgenerator.domain.PdmClient
+import dev.reportgenerator.domain.SpecificationData
+import dev.reportgenerator.domain.SpecificationItem
 import java.net.CookieManager
 import java.net.CookiePolicy
 import java.net.URI
@@ -41,7 +43,7 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
     private var cachedDocumentsLinkTypeId: Int? = null
     private var metaLoaded = false
 
-    override fun fetchSpecification(documentId: String): SpecificationDto {
+    override fun fetchSpecification(documentId: String): SpecificationData {
         val versionId = documentId.toIntOrNull()
             ?: throw LoodsmanApiException("documentId must be a numeric Loodsman versionId, got '$documentId'")
 
@@ -140,7 +142,7 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
         }
 
         fun List<ChildLink>.ofKinds(documentation: Boolean) = filter {
-            (mapItemKind(typeNameByObjectId[it.idChild]) == "DOCUMENTATION") == documentation
+            (mapItemKind(typeNameByObjectId[it.idChild]) == ItemKind.DOCUMENTATION) == documentation
         }
         val items = buildItems(
             compositionChildren.ofKinds(documentation = false), typeNameByObjectId, productByObjectId, nameByObjectId,
@@ -150,7 +152,7 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
             quantityByLinkId, unitByLinkId, productDesignationByObjectId,
         )
 
-        return SpecificationDto(documentDesignation, documentName, items)
+        return SpecificationData(documentDesignation, documentName, items)
     }
 
     @Synchronized
@@ -278,13 +280,13 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
 }
 
 @Serializable
-private data class LoginRequest(val dbName: String, val username: String, val password: String, val rememberMe: Boolean = false)
+internal data class LoginRequest(val dbName: String, val username: String, val password: String, val rememberMe: Boolean = false)
 
 @Serializable
-private data class SessionResponse(val sessionId: String? = null)
+internal data class SessionResponse(val sessionId: String? = null)
 
 @Serializable
-private data class PropObjectDto(
+internal data class PropObjectDto(
     val idVersion: Int = 0,
     val type: String? = null,
     val product: String? = null,
@@ -293,7 +295,7 @@ private data class PropObjectDto(
 )
 
 @Serializable
-private data class LinkedObjectDto(
+internal data class LinkedObjectDto(
     @SerialName("idLink")
     val linkId: Int = 0,
     @SerialName("idChild")
@@ -310,10 +312,10 @@ private data class LinkedObjectDto(
 }
 
 @Serializable
-private data class LinkListEntry(val id: Int, val name: String? = null)
+internal data class LinkListEntry(val id: Int, val name: String? = null)
 
 @Serializable
-private data class ObjectAttributeDto(val name: String? = null, val value: String? = null)
+internal data class ObjectAttributeDto(val name: String? = null, val value: String? = null)
 
 @Serializable
 private data class LinkAttributeDto(val name: String? = null, val value: String? = null)

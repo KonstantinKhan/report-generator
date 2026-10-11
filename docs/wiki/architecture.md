@@ -18,15 +18,14 @@
 PDM (Loodsman REST API)
       │
       ▼
-report-loodsman   — реализация PdmClient поверх Loodsman API v4 (report-server — Ktor-обёртка)
-      │
+report-loodsman   — реализация PdmClient поверх Loodsman API v4
+      │             (интерфейс PdmClient, реализация LoodsmanPdmClient/LoodsmanKtorPdmClient,
+      │              маппинг типов Loodsman → ItemKind)
       ▼
-report-api        — DTO + интерфейс PdmClient (контракт, без HTTP-библиотеки)
+report-domain     — доменная модель: SpecificationData, SpecificationItem, ItemKind, интерфейс PdmClient
+      │             (от клиентов в report-loodsman и InMemoryPdmClient для тестов)
       ▼
-report-data       — mapping DTO → Report Data (SpecificationData)
-      │
-      ▼
-reports/specification  — Report Builder = адаптер данных: Report Data → DataContext
+reports/specification  — Report Builder = адаптер данных: SpecificationData → DataContext
       │                   (схема + значения doc.*, типизированные записи item.*)
       │                   + document { pageSetup, table(FlowTables.build(...)) }
       ▼
@@ -47,7 +46,7 @@ Layout IR (report-layout-ir)
 report-render-svg  report-render-pdf   (XLSX — не начато)
 ```
 
-Путь своего шаблона (`report-cli` `TemplateMain`, `runTemplate`): минуя `report-api`/`report-data`/Report Builder.
+Путь своего шаблона (`report-cli` `TemplateMain`, `runTemplate`): минуя Report Builder.
 
 ```text
 template.yaml ──► TemplateLoader (разбор + валидация)
@@ -111,10 +110,10 @@ report-geometry  ← report-layout-ir      (НЕ зависит от report-ir �
 report-ir + report-layout-ir  ← report-layout     (+ PDFBox)
 report-layout-ir  ← report-render-svg    (main-код, только это)
 report-layout-ir + report-layout(FontRegistry)  ← report-render-pdf
-report-api ← report-data ← reports/specification (+ report-ir)
-report-api ← report-loodsman
+report-domain ← report-loodsman
+report-domain ← reports/specification (+ report-ir)
 reports/specification, report-layout, report-template, рендереры ← report-cli
-report-loodsman, report-data, reports/specification, report-layout, report-render-pdf ← report-server
+report-loodsman, reports/specification, report-layout, report-render-pdf ← report-server
 ```
 
 `report-template` это самый нижний слой после геометрии: он знает про YAML, данные и геометрию блоков, но ничего про

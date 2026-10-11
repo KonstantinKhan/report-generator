@@ -2,42 +2,29 @@
 
 Потенциальные архитектурные рефакторинги и улучшения. Идеи, которые стоят обсуждения и валидации перед реализацией.
 
-Статус разделов на 2026-10-03: «Упразднить report-api» остаётся идеей (условие реализации наступило, решение не принято);
+Статус разделов на 2026-10-11: «Упразднить report-api» **ВЫПОЛНЕНО** (реализовано, модули report-common/report-api/report-data удалены);
 «Универсальный механизм привязки статических блоков» и рецепт ручной проверки блоков **УСТАРЕЛИ** (реализовано в
 `report-template`, см. [template-yaml.md](template-yaml.md), хронология в [changelog-engine.md](changelog-engine.md)).
 
-## Упразднить report-api модуль, объединить с report-data
+## Упразднить report-api модуль (ВЫПОЛНЕНО 2026-10-11)
 
-> **Статус (2026-10-03).** Условие реализации («появится реальный HTTP-клиент к PDM») наступило: `report-loodsman`
-> реализует `PdmClient` из `report-api`, `report-server` собирает его с рендером. Модуль `report-api` сохранён как контракт
-> между клиентом и `report-data`; решение об упразднении не принималось, раздел остаётся идеей.
+> **Статус (2026-10-11).** Решение реализовано полностью: модули `report-api`, `report-data` и `report-common` удалены.
+> Интерфейс `PdmClient` перемещён в `report-domain` вместе с доменной моделью (`SpecificationData`, `SpecificationItem`, `ItemKind`).
+> Обе реализации (`LoodsmanPdmClient` на java.net.http и `LoodsmanKtorPdmClient` на Ktor) в `report-loodsman`,
+> `InMemoryPdmClient` для тестов также в `report-domain`. Маппинг типов Loodsman → ItemKind (`mapItemKind`) — internal функция в `report-loodsman`.
 
-**Текущее состояние:**
-- `report-api`: DTO контракт с PDM (`SpecificationDto`, `ItemDto`) + интерфейс `PdmClient`
-- `report-data`: маппинг DTO → доменная модель (`SpecificationData`, `SpecificationItem`)
-- Поток: `PdmClient.fetchSpecification()` → `SpecificationDto` → `mapToSpecificationData()` → `SpecificationData`
-
-**Предложение:**
-- Упразднить `report-api` модуль
-- `PdmClient` переместить в `report-data`
+**Реализовано:**
+- `report-api`: удалён, контракт `PdmClient` переместился в `report-domain`
+- `report-data`: удалён, маппинг DTO → доменная модель теперь inside `report-loodsman.SpecificationAssembly.buildItems()`
+- `report-common`: удалён, типы перемещены в `report-domain`
 - `PdmClient.fetchSpecification()` возвращает напрямую `SpecificationData` (без промежуточного DTO)
-- Маппинг остаётся внутри `PdmClient`, не публичная функция
+- Поток: Loodsman API → `LoodsmanPdmClient/LoodsmanKtorPdmClient` → `SpecificationData`
+- Потребители (report-server, report-cli, reports/specification) зависят только от `report-domain`
 
-**Плюсы:**
-- Меньше кода, один промежуточный тип вместо двух
+**Результат:**
 - Одна граница между внешним миром и доменой логикой (вместо двух)
-- Проще понять поток данных: PDM → SpecificationData
-
-**Минусы:**
-- `SpecificationData` становится привязана к PDM контракту (если PDM меняется, меняется доменная модель)
-- Если когда-то будут другие потребители PDM контракта, нужен будет рефакторинг
-
-**Условие реализации:**
-- Когда появится реальный HTTP-клиент к PDM
-- Обсудить, действительно ли нужна отдельная граница контракта
-- Проверить, будут ли другие потребители PDM API
-
-**Статус:** Идея, требует валидации при реальной интеграции с PDM
+- Явный поток данных: PDM → Интерфейс PdmClient → доменная модель `SpecificationData`
+- Меньше промежуточных типов: нет DTO (`ItemDto`, `SpecificationDto`)
 
 ## Универсальный механизм привязки статических блоков к рамке
 
