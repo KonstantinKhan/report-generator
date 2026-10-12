@@ -2,12 +2,16 @@ package dev.reportgenerator.loodsman
 
 import dev.reportgenerator.domain.ItemKind
 import dev.reportgenerator.domain.PdmClient
+import dev.reportgenerator.domain.PdmDatabase
 import dev.reportgenerator.domain.SpecificationData
-import dev.reportgenerator.domain.SpecificationItem
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpResponseValidator
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.cookies.HttpCookies
+import io.ktor.client.plugins.logging.LogLevel
+import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -17,9 +21,12 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import java.net.ConnectException
+import java.nio.channels.UnresolvedAddressException
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.write
 
@@ -32,19 +39,43 @@ private const val ATTR_QUANTITY = "Количество"
 class LoodsmanKtorPdmClient(
     private val config: LoodsmanConfig,
     private val httpClient: HttpClient = HttpClient(CIO) {
+        expectSuccess = true
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true })
         }
         install(HttpCookies)
+        install(Logging) {
+            level = LogLevel.INFO
+        }
+        HttpResponseValidator {
+            handleResponseExceptionWithRequest { cause, request ->
+                if (cause is CancellationException || cause is LoodsmanApiException) throw cause
+                if (cause is ResponseException) {
+                    throw LoodsmanApiException(
+                        "Loodsman API error ${cause.response.status.value} for " +
+                            "${request.method.value} ${request.url}: ${cause.response.bodyAsText().take(500)}",
+                        cause,
+                        cause.response.status.value
+                    )
+                }
+                val reason = when (cause) {
+                    is UnresolvedAddressException -> "host not resolved: ${request.url.host}"
+                    is ConnectException -> "connection refused: ${request.url.host}:${request.url.port}"
+                    else -> cause.message ?: cause::class.simpleName
+                }
+                throw LoodsmanApiException(
+                    "Loodsman request failed: ${request.method.value} ${request.url}: $reason",
+                    cause
+                )
+            }
+        }
     }
 ) : PdmClient {
 
     private val baseUrl = config.baseUrl.trimEnd('/')
     private val json = Json { ignoreUnknownKeys = true }
-    private val debug = System.getenv("LOODSMAN_DEBUG") == "1"
 
     private val lock = ReentrantReadWriteLock()
-    private var cachedSessionId: String? = null
     private var cachedAssemblyLinkTypeId: Int? = null
     private var cachedDocumentsLinkTypeId: Int? = null
     private var metaLoaded = false
@@ -142,6 +173,7 @@ class LoodsmanKtorPdmClient(
         fun List<ChildLink>.ofKinds(documentation: Boolean) = filter {
             (mapItemKind(typeNameByObjectId[it.idChild]) == ItemKind.DOCUMENTATION) == documentation
         }
+
         val items = buildItems(
             compositionChildren.ofKinds(documentation = false), typeNameByObjectId, productByObjectId, nameByObjectId,
             quantityByLinkId, unitByLinkId, productDesignationByObjectId,
@@ -153,6 +185,17 @@ class LoodsmanKtorPdmClient(
         SpecificationData(documentDesignation, documentName, items)
     }
 
+    suspend fun pdmDatabases(): List<PdmDatabase> = auth.databases().map { db -> db.toDomain() }
+
+    suspend fun userId(dbName: String, username: String, password: String) = auth.login(dbName, username, password).userId
+
+    suspend fun isAdmin(): Boolean = sessions.withSession { auth.isAdmin(it) }
+
+    suspend fun logout() = sessions.close()
+
+    private val auth: Auth = Auth(httpClient, baseUrl)
+    private val sessions = SessionHolder(auth, config)
+
     private fun ensureMetaLoaded() {
         lock.write {
             if (metaLoaded) return@write
@@ -161,8 +204,9 @@ class LoodsmanKtorPdmClient(
                 val linkTypes = getJson<List<LinkListEntry>>(
                     "$baseUrl/api/v4/MetaData/get-link-list"
                 )
-                cachedAssemblyLinkTypeId = linkTypes.firstOrNull { it.name?.trim() == ASSEMBLY_COMPOSITION_LINK_NAME }?.id
-                    ?: throw LoodsmanApiException("Link type '$ASSEMBLY_COMPOSITION_LINK_NAME' not found in Loodsman metadata")
+                cachedAssemblyLinkTypeId =
+                    linkTypes.firstOrNull { it.name?.trim() == ASSEMBLY_COMPOSITION_LINK_NAME }?.id
+                        ?: throw LoodsmanApiException("Link type '$ASSEMBLY_COMPOSITION_LINK_NAME' not found in Loodsman metadata")
                 cachedDocumentsLinkTypeId = linkTypes.firstOrNull { it.name?.trim() == DOCUMENTS_LINK_NAME }?.id
                 metaLoaded = true
             }
@@ -179,68 +223,14 @@ class LoodsmanKtorPdmClient(
             )
         )
 
-    private suspend fun ensureSessionId(): String = lock.write {
-        cachedSessionId ?: login().also { cachedSessionId = it }
-    }
-
-    private suspend fun login(): String {
-        val response = httpClient.post("$baseUrl/api/v4/Auth/login") {
-            contentType(ContentType.Application.Json)
-            header("x-loodsman-db-name", config.dbName)
-            setBody(LoginRequest(config.dbName, config.username, config.password))
-        }
-
-        if (response.status.value !in 200..299) {
-            throw LoodsmanApiException("Loodsman login failed with status ${response.status.value}: ${response.bodyAsText()}")
-        }
-
-        val sessionResponse = try {
-            json.decodeFromString<SessionResponse>(response.bodyAsText())
-        } catch (e: SerializationException) {
-            throw LoodsmanApiException("Malformed JSON response from Loodsman login: ${e.message}")
-        }
-
-        return sessionResponse.sessionId
-            ?: throw LoodsmanApiException("Loodsman login response did not contain a sessionId")
-    }
-
     private suspend inline fun <reified T> getJson(url: String): T {
-        val response = httpClient.get(url) {
-            header("web-loodsman-session", ensureSessionId())
-            header("x-loodsman-db-name", config.dbName)
+        val response = sessions.withSession { sessionId ->
+            httpClient.get(url) {
+                header("web-loodsman-session", sessionId)
+                header("x-loodsman-db-name", config.dbName)
+            }
         }
         return decode<T>(response)
-    }
-
-    private suspend fun send(url: String, retried: Boolean = false): HttpResponse {
-        val response = httpClient.get(url) {
-            header("web-loodsman-session", ensureSessionId())
-            header("x-loodsman-db-name", config.dbName)
-        }
-
-        if (debug) {
-            System.err.println("[loodsman-ktor] GET $url -> ${response.status.value}")
-            System.err.println(response.bodyAsText())
-        }
-
-        if (response.status.value == 404) {
-            throw LoodsmanApiException("Loodsman resource not found (404): $url")
-        }
-
-        if ((response.status.value == 401 || response.status.value == 419) && !retried) {
-            lock.write { cachedSessionId = null }
-            return send(url, retried = true)
-        }
-
-        if (response.status.value == 401 || response.status.value == 419) {
-            throw LoodsmanApiException("Loodsman session expired or unauthorized (${response.status.value}): $url")
-        }
-
-        if (response.status.value !in 200..299) {
-            throw LoodsmanApiException("Loodsman API error ${response.status.value} for $url: ${response.bodyAsText()}")
-        }
-
-        return response
     }
 
     private suspend inline fun <reified T> decode(response: HttpResponse): T =

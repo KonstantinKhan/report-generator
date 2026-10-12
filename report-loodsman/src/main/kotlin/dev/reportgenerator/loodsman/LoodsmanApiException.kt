@@ -1,3 +1,11 @@
 package dev.reportgenerator.loodsman
 
-class LoodsmanApiException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+class LoodsmanApiException(
+    message: String,
+    cause: Throwable? = null,
+    val status: Int? = null
+) : RuntimeException(message, cause) {
+
+    val isSessionExpired: Boolean
+        get() = status == 401 || status == 419
+}

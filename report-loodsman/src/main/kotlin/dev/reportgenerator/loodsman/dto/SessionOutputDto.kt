@@ -1,0 +1,12 @@
+package dev.reportgenerator.loodsman.dto
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+internal data class SessionOutputDto(
+    val sessionId: String? = null,
+    val dbName: String? = null,
+    val userId: Int,
+    val checkoutId: Int? = null,
+    val isEditable: Boolean
+)
