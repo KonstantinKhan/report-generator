@@ -1,0 +1,61 @@
+kinds:
+  Деталь: PART
+  Сборочная единица: ASSEMBLY
+  Сборочный чертеж: DOCUMENT
+  Комплекс: COMPLEX
+  Стандартное изделие: STANDARD
+  Прочее изделие: OTHER
+  Материал по КД: MATERIAL
+  Комплект: KIT
+
+relations:
+  Состоит из ...: COMPOSITION
+  Документы: DOCUMENT
+
+requiredRelations:
+  - COMPOSITION
+
+identity:
+  designation:
+    type: prop
+    field: PRODUCT
+  name:
+    type: attribute
+    name: Наименование
+  byKind:
+    STANDARD:
+      designation:
+        type: attribute
+        name: Обозначение изделия
+      name:
+        type: prop
+        field: PRODUCT
+    OTHER:
+      designation:
+        type: attribute
+        name: Обозначение изделия
+      name:
+        type: prop
+        field: PRODUCT
+
+position:
+  type: attribute
+  name: Позиция
+
+attributes:
+  version:
+    type: prop
+    field: VERSION
+  state:
+    type: prop
+    field: STATE
+  mass:
+    type: attribute
+    name: Масса
+  material:
+    type: attribute
+    name: Материал
+
+onUnmapped:
+  kind: KEEP
+  relation: SKIP

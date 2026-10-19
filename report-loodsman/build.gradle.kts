@@ -5,7 +5,9 @@ plugins {
 
 dependencies {
     api(projects.reportDomain)
+    implementation(projects.reportPdm)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kaml)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
@@ -14,6 +16,7 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
 
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlin.reflect)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.ktor.client.mock)
     testImplementation(libs.kotest.runner.junit5)

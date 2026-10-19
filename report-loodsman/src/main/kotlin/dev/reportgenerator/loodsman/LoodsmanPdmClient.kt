@@ -1,7 +1,11 @@
 package dev.reportgenerator.loodsman
 
+import dev.reportgenerator.domain.DirectLink
+import dev.reportgenerator.domain.HorizontalLink
 import dev.reportgenerator.domain.ItemKind
+import dev.reportgenerator.domain.InverseLink
 import dev.reportgenerator.domain.PdmClient
+import dev.reportgenerator.domain.PdmObjectResult
 import dev.reportgenerator.domain.SpecificationData
 import dev.reportgenerator.domain.SpecificationItem
 import java.net.CookieManager
@@ -154,6 +158,12 @@ class LoodsmanPdmClient(private val config: LoodsmanConfig) : PdmClient {
 
         return SpecificationData(documentDesignation, documentName, items)
     }
+
+    override suspend fun getObject(objectId: Int): PdmObjectResult = PdmObjectResult.NotFound(objectId)
+
+    override suspend fun getDirectLinks(objectId: Int): List<DirectLink> = emptyList()
+    override suspend fun getInverseLinks(objectId: Int): List<InverseLink> = emptyList()
+    override suspend fun getHorizontalLinks(objectId: Int): List<HorizontalLink> = emptyList()
 
     @Synchronized
     private fun ensureMetaLoaded() {

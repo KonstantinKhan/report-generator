@@ -4,5 +4,10 @@ plugins {
 
 dependencies {
     testImplementation(libs.kotlin.test)
-    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.kotest.runner.junit5)
+    testImplementation(libs.kotest.assertions.core)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

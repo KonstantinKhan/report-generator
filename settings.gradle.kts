@@ -17,6 +17,7 @@ include(
     "report-render-svg",
     "report-render-pdf",
     "report-domain",
+    "report-pdm",
     "reports:specification",
     "report-cli",
     "report-loodsman",

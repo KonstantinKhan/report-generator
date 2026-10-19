@@ -22,7 +22,9 @@ report-loodsman   — реализация PdmClient поверх Loodsman API v
       │             (интерфейс PdmClient, реализация LoodsmanPdmClient/LoodsmanKtorPdmClient,
       │              маппинг типов Loodsman → ItemKind)
       ▼
-report-domain     — доменная модель: SpecificationData, SpecificationItem, ItemKind, интерфейс PdmClient
+report-domain     — доменная модель: SpecificationData, SpecificationItem, ItemKind, интерфейс PdmClient;
+      │             модель структуры изделия: ProductNode, Usage, Field<T>, ProductKind, Relation,
+      │             AttributeKey, AttributeValue, StructureQuery, интерфейс ProductStructureClient
       │             (от клиентов в report-loodsman и InMemoryPdmClient для тестов)
       ▼
 reports/specification  — Report Builder = адаптер данных: SpecificationData → DataContext

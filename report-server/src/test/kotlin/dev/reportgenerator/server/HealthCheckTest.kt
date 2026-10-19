@@ -1,7 +1,11 @@
 package dev.reportgenerator.server
 
+import dev.reportgenerator.domain.DirectLink
+import dev.reportgenerator.domain.HorizontalLink
 import dev.reportgenerator.domain.ItemKind
+import dev.reportgenerator.domain.InverseLink
 import dev.reportgenerator.domain.PdmClient
+import dev.reportgenerator.domain.PdmObjectResult
 import dev.reportgenerator.domain.SpecificationData
 import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.layout.DefaultFontRegistry
@@ -25,6 +29,11 @@ private class StubPdmClient : PdmClient {
             documentName = "Test",
             items = listOf(SpecificationItem("AAA.01.000", "Part", ItemKind.PART, 1.0)),
         )
+
+    override suspend fun getObject(objectId: Int): PdmObjectResult = PdmObjectResult.NotFound(objectId)
+    override suspend fun getDirectLinks(objectId: Int): List<DirectLink> = emptyList()
+    override suspend fun getInverseLinks(objectId: Int): List<InverseLink> = emptyList()
+    override suspend fun getHorizontalLinks(objectId: Int): List<HorizontalLink> = emptyList()
 }
 
 class HealthCheckTest {
