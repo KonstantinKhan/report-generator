@@ -424,9 +424,11 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     should("choose the position rule by the kinds of the linked objects") {
         val mapping = MappingConfigLoader.load(emptyMap()).copy(
             link = LinkMapping(
-                position = listOf(
-                    LinkAttributeRule(relation = "COMPOSITION", name = "Позиция"),
-                    LinkAttributeRule(relation = "COMPOSITION", child = setOf("STANDARD"), name = "Позиция изделия")
+                attributes = mapOf(
+                    "position" to listOf(
+                        LinkAttributeRule(relation = "COMPOSITION", name = "Позиция"),
+                        LinkAttributeRule(relation = "COMPOSITION", child = setOf("STANDARD"), name = "Позиция изделия")
+                    )
                 )
             )
         )
@@ -445,5 +447,39 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1))
 
         root.usages.map { it.position } shouldBe listOf(Field.Missing, Field.Missing)
+    }
+
+    should("reject the built-in position key in the link attributes query") {
+        shouldThrow<LoodsmanApiException> {
+            FakeLoodsman(tree, treeEdges).client()
+                .loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Position)))
+        }
+    }
+
+    should("not duplicate the position in the link attributes of a usage") {
+        val edges = listOf(Edge(1, 2, attrs = mapOf("Позиция" to "3", "Примечание" to "n")))
+
+        val root = FakeLoodsman(tree, edges).client()
+            .loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+        root.usages.single().position shouldBe Field.Value(3)
+        root.usages.single().attributes shouldBe mapOf(LinkAttributeKey.Note to AttributeValue.Text("n"))
+    }
+
+    should("request link attributes only for links that have a matching rule") {
+        val mapping = MappingConfigLoader.load(emptyMap()).copy(
+            link = LinkMapping(
+                attributes = mapOf(
+                    "position" to listOf(
+                        LinkAttributeRule(relation = "COMPOSITION", child = setOf("STANDARD"), name = "Позиция")
+                    )
+                )
+            )
+        )
+        val fake = FakeLoodsman(tree, treeEdges)
+
+        fake.client(mapping).loadStructure(query(1))
+
+        fake.linkAttributeCalls.size shouldBe 1
     }
 })

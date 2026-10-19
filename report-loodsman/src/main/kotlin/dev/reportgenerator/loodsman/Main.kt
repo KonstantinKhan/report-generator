@@ -25,18 +25,20 @@ fun main(): Unit = runBlocking {
                 rootId = ProductId("5697"),
                 depth = 1,
                 linkAttributes = setOf(LinkAttributeKey.Note),
-                attributes = setOf(AttributeKey.Mass)
+                attributes = setOf(AttributeKey.Mass, AttributeKey.CompanyName)
             )
         )
 
-        println("Корень: ${root.designation.orElse("—")} / ${root.name.orElse("—")} (version: ${root.version.orElse("—")}, state: ${root.state.orElse("—")})")
+        println("Корень: ${root.designation.orElse("—")} / ${root.name.orElse("—")} (version: ${root.version.orElse("—")}, state: ${root.state.orElse("—")}, " +
+                "Наименование предприятия: ${root.attributes[AttributeKey.CompanyName].orElse("—")})")
         root.usages.forEach { usage ->
             val child = usage.child
             println("  Связь: ${usage.relation}, Kind: ${child.kind}, Позиция: ${usage.position.orElse("—")}, " +
                     "Количество: ${usage.quantity}, Единица: ${usage.unit.orElse("—")}, " +
                     "Обозначение: ${child.designation.orElse("—")}, Наименование: ${child.name.orElse("—")}, " +
                     "version: ${child.version.orElse("—")}, state: ${child.state.orElse("—")}, " +
-                    "Примечание: ${usage.attributes[LinkAttributeKey.Note]?.toString() ?: "—"}")
+                    "Примечание: ${usage.attributes[LinkAttributeKey.Note].orElse("—")}, " +
+                    "Наименование предприятия: ${child.attributes[AttributeKey.CompanyName].orElse("—")}")
         }
     } catch (e: LoodsmanApiException) {
         logger.error(e.message)

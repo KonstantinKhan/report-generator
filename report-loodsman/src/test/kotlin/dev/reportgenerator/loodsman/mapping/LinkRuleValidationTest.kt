@@ -13,7 +13,7 @@ private fun rule(
 ) = LinkAttributeRule(relation = relation, parent = parent, child = child, name = name)
 
 private fun configWithPositionRules(vararg rules: LinkAttributeRule): MappingConfig =
-    MappingConfigLoader.load(emptyMap()).copy(link = LinkMapping(position = rules.toList()))
+    MappingConfigLoader.load(emptyMap()).copy(link = LinkMapping(attributes = mapOf("position" to rules.toList())))
 
 class LinkRuleValidationTest : ShouldSpec({
     context("default mapping") {
@@ -32,7 +32,7 @@ class LinkRuleValidationTest : ShouldSpec({
         should("define a position rule for the composition relation") {
             val config = MappingConfigLoader.load(emptyMap())
 
-            config.link.position.any { it.relation == "COMPOSITION" } shouldBe true
+            config.link.positionRules.any { it.relation == "COMPOSITION" } shouldBe true
         }
     }
 

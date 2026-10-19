@@ -159,15 +159,19 @@ attributes:                 # атрибуты узла: id ключа моде�
     name: Материал
     byKind:                 # переопределение имени для вида (пример)
       STANDARD: Материал изделия
+  companyName:              # атрибут есть только у сборочных единиц и деталей: общего name нет
+    byKind:
+      ASSEMBLY: Наименование предприятия
+      PART: Наименование предприятия
 
 link:
-  position:                 # правила выбора атрибута связи для Usage.position
-    - relation: COMPOSITION
-      name: Позиция
-    - relation: COMPOSITION # более конкретное правило выигрывает (пример)
-      child: [STANDARD]
-      name: Позиция изделия
   attributes:               # атрибуты связи: id ключа модели -> список правил
+    position:               # встроенный ключ: всегда загружается, попадает в Usage.position
+      - relation: COMPOSITION
+        name: Позиция
+      - relation: COMPOSITION   # более конкретное правило выигрывает (пример)
+        child: [STANDARD]
+        name: Позиция изделия
     note:
       - relation: COMPOSITION
         name: Примечание
@@ -181,20 +185,22 @@ onUnmapped:
 по типу (`byKind`). У стандартных и прочих изделий обозначение в атрибуте «Обозначение изделия»,
 наименование в свойстве `product`.
 
-**`attributes`** — узловые атрибуты модели. Каждый ключ (`mass`, `material`) обязан быть в `Registries.attributeKeys`.
+**`attributes`** — узловые атрибуты модели. Каждый ключ (`mass`, `material`, `companyName`) обязан быть в `Registries.attributeKeys`.
 Правило содержит:
 - `name` — имя атрибута в PDM по умолчанию;
 - `byKind` — переопределение имени для отдельных видов (id вида -> имя).
 
 Должен быть задан `name` или непустой `byKind`. Если для вида имени нет, значение узла — `AttributeValue.Empty`.
 
-**`link.position`** — правила выбора атрибута позиции из связи. Правило содержит:
+**`link.attributes`** — атрибуты связей модели (ключи `position`, `note` обязаны быть в `Registries.linkAttributeKeys`).
+Для каждого ключа — список правил:
 - `relation` — id отношения (обязателен);
-- `parent`, `child` — множества id типов родителя/ребёнка (пусто = для всех);
+- `parent`, `child` — множества id видов родителя/ребёнка (пусто = для всех);
 - `name` — имя атрибута связи в PDM.
 
-**`link.attributes`** — атрибуты связей модели (ключи вроде `note` обязаны быть в `Registries.linkAttributeKeys`).
-Для каждого ключа — список правил с `relation`, `parent`, `child`, `name`. Правило выбирается по специфичности:
+Ключ `position` встроенный: он загружается всегда и проецируется в типизированное поле `Usage.position`
+(в `Usage.attributes` не дублируется), поэтому в `StructureQuery.linkAttributes` его указывать нельзя —
+`LoodsmanApiException`. Остальные ключи (`note`) загружаются только по запросу. Правило выбирается по специфичности:
 оба селектора (3) > только `child` (2) > только `parent` (1) > без селекторов (0). Пересечение одинаково специфичных
 правил — ошибка валидации.
 
@@ -205,12 +211,12 @@ onUnmapped:
 ```kotlin
 Registries.itemKinds  // ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, DOCUMENT, COMPLEX, KIT
 Registries.relations  // COMPOSITION, DOCUMENT
-Registries.attributeKeys  // mass, material
-Registries.linkAttributeKeys  // note
+Registries.attributeKeys  // mass, material, companyName
+Registries.linkAttributeKeys  // position, note
 ```
 
 `MappingConfig.validate()` проверяет, что все ключи в конфиге существуют в реестрах, и что правила
-`link.position` и `link.attributes` не пересекаются по селекторам одинаковой специфичности.
+правила каждого ключа `link.attributes` (включая `position`) не пересекаются по селекторам одинаковой специфичности.
 
 ### Политика Unmapped
 
@@ -257,8 +263,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
    - следующий уровень — дети, которых ещё нет среди загруженных узлов. Поэтому обход конечен даже при цикле.
 
 3. **Загрузка атрибутов связей (фаза 2).** ПОСЛЕ полного обхода дерева: если запрошены `query.linkAttributes`
-   или существуют правила `mapping.link.position`, для каждой загруженной связи с обоих сторон известным типом
-   делается один запрос `/api/v4/ObjectInfo/get-link-attributes` (параллельно, `Semaphore(concurrency)`).
+   или есть правило для `position`, для каждой загруженной связи с известными видами обоих концов, у которой правило
+   подходит по тройке, делается один запрос `/api/v4/ObjectInfo/get-link-attributes` (параллельно, `Semaphore(concurrency)`).
    Результаты собираются в карту `linkId → атрибуты`.
 
 4. **Кэш.** Свойства, узловые атрибуты и связи хранятся по `idVersion`/`idLink`. Узел разворачивается один раз на
@@ -289,9 +295,13 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 `Missing` даёт `default`, `NotLoaded` бросает `IllegalStateException`: обращение к незапрошенному значению —
 ошибка вызывающего кода, а не пустая ячейка. Адаптер `NotLoaded` не создаёт (поля заполнены всегда), оно
 остаётся значением по умолчанию у вручную собранных `ProductNode` в тестах.
+
+Значения атрибутов (`ProductNode.attributes`, `Usage.attributes`) читаются так же: `attributes[ключ].orElse("—")`.
+Это функция на `AttributeValue?`: `Text` даёт текст, `Number` — число строкой, `Empty` («запрошено, значения нет»)
+и отсутствие ключа («не запрашивалось») дают `default`.
 Текст для пустых значений (прочерк, «отсутствует», пустая строка) выбирает отчёт, модель его не хранит.
 
-- **Позиция** (`Usage.position`) — выбирается по правилам `mapping.link.position.select(relation, parentKind, childKind)`.
+- **Позиция** (`Usage.position`) — выбирается по правилам ключа `position` в `mapping.link.attributes` (`select(relation, parentKind, childKind)`).
   Если есть правило, ищется атрибут связи с именем из правила в ответе `/get-link-attributes`. Значение преобразуется
   в `Int`: успешно → `Field.Value(число)`, нет → `Field.Missing`.
 - **Атрибуты связи** (`Usage.attributes`) — только ключи из `query.linkAttributes`. Для каждого ключа ищется список

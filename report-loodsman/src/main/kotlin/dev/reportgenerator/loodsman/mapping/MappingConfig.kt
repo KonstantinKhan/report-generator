@@ -59,9 +59,14 @@ data class LinkAttributeRule(
 
 @Serializable
 data class LinkMapping(
-    val position: List<LinkAttributeRule> = emptyList(),
     val attributes: Map<String, List<LinkAttributeRule>> = emptyMap()
-)
+) {
+    val positionRules: List<LinkAttributeRule> get() = attributes[POSITION_ID].orEmpty()
+
+    companion object {
+        const val POSITION_ID = "position"
+    }
+}
 
 @Serializable
 data class MappingConfig(
@@ -107,7 +112,6 @@ data class MappingConfig(
             Registries.itemKinds.resolve(kindKey)
         }
 
-        link.position.validateRules()
         link.attributes.forEach { (key, rules) ->
             Registries.linkAttributeKeys.resolve(key)
             rules.validateRules()

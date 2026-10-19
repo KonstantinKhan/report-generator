@@ -110,6 +110,7 @@ class LoodsmanProductStructureClient(
             ?: throw LoodsmanApiException("rootId must be numeric, got '${query.rootId.value}'")
         val relationByLinkTypeId = resolveLinkTypes(query.relations)
         val attributeRules = resolveAttributeRules(query)
+        validateLinkAttributes(query)
 
         val nodes = HashMap<Int, LoadedNode>()
         val links = HashMap<Int, List<Link>>()
@@ -154,6 +155,19 @@ class LoodsmanProductStructureClient(
                 ?: throw LoodsmanApiException("Relation $relation is not configured in mapping")
             linkTypeId(pdmName)
                 ?: throw LoodsmanApiException("Link type '$pdmName' not found in Loodsman metadata")
+        }
+    }
+
+    private fun validateLinkAttributes(query: StructureQuery) {
+        for (key in query.linkAttributes) {
+            if (key == LinkAttributeKey.Position) {
+                throw LoodsmanApiException("Link attribute 'position' is built in: read Usage.position instead")
+            }
+            val id = Registries.linkAttributeKeys.idOf(key)
+                ?: throw LoodsmanApiException("Link attribute key '$key' not found in Registries")
+            if (id !in mapping.link.attributes) {
+                throw LoodsmanApiException("Link attribute '$id' is not configured in mapping.link.attributes")
+            }
         }
     }
 
@@ -220,7 +234,7 @@ class LoodsmanProductStructureClient(
         nodes: Map<Int, LoadedNode>,
         links: Map<Int, List<Link>>
     ): Map<Int, LinkAttributesData> {
-        if (query.linkAttributes.isEmpty() && mapping.link.position.isEmpty()) {
+        if (query.linkAttributes.isEmpty() && mapping.link.positionRules.isEmpty()) {
             return emptyMap()
         }
 
@@ -238,14 +252,8 @@ class LoodsmanProductStructureClient(
             return emptyMap()
         }
 
-        val requestedAttributeIds = mutableSetOf<String>()
-        for (key in query.linkAttributes) {
-            val id = Registries.linkAttributeKeys.idOf(key)
-                ?: throw LoodsmanApiException("Link attribute key '$key' not found in Registries")
-            if (!mapping.link.attributes.containsKey(id)) {
-                throw LoodsmanApiException("Link attribute '$id' is not configured in mapping.link.attributes")
-            }
-            requestedAttributeIds.add(id)
+        val requestedRules = query.linkAttributes.map { key ->
+            mapping.link.attributes.getValue(Registries.linkAttributeKeys.idOf(key)!!)
         }
 
         val result = mutableMapOf<Int, LinkAttributesData>()
@@ -253,8 +261,9 @@ class LoodsmanProductStructureClient(
             val link = linksByLinkId[linkId]!!
             val parentKind = nodes[link.dto.idParent]!!.kind!!
             val childKind = nodes[link.dto.idChild]!!.kind!!
-            val needsAttributeRequest = requestedAttributeIds.isNotEmpty() ||
-                mapping.link.position.select(link.relation, parentKind, childKind) != null
+            val needsAttributeRequest =
+                mapping.link.positionRules.select(link.relation, parentKind, childKind) != null ||
+                    requestedRules.any { it.select(link.relation, parentKind, childKind) != null }
 
             if (!needsAttributeRequest) {
                 return@withPermits mapOf<String, String>()
@@ -303,7 +312,7 @@ class LoodsmanProductStructureClient(
                 if (child.kind == null) return@mapNotNull null
                 val childKind = child.kind
                 val linkAttrs = linkAttributes[link.linkId]?.attributes ?: emptyMap()
-                val positionRule = mapping.link.position.select(link.relation, kind, childKind)
+                val positionRule = mapping.link.positionRules.select(link.relation, kind, childKind)
                 val position = positionRule?.name
                     ?.let { posName -> linkAttrs[posName]?.toIntOrNull() }
                     ?.let { Field.Value(it) } ?: Field.Missing

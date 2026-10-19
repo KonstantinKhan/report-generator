@@ -9,3 +9,10 @@ sealed interface AttributeValue {
 
     data object Empty : AttributeValue
 }
+
+fun AttributeValue?.orElse(default: String): String = when (this) {
+    is AttributeValue.Text -> value
+    is AttributeValue.Number -> value.toString()
+    AttributeValue.Empty -> default
+    null -> default
+}

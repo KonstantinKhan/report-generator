@@ -32,13 +32,15 @@ object Registries {
         "attributeKey",
         mapOf(
             "mass" to AttributeKey.Mass,
-            "material" to AttributeKey.Material
+            "material" to AttributeKey.Material,
+            "companyName" to AttributeKey.CompanyName
         )
     )
 
     val linkAttributeKeys = Registry<LinkAttributeKey>(
         "linkAttributeKey",
         mapOf(
+            "position" to LinkAttributeKey.Position,
             "note" to LinkAttributeKey.Note
         )
     )
