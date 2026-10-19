@@ -58,7 +58,28 @@ data class LinkAttributeRule(
 )
 
 @Serializable
+enum class LinkField(val numeric: Boolean) {
+    MIN_QUANTITY(true),
+    MAX_QUANTITY(true),
+    UNIT(false)
+}
+
+@Serializable
+data class PropertiesMapping(
+    val version: PropField = PropField.VERSION,
+    val state: PropField = PropField.STATE
+)
+
+@Serializable
+data class LinkFieldsMapping(
+    val quantityMin: LinkField = LinkField.MIN_QUANTITY,
+    val quantityMax: LinkField = LinkField.MAX_QUANTITY,
+    val unit: LinkField = LinkField.UNIT
+)
+
+@Serializable
 data class LinkMapping(
+    val fields: LinkFieldsMapping = LinkFieldsMapping(),
     val attributes: Map<String, List<LinkAttributeRule>> = emptyMap()
 ) {
     val positionRules: List<LinkAttributeRule> get() = attributes[POSITION_ID].orEmpty()
@@ -75,6 +96,7 @@ data class MappingConfig(
     val requiredRelations: Set<String> = emptySet(),
     val identity: IdentityMapping,
     val attributes: Map<String, AttributeRule> = emptyMap(),
+    val properties: PropertiesMapping = PropertiesMapping(),
     val link: LinkMapping = LinkMapping(),
     val onUnmapped: UnmappedPolicy = UnmappedPolicy()
 ) {
@@ -110,6 +132,16 @@ data class MappingConfig(
 
         identity.byKind.forEach { (kindKey, _) ->
             Registries.itemKinds.resolve(kindKey)
+        }
+
+        require(link.fields.quantityMin.numeric) {
+            "link.fields.quantityMin must be a numeric field, got ${link.fields.quantityMin}"
+        }
+        require(link.fields.quantityMax.numeric) {
+            "link.fields.quantityMax must be a numeric field, got ${link.fields.quantityMax}"
+        }
+        require(!link.fields.unit.numeric) {
+            "link.fields.unit must be a text field, got ${link.fields.unit}"
         }
 
         link.attributes.forEach { (key, rules) ->

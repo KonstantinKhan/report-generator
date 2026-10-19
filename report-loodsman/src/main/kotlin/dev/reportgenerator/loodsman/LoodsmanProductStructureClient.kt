@@ -20,6 +20,7 @@ import dev.reportgenerator.loodsman.dto.PropObjectOutputDto
 import dev.reportgenerator.loodsman.mapping.AttributeRule
 import dev.reportgenerator.loodsman.mapping.FieldSource
 import dev.reportgenerator.loodsman.mapping.KindMapper
+import dev.reportgenerator.loodsman.mapping.LinkField
 import dev.reportgenerator.loodsman.mapping.MappingConfig
 import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
 import dev.reportgenerator.loodsman.mapping.PropField
@@ -323,7 +324,7 @@ class LoodsmanProductStructureClient(
                     ),
                     position = position,
                     quantity = quantityOf(link.dto),
-                    unit = link.dto.unit?.trim()?.takeIf { it.isNotEmpty() }?.let { Field.Value(it) } ?: Field.Missing,
+                    unit = link.dto.text(mapping.link.fields.unit)?.let { Field.Value(it) } ?: Field.Missing,
                     attributes = linkAttributesOf(link.relation, kind, childKind, query, linkAttrs)
                 )
             }
@@ -336,8 +337,8 @@ class LoodsmanProductStructureClient(
             kind = kind,
             designation = node.read(identity.designation)?.let { Designation.Value(it) } ?: Designation.Missing,
             name = node.read(identity.name)?.let { Name.Value(it) } ?: Name.Missing,
-            version = node.prop.version?.trim()?.takeIf { it.isNotEmpty() }?.let { Field.Value(it) } ?: Field.Missing,
-            state = node.prop.state?.trim()?.takeIf { it.isNotEmpty() }?.let { Field.Value(it) } ?: Field.Missing,
+            version = node.read(FieldSource.Prop(mapping.properties.version))?.let { Field.Value(it) } ?: Field.Missing,
+            state = node.read(FieldSource.Prop(mapping.properties.state))?.let { Field.Value(it) } ?: Field.Missing,
             attributes = attributesOf(node, kind, query, attributeRules),
             usages = usages
         )
@@ -416,14 +417,25 @@ class LoodsmanProductStructureClient(
     }
 
     private fun quantityOf(dto: GetLinkedObjectsForObjectsOutputDto_V4): Quantity {
-        val min = dto.minQuantity
-        val max = dto.maxQuantity
+        val min = dto.number(mapping.link.fields.quantityMin)
+        val max = dto.number(mapping.link.fields.quantityMax)
         return when {
             min == null && max == null -> Quantity.Missing
             min == null -> Quantity.Exact(max!!)
             max == null || min == max -> Quantity.Exact(min)
             else -> Quantity.Range(min, max)
         }
+    }
+
+    private fun GetLinkedObjectsForObjectsOutputDto_V4.number(field: LinkField): Double? = when (field) {
+        LinkField.MIN_QUANTITY -> minQuantity
+        LinkField.MAX_QUANTITY -> maxQuantity
+        LinkField.UNIT -> null
+    }
+
+    private fun GetLinkedObjectsForObjectsOutputDto_V4.text(field: LinkField): String? = when (field) {
+        LinkField.UNIT -> unit?.trim()?.takeIf { it.isNotEmpty() }
+        LinkField.MIN_QUANTITY, LinkField.MAX_QUANTITY -> null
     }
 
     private fun LoadedNode.read(source: FieldSource): String? = when (source) {

@@ -164,7 +164,15 @@ attributes:                 # атрибуты узла: id ключа моде�
       ASSEMBLY: Наименование предприятия
       PART: Наименование предприятия
 
+properties:                 # поля узла из свойств объекта (get-prop-objects): PRODUCT, VERSION, STATE, TYPE
+  version: VERSION
+  state: STATE
+
 link:
+  fields:                   # поля связи из списка связей (get-linked-objects-for-objects)
+    quantityMin: MIN_QUANTITY   # числовые: MIN_QUANTITY, MAX_QUANTITY
+    quantityMax: MAX_QUANTITY
+    unit: UNIT                  # текстовое: UNIT
   attributes:               # атрибуты связи: id ключа модели -> список правил
     position:               # встроенный ключ: всегда загружается, попадает в Usage.position
       - relation: COMPOSITION
@@ -284,8 +292,9 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 - **Обозначение и наименование** — из источников `identity` (с переопределением `byKind`). Пустое значение →
   `Designation.Missing` / `Name.Missing`.
-- **Version и State** — ВСЕГДА из свойств объекта (`prop.version` и `prop.state`, trim). Не настраиваются конфигом.
-  Непустое значение → `Field.Value(строка)`, иначе `Field.Missing`.
+- **Version и State** — ВСЕГДА из свойств объекта, источник задаёт блок `properties` (по умолчанию `VERSION` и
+  `STATE`). Значение — трим; непустое → `Field.Value(строка)`, пустое или отсутствующее → `Field.Missing`
+  (версия у объекта бывает не задана, состояние ожидается всегда, но отсутствие не считается ошибкой загрузки).
 
 ### Состояния значений и доступ к ним
 
@@ -307,14 +316,34 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - **Атрибуты связи** (`Usage.attributes`) — только ключи из `query.linkAttributes`. Для каждого ключа ищется список
   правил в `mapping.link.attributes[ключ]` и выбирается по специфичности селектора (как для позиции).
   Если есть правило и атрибут найден в `/get-link-attributes` → `AttributeValue.Text(значение)`, иначе `Empty`.
-- **Количество** (`Usage.quantity`) — из `minQuantity`/`maxQuantity` связи: оба пусты → `Quantity.Missing`;
-  одно значение или `min == max` → `Quantity.Exact`; иначе `Quantity.Range`. **Единица** — `unit` связи.
+- **Количество** (`Usage.quantity`) — поля связи, выбранные в `link.fields.quantityMin` и `quantityMax` (по умолчанию
+  `minQuantity`/`maxQuantity`): оба пусты → `Quantity.Missing`; одно значение или `min == max` → `Quantity.Exact`;
+  иначе `Quantity.Range`. **Единица** (`Usage.unit`) — поле из `link.fields.unit` (по умолчанию `unit`).
+  Валидация конфига: `quantityMin`/`quantityMax` должны быть числовыми полями, `unit` — текстовым.
 - **Атрибуты узла** (`ProductNode.attributes`) — только те ключи, что перечислены в `query.attributes`. Каждый ключ
   обязан быть в `mapping.attributes`, источник выбирается из `rule.nameFor(kind)` (с учётом переопределения `byKind`).
   Непустое значение → `AttributeValue.Text`, иначе `Empty`. Не запрошенные ключи отсутствуют.
 - `query.includeUnmappedAttributes = true` — остальные непустые атрибуты объекта добавляются как
   `AttributeKey.Unmapped(name)`. Исключаются все известные имена: из `mapping.attributes.*.name` и
   `mapping.attributes.*.byKind.*`, из `mapping.identity.*.{name}` и их `byKind` переопределений.
+
+### Откуда что берётся
+
+| Данные | Источник в API | Настройка в конфиге | Куда пишется |
+|---|---|---|---|
+| Вид объекта | свойство `type` (`get-prop-objects`) | `kinds` | `ProductNode.kind` |
+| Версия, состояние | свойства `version`, `state` | `properties` | `ProductNode.version`, `state` |
+| Обозначение, наименование | свойство или атрибут объекта | `identity` (+ `byKind`) | `ProductNode.designation`, `name` |
+| Атрибуты узла | атрибуты объекта (`get-info-about-version-mode-3`) | `attributes` (+ `byKind`) | `ProductNode.attributes` |
+| Количество | поля связи `minQuantity`, `maxQuantity` | `link.fields.quantityMin`, `quantityMax` | `Usage.quantity` |
+| Единица | поле связи `unit` | `link.fields.unit` | `Usage.unit` |
+| Позиция | атрибут связи (`get-link-attributes`) | `link.attributes.position` | `Usage.position` |
+| Прочие атрибуты связи | атрибуты связи (`get-link-attributes`) | `link.attributes.<ключ>` | `Usage.attributes` |
+| Тип связи | `idLinkType` + `get-link-list` | `relations` | `Usage.relation` |
+
+Правило: всё, что приходит вместе с объектом или списком связей (свойства и поля связи), не требует
+дополнительных запросов. Атрибуты узла и связи — отдельные запросы, поэтому они настраиваются правилами и
+запрашиваются только по необходимости. Всё перечисленное задаётся в `loodsman-mapping.yaml`.
 
 ### Env-переменная
 

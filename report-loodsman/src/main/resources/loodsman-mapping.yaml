@@ -48,7 +48,15 @@ attributes:
       ASSEMBLY: Наименование предприятия
       PART: Наименование предприятия
 
+properties:
+  version: VERSION
+  state: STATE
+
 link:
+  fields:
+    quantityMin: MIN_QUANTITY
+    quantityMax: MAX_QUANTITY
+    unit: UNIT
   attributes:
     position:
       - relation: COMPOSITION
