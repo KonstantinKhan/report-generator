@@ -1,37 +1,38 @@
 package dev.reportgenerator.domain
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
 
 class NameTest : ShouldSpec({
     context("Name.Value") {
-        should("return text from orNull") {
-            val name = Name.Value("Болт")
-            name.orNull() shouldBe "Болт"
+        should("return its text from orElse") {
+            val value: Name = Name.Value("Болт")
+            value.orElse("default") shouldBe "Болт"
         }
 
-        should("work with empty string") {
-            val name = Name.Value("")
-            name.orNull() shouldBe ""
+        should("keep an empty string as a value") {
+            val value: Name = Name.Value("")
+            value.orElse("default") shouldBe ""
         }
 
-        should("work with whitespace") {
-            val name = Name.Value("  Деталь  ")
-            name.orNull() shouldBe "  Деталь  "
+        should("not trim the text") {
+            val value: Name = Name.Value("  Деталь  ")
+            value.orElse("default") shouldBe "  Деталь  "
         }
     }
 
     context("Name.Missing") {
-        should("return null from orNull") {
-            val name: Name = Name.Missing
-            name.orNull() shouldBe null
+        should("return the given default from orElse") {
+            val value: Name = Name.Missing
+            value.orElse("—") shouldBe "—"
         }
     }
 
     context("Name.NotLoaded") {
-        should("return null from orNull") {
-            val name: Name = Name.NotLoaded
-            name.orNull() shouldBe null
+        should("throw from orElse") {
+            val value: Name = Name.NotLoaded
+            shouldThrow<IllegalStateException> { value.orElse("—") }
         }
     }
 })

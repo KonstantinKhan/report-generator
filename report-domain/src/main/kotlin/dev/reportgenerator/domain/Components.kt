@@ -35,22 +35,22 @@ private val componentComparator = Comparator<Component<Item>> { a, b ->
                 if (cmp != 0) cmp
                 else {
                     // Tiebreaker: name
-                    val nameA = a.item.name.orNull().orEmpty()
-                    val nameB = b.item.name.orNull().orEmpty()
+                    val nameA = a.item.name.orElse("")
+                    val nameB = b.item.name.orElse("")
                     val nameCmp = String.CASE_INSENSITIVE_ORDER.compare(nameA, nameB)
                     if (nameCmp != 0) nameCmp else a.item.id.compareTo(b.item.id)
                 }
             }
             else -> {
                 // Group 2: by name, case-insensitive
-                val nameA = a.item.name.orNull().orEmpty()
-                val nameB = b.item.name.orNull().orEmpty()
+                val nameA = a.item.name.orElse("")
+                val nameB = b.item.name.orElse("")
                 val nameCmp = String.CASE_INSENSITIVE_ORDER.compare(nameA, nameB)
                 if (nameCmp != 0) nameCmp
                 else {
                     // Tiebreaker: designation
-                    val designA = a.item.designation.orNull().orEmpty()
-                    val designB = b.item.designation.orNull().orEmpty()
+                    val designA = a.item.designation.orElse("")
+                    val designB = b.item.designation.orElse("")
                     val designCmp = String.CASE_INSENSITIVE_ORDER.compare(designA, designB)
                     if (designCmp != 0) designCmp else a.item.id.compareTo(b.item.id)
                 }

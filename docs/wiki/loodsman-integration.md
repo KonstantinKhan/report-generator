@@ -233,6 +233,15 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 - **Обозначение и наименование** — из источников `identity` (с переопределением `byKind`). Пустое значение →
   `Designation.Missing` / `Name.Missing`.
+
+### Состояния значений и доступ к ним
+
+`Designation`, `Name` и `Field<T>` (позиция, единица) — sealed-типы с тремя состояниями:
+`Value` (значение есть), `Missing` (в PDM пусто), `NotLoaded` (не запрашивалось). `null` в API нет. Доступ —
+`orElse(default)`, значение по умолчанию вызывающий указывает явно: `child.name.orElse("—")`.
+`Missing` даёт `default`, `NotLoaded` бросает `IllegalStateException`: обращение к незапрошенному значению —
+ошибка вызывающего кода, а не пустая ячейка. Адаптер `NotLoaded` сейчас не создаёт, всегда `Value` или `Missing`.
+Текст для пустых значений (прочерк, «отсутствует», пустая строка) выбирает отчёт, модель его не хранит.
 - **Позиция** (`Usage.position`) — значение из `mapping.position`, прочитанное у **дочернего** объекта.
   Не число или нет значения → `Field.Missing`. Для её чтения дочерним узлам загружаются атрибуты.
 - **Количество** (`Usage.quantity`) — из `minQuantity`/`maxQuantity` связи: оба пусты → `Quantity.Missing`;

@@ -3,7 +3,7 @@ package dev.reportgenerator.loodsman
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.ProductId
 import dev.reportgenerator.domain.StructureQuery
-import dev.reportgenerator.domain.orNull
+import dev.reportgenerator.domain.orElse
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 
@@ -27,12 +27,12 @@ fun main(): Unit = runBlocking {
             )
         )
 
-        println("Корень: ${root.designation.orNull()} / ${root.name.orNull()}")
+        println("Корень: ${root.designation.orElse("—")} / ${root.name.orElse("—")}")
         root.usages.forEach { usage ->
             val child = usage.child
             println("  Связь: ${usage.relation}, Kind: ${child.kind}, Позиция: ${usage.position}, " +
                     "Количество: ${usage.quantity}, Единица: ${usage.unit}, " +
-                    "Обозначение: ${child.designation.orNull()}, Наименование: ${child.name.orNull()}")
+                    "Обозначение: ${child.designation.orElse("—")}, Наименование: ${child.name.orElse("—")}")
         }
     } catch (e: LoodsmanApiException) {
         logger.error(e.message)

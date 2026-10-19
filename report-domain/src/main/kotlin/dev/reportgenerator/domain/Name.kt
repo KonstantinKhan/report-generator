@@ -9,8 +9,10 @@ sealed interface Name {
     data object NotLoaded : Name
 }
 
-fun Name.orNull(): String? = when (this) {
+fun Name.orElse(default: String): String = when (this) {
     is Name.Value -> text
-    is Name.Missing -> null
-    is Name.NotLoaded -> null
+    is Name.Missing -> default
+    is Name.NotLoaded -> throw IllegalStateException(
+        "Name is not loaded: the value was not requested from the PDM client"
+    )
 }

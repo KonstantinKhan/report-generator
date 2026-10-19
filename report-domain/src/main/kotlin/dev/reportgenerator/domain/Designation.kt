@@ -9,8 +9,10 @@ sealed interface Designation {
     data object NotLoaded : Designation
 }
 
-fun Designation.orNull(): String? = when (this) {
+fun Designation.orElse(default: String): String = when (this) {
     is Designation.Value -> text
-    is Designation.Missing -> null
-    is Designation.NotLoaded -> null
+    is Designation.Missing -> default
+    is Designation.NotLoaded -> throw IllegalStateException(
+        "Designation is not loaded: the value was not requested from the PDM client"
+    )
 }
