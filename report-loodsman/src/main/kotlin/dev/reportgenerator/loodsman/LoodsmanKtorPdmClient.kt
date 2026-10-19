@@ -18,25 +18,13 @@ import dev.reportgenerator.domain.inverseLinkType
 import dev.reportgenerator.domain.pdmType
 import dev.reportgenerator.loodsman.dto.ObjectAttributeOutputDto
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.HttpResponseValidator
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.ResponseException
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.cookies.HttpCookies
-import io.ktor.client.plugins.logging.LogLevel
-import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
-import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import java.net.ConnectException
-import java.nio.channels.UnresolvedAddressException
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.write
 

@@ -4,6 +4,7 @@ import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.Field
+import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.Name
 import dev.reportgenerator.domain.ProductId
 import dev.reportgenerator.domain.ProductKind
@@ -16,6 +17,7 @@ import dev.reportgenerator.domain.Usage
 import dev.reportgenerator.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
 import dev.reportgenerator.loodsman.dto.ObjectAttributeOutputDto
 import dev.reportgenerator.loodsman.dto.PropObjectOutputDto
+import dev.reportgenerator.loodsman.mapping.AttributeRule
 import dev.reportgenerator.loodsman.mapping.FieldSource
 import dev.reportgenerator.loodsman.mapping.KindMapper
 import dev.reportgenerator.loodsman.mapping.MappingConfig
@@ -23,6 +25,8 @@ import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
 import dev.reportgenerator.loodsman.mapping.PropField
 import dev.reportgenerator.loodsman.mapping.Registries
 import dev.reportgenerator.loodsman.mapping.RelationMapper
+import dev.reportgenerator.loodsman.mapping.nameFor
+import dev.reportgenerator.loodsman.mapping.select
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpResponseValidator
@@ -105,14 +109,14 @@ class LoodsmanProductStructureClient(
         val rootId = query.rootId.value.toIntOrNull()
             ?: throw LoodsmanApiException("rootId must be numeric, got '${query.rootId.value}'")
         val relationByLinkTypeId = resolveLinkTypes(query.relations)
-        val attributeSources = resolveAttributeSources(query)
+        val attributeRules = resolveAttributeRules(query)
 
         val nodes = HashMap<Int, LoadedNode>()
         val links = HashMap<Int, List<Link>>()
         var frontier = listOf(rootId)
         var level = 0
         while (frontier.isNotEmpty()) {
-            loadNodes(frontier, rootId, query, attributeSources.isNotEmpty(), nodes)
+            loadNodes(frontier, query, attributeRules, nodes)
             if (level >= query.depth) break
 
             val expandable = frontier.filter { nodes.getValue(it).kind != null }
@@ -127,7 +131,9 @@ class LoodsmanProductStructureClient(
         if (root.kind == null) {
             throw LoodsmanApiException("Root object $rootId has unmapped type '${root.prop.type}'")
         }
-        return buildNode(rootId, query.depth, query, attributeSources, nodes, links, emptyList())
+
+        val linkAttributes = loadLinkAttributes(query, nodes, links)
+        return buildNode(rootId, query.depth, query, attributeRules, nodes, links, linkAttributes, emptyList())
     }
 
     private suspend fun resolveLinkTypes(relations: Set<Relation>): Map<Int, Relation> {
@@ -151,18 +157,16 @@ class LoodsmanProductStructureClient(
         }
     }
 
-    private fun resolveAttributeSources(query: StructureQuery): Map<AttributeKey, FieldSource> =
+    private fun resolveAttributeRules(query: StructureQuery): Map<AttributeKey, AttributeRule> =
         query.attributes.associateWith { key ->
-            val id = Registries.attributeKeys.idOf(key)
-            id?.let { mapping.attributes[it] }
+            Registries.attributeKeys.idOf(key)?.let { mapping.attributes[it] }
                 ?: throw LoodsmanApiException("Attribute '$key' is not configured in mapping.attributes")
         }
 
     private suspend fun loadNodes(
         ids: List<Int>,
-        rootId: Int,
         query: StructureQuery,
-        hasRequestedAttributes: Boolean,
+        attributeRules: Map<AttributeKey, AttributeRule>,
         nodes: MutableMap<Int, LoadedNode>
     ) {
         val props = ids.chunked(PROPS_BATCH_SIZE).flatMap { chunk ->
@@ -174,9 +178,9 @@ class LoodsmanProductStructureClient(
             id to Pair(prop, kindMapper.map(prop.type))
         }
 
-        val attributes = withPermits(prepared.filter { (id, pair) ->
-            val (_, kind) = pair
-            kind != null && needsAttributes(kind, id == rootId, query, hasRequestedAttributes)
+        val attributes = withPermits(prepared.filter { (_, pair) ->
+            val kind = pair.second
+            kind != null && needsAttributes(kind, query, attributeRules)
         }.map { it.first }) { id -> sessions.withSession { objectInfo.infoAboutVersion(it, id) } }
 
         prepared.forEach { (id, pair) ->
@@ -201,18 +205,71 @@ class LoodsmanProductStructureClient(
 
     private fun needsAttributes(
         kind: ProductKind,
-        isRoot: Boolean,
         query: StructureQuery,
-        hasRequestedAttributes: Boolean
+        attributeRules: Map<AttributeKey, AttributeRule>
     ): Boolean {
         val identity = identityOf(kind)
         return identity.designation is FieldSource.Attribute ||
             identity.name is FieldSource.Attribute ||
-            (!isRoot && mapping.position is FieldSource.Attribute) ||
-            (hasRequestedAttributes && query.attributes.any {
-                mapping.attributes[Registries.attributeKeys.idOf(it)] is FieldSource.Attribute
-            }) ||
+            attributeRules.values.any { it.nameFor(kind) != null } ||
             query.includeUnmappedAttributes
+    }
+
+    private suspend fun loadLinkAttributes(
+        query: StructureQuery,
+        nodes: Map<Int, LoadedNode>,
+        links: Map<Int, List<Link>>
+    ): Map<Int, LinkAttributesData> {
+        if (query.linkAttributes.isEmpty() && mapping.link.position.isEmpty()) {
+            return emptyMap()
+        }
+
+        val allLinks = links.values.flatten()
+        val linksByLinkId = mutableMapOf<Int, Link>()
+        for (link in allLinks) {
+            val parentNode = nodes[link.dto.idParent]
+            val childNode = nodes[link.dto.idChild]
+            if (parentNode?.kind != null && childNode?.kind != null) {
+                linksByLinkId[link.linkId] = link
+            }
+        }
+
+        if (linksByLinkId.isEmpty()) {
+            return emptyMap()
+        }
+
+        val requestedAttributeIds = mutableSetOf<String>()
+        for (key in query.linkAttributes) {
+            val id = Registries.linkAttributeKeys.idOf(key)
+                ?: throw LoodsmanApiException("Link attribute key '$key' not found in Registries")
+            if (!mapping.link.attributes.containsKey(id)) {
+                throw LoodsmanApiException("Link attribute '$id' is not configured in mapping.link.attributes")
+            }
+            requestedAttributeIds.add(id)
+        }
+
+        val result = mutableMapOf<Int, LinkAttributesData>()
+        val attributesByLinkId = withPermits(linksByLinkId.keys.toList()) { linkId ->
+            val link = linksByLinkId[linkId]!!
+            val parentKind = nodes[link.dto.idParent]!!.kind!!
+            val childKind = nodes[link.dto.idChild]!!.kind!!
+            val needsAttributeRequest = requestedAttributeIds.isNotEmpty() ||
+                mapping.link.position.select(link.relation, parentKind, childKind) != null
+
+            if (!needsAttributeRequest) {
+                return@withPermits mapOf<String, String>()
+            }
+
+            sessions.withSession { objectInfo.linkAttributes(it, linkId) }
+                .associate { it.name?.trim().orEmpty() to (it.value?.trim().orEmpty()) }
+                .filterKeys { it.isNotEmpty() }
+        }
+
+        for ((linkId, attrs) in attributesByLinkId) {
+            result[linkId] = LinkAttributesData(linkId, attrs)
+        }
+
+        return result
     }
 
     private fun identityOf(kind: ProductKind): Identity {
@@ -227,9 +284,10 @@ class LoodsmanProductStructureClient(
         id: Int,
         remaining: Int,
         query: StructureQuery,
-        attributeSources: Map<AttributeKey, FieldSource>,
+        attributeRules: Map<AttributeKey, AttributeRule>,
         nodes: Map<Int, LoadedNode>,
         links: Map<Int, List<Link>>,
+        linkAttributes: Map<Int, LinkAttributesData>,
         path: List<Int>
     ): ProductNode {
         if (id in path) {
@@ -243,14 +301,21 @@ class LoodsmanProductStructureClient(
             links[id].orEmpty().mapNotNull { link ->
                 val child = nodes.getValue(link.dto.idChild)
                 if (child.kind == null) return@mapNotNull null
+                val childKind = child.kind
+                val linkAttrs = linkAttributes[link.linkId]?.attributes ?: emptyMap()
+                val positionRule = mapping.link.position.select(link.relation, kind, childKind)
+                val position = positionRule?.name
+                    ?.let { posName -> linkAttrs[posName]?.toIntOrNull() }
+                    ?.let { Field.Value(it) } ?: Field.Missing
                 Usage(
                     relation = link.relation,
                     child = buildNode(
-                        link.dto.idChild, remaining - 1, query, attributeSources, nodes, links, path + id
+                        link.dto.idChild, remaining - 1, query, attributeRules, nodes, links, linkAttributes, path + id
                     ),
-                    position = child.read(mapping.position)?.toIntOrNull()?.let { Field.Value(it) } ?: Field.Missing,
+                    position = position,
                     quantity = quantityOf(link.dto),
-                    unit = link.dto.unit?.trim()?.takeIf { it.isNotEmpty() }?.let { Field.Value(it) } ?: Field.Missing
+                    unit = link.dto.unit?.trim()?.takeIf { it.isNotEmpty() }?.let { Field.Value(it) } ?: Field.Missing,
+                    attributes = linkAttributesOf(link.relation, kind, childKind, query, linkAttrs)
                 )
             }
         } else {
@@ -262,22 +327,56 @@ class LoodsmanProductStructureClient(
             kind = kind,
             designation = node.read(identity.designation)?.let { Designation.Value(it) } ?: Designation.Missing,
             name = node.read(identity.name)?.let { Name.Value(it) } ?: Name.Missing,
-            attributes = attributesOf(node, query, attributeSources),
+            version = node.prop.version?.trim()?.takeIf { it.isNotEmpty() }?.let { Field.Value(it) } ?: Field.Missing,
+            state = node.prop.state?.trim()?.takeIf { it.isNotEmpty() }?.let { Field.Value(it) } ?: Field.Missing,
+            attributes = attributesOf(node, kind, query, attributeRules),
             usages = usages
         )
     }
 
     private fun attributesOf(
         node: LoadedNode,
+        kind: ProductKind,
         query: StructureQuery,
-        sources: Map<AttributeKey, FieldSource>
+        rules: Map<AttributeKey, AttributeRule>
     ): Map<AttributeKey, AttributeValue> {
         val result = LinkedHashMap<AttributeKey, AttributeValue>()
-        sources.forEach { (key, source) ->
-            result[key] = node.read(source)?.let { AttributeValue.Text(it) } ?: AttributeValue.Empty
+        rules.forEach { (key, rule) ->
+            val value = rule.nameFor(kind)?.let { name -> node.read(FieldSource.Attribute(name)) }
+            result[key] = value?.let { AttributeValue.Text(it) } ?: AttributeValue.Empty
         }
         if (query.includeUnmappedAttributes) {
-            val mappedNames = mapping.attributes.values.filterIsInstance<FieldSource.Attribute>().map { it.name }.toSet()
+            val mappedNames = mutableSetOf<String>()
+            mapping.attributes.values.forEach { rule ->
+                rule.name?.let { mappedNames.add(it) }
+                rule.byKind.values.forEach { mappedNames.add(it) }
+            }
+            mapping.identity.designation.let { ds ->
+                when (ds) {
+                    is FieldSource.Attribute -> mappedNames.add(ds.name)
+                    else -> {}
+                }
+            }
+            mapping.identity.name.let { n ->
+                when (n) {
+                    is FieldSource.Attribute -> mappedNames.add(n.name)
+                    else -> {}
+                }
+            }
+            mapping.identity.byKind.values.forEach { ki ->
+                ki.designation?.let { ds ->
+                    when (ds) {
+                        is FieldSource.Attribute -> mappedNames.add(ds.name)
+                        else -> {}
+                    }
+                }
+                ki.name?.let { n ->
+                    when (n) {
+                        is FieldSource.Attribute -> mappedNames.add(n.name)
+                        else -> {}
+                    }
+                }
+            }
             node.attributes.forEach { attribute ->
                 val name = attribute.name?.trim()
                 val value = attribute.value?.trim()
@@ -285,6 +384,24 @@ class LoodsmanProductStructureClient(
                     result[AttributeKey.Unmapped(name)] = AttributeValue.Text(value)
                 }
             }
+        }
+        return result
+    }
+
+    private fun linkAttributesOf(
+        relation: Relation,
+        parentKind: ProductKind,
+        childKind: ProductKind,
+        query: StructureQuery,
+        linkAttrs: Map<String, String>
+    ): Map<LinkAttributeKey, AttributeValue> {
+        val result = LinkedHashMap<LinkAttributeKey, AttributeValue>()
+        for (key in query.linkAttributes) {
+            val id = Registries.linkAttributeKeys.idOf(key) ?: continue
+            val rules = mapping.link.attributes[id] ?: continue
+            val rule = rules.select(relation, parentKind, childKind)
+            val value = rule?.name?.let { name -> linkAttrs[name] }?.takeIf { it.isNotEmpty() }
+            result[key] = value?.let { AttributeValue.Text(it) } ?: AttributeValue.Empty
         }
         return result
     }
@@ -319,7 +436,16 @@ class LoodsmanProductStructureClient(
         val attributes: List<ObjectAttributeOutputDto>
     )
 
-    private class Link(val relation: Relation, val dto: GetLinkedObjectsForObjectsOutputDto_V4)
+    private class Link(
+        val relation: Relation,
+        val dto: GetLinkedObjectsForObjectsOutputDto_V4,
+        val linkId: Int = dto.idLink
+    )
+
+    private data class LinkAttributesData(
+        val linkId: Int,
+        val attributes: Map<String, String>
+    )
 
     private class Identity(val designation: FieldSource, val name: FieldSource)
 }

@@ -20,7 +20,6 @@ class KindMapperTest : ShouldSpec({
             designation = FieldSource.Prop(PropField.PRODUCT),
             name = FieldSource.Attribute("Наименование")
         ),
-        position = FieldSource.Attribute("Позиция"),
         onUnmapped = UnmappedPolicy(kind = OnUnmapped.KEEP, relation = OnUnmapped.SKIP)
     )
     val log = LoggerFactory.getLogger(this::class.java)

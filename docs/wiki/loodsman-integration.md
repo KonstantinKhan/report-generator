@@ -138,31 +138,65 @@ identity:
     name: Наименование
   byKind:                   # переопределение для отдельных видов (STANDARD, OTHER)
     STANDARD:
-      designation: { type: attribute, name: Обозначение изделия }
-      name: { type: prop, field: PRODUCT }
+      designation:
+        type: attribute
+        name: Обозначение изделия
+      name:
+        type: prop
+        field: PRODUCT
+    OTHER:
+      designation:
+        type: attribute
+        name: Обозначение изделия
+      name:
+        type: prop
+        field: PRODUCT
 
-position:
-  type: attribute
-  name: Позиция
+attributes:                 # атрибуты узла: id ключа модели -> имя атрибута в PDM
+  mass:
+    name: Масса
+  material:
+    name: Материал
+    byKind:                 # переопределение имени для вида (пример)
+      STANDARD: Материал изделия
 
-attributes:                 # id ключа атрибута модели -> источник
-  version: { type: prop, field: VERSION }
-  state: { type: prop, field: STATE }
-  mass: { type: attribute, name: Масса }
-  material: { type: attribute, name: Материал }
+link:
+  position:                 # правила выбора атрибута связи для Usage.position
+    - relation: COMPOSITION
+      name: Позиция
+    - relation: COMPOSITION # более конкретное правило выигрывает (пример)
+      child: [STANDARD]
+      name: Позиция изделия
+  attributes:               # атрибуты связи: id ключа модели -> список правил
+    note:
+      - relation: COMPOSITION
+        name: Примечание
 
 onUnmapped:
   kind: KEEP
   relation: SKIP
 ```
 
-(В ресурсе `byKind` задан и для `STANDARD`, и для `OTHER`, поля записаны в блочном стиле.)
+**`identity`** — источники обозначения и наименования объекта (`prop` или `attribute`), с переопределением
+по типу (`byKind`). У стандартных и прочих изделий обозначение в атрибуте «Обозначение изделия»,
+наименование в свойстве `product`.
 
-**`type: prop`** — значение из свойств объекта (`PRODUCT`, `VERSION`, `STATE`, `TYPE` из `/get-prop-objects`).
-**`type: attribute`** — значение из атрибутов объекта (ищется по имени через `/get-info-about-version-mode-3`).
+**`attributes`** — узловые атрибуты модели. Каждый ключ (`mass`, `material`) обязан быть в `Registries.attributeKeys`.
+Правило содержит:
+- `name` — имя атрибута в PDM по умолчанию;
+- `byKind` — переопределение имени для отдельных видов (id вида -> имя).
 
-**`identity.byKind`** — переопределение источников обозначения и наименования для отдельных видов изделий:
-у стандартных и прочих изделий обозначение лежит в атрибуте «Обозначение изделия», а `product` содержит наименование.
+Должен быть задан `name` или непустой `byKind`. Если для вида имени нет, значение узла — `AttributeValue.Empty`.
+
+**`link.position`** — правила выбора атрибута позиции из связи. Правило содержит:
+- `relation` — id отношения (обязателен);
+- `parent`, `child` — множества id типов родителя/ребёнка (пусто = для всех);
+- `name` — имя атрибута связи в PDM.
+
+**`link.attributes`** — атрибуты связей модели (ключи вроде `note` обязаны быть в `Registries.linkAttributeKeys`).
+Для каждого ключа — список правил с `relation`, `parent`, `child`, `name`. Правило выбирается по специфичности:
+оба селектора (3) > только `child` (2) > только `parent` (1) > без селекторов (0). Пересечение одинаково специфичных
+правил — ошибка валидации.
 
 ### Реестры (Registries)
 
@@ -171,10 +205,12 @@ onUnmapped:
 ```kotlin
 Registries.itemKinds  // ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, DOCUMENT, COMPLEX, KIT
 Registries.relations  // COMPOSITION, DOCUMENT
-Registries.attributeKeys  // version, state, mass, material
+Registries.attributeKeys  // mass, material
+Registries.linkAttributeKeys  // note
 ```
 
-`MappingConfig.validate()` проверяет, что все ключи в конфиге существуют в реестрах.
+`MappingConfig.validate()` проверяет, что все ключи в конфиге существуют в реестрах, и что правила
+`link.position` и `link.attributes` не пересекаются по селекторам одинаковой специфичности.
 
 ### Политика Unmapped
 
@@ -206,51 +242,69 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 `LoodsmanProductStructureClient.loadStructure(query: StructureQuery)`:
 
-1. **Разрешение связей.** Для каждого отношения из `query.relations` ищется id типа связи в `get-link-list`
-   (только `type == 0`, имя сравнивается без учёта регистра и лишних пробелов). Каждая связь из
-   `requiredRelations` конфига обязана быть в метаданных, иначе `LoodsmanApiException`. Отношение вне конфига
-   или без связи в PDM — тоже `LoodsmanApiException`.
+1. **Разрешение связей и атрибутов узла.** Для каждого отношения из `query.relations` ищется id типа связи в `get-link-list`
+   (только `type == 0`, имя сравнивается без учёта регистра и лишних пробелов). Каждая связь из `requiredRelations`
+   конфига обязана быть в метаданных, иначе `LoodsmanApiException`. Для каждого атрибута узла из `query.attributes`
+   проверяется наличие конфигурированного правила в `mapping.attributes`, иначе `LoodsmanApiException`.
 
-2. **Обход по уровням.** `depth = 0` — только корень, запросов связей нет. `depth = N` — связи разворачиваются
+2. **Обход по уровням (фаза 1).** `depth = 0` — только корень, запросов связей нет. `depth = N` — связи разворачиваются
    у узлов уровней `0..N-1`, дети уровня `N` загружаются (свойства и атрибуты), но их `usages` пусты.
    На каждом уровне:
    - свойства всех узлов уровня запрашиваются одним `get-prop-objects` (чанками по 100);
    - тип узла определяется по `type` из свойств (`KindMapper`), а не по обозначению;
-   - связи (`get-linked-objects-for-objects`) и атрибуты (`get-info-about-version-mode-3`, один запрос на узел)
-     запрашиваются параллельно через `Semaphore(concurrency)`;
+   - связи (`get-linked-objects-for-objects`) и узловые атрибуты (`get-info-about-version-mode-3`, один запрос на узел)
+     запрашиваются параллельно через `Semaphore(concurrency)` — если нужны;
    - следующий уровень — дети, которых ещё нет среди загруженных узлов. Поэтому обход конечен даже при цикле.
 
-3. **Кэш.** Свойства, атрибуты и связи хранятся по `idVersion`. Узел разворачивается один раз на минимальной
-   глубине, повторные вхождения в дерево используют те же данные.
+3. **Загрузка атрибутов связей (фаза 2).** ПОСЛЕ полного обхода дерева: если запрошены `query.linkAttributes`
+   или существуют правила `mapping.link.position`, для каждой загруженной связи с обоих сторон известным типом
+   делается один запрос `/api/v4/ObjectInfo/get-link-attributes` (параллельно, `Semaphore(concurrency)`).
+   Результаты собираются в карту `linkId → атрибуты`.
 
-4. **Сборка дерева** идёт из кэша рекурсией с остаточной глубиной. Цикл определяется по текущему пути →
-   `LoodsmanApiException` с путём. Дети, чей тип пропущен политикой `SKIP`, в `usages` не попадают.
+4. **Кэш.** Свойства, узловые атрибуты и связи хранятся по `idVersion`/`idLink`. Узел разворачивается один раз на
+   минимальной глубине, повторные вхождения в дерево используют те же данные.
 
-Запросов остаётся по два на узел (связи и атрибуты): `get-info-about-version-mode-3` принимает один id. Батчится
-только `get-prop-objects`.
+5. **Сборка дерева** идёт из кэша рекурсией с остаточной глубиной, используя загруженные атрибуты связей. Цикл
+   определяется по текущему пути → `LoodsmanApiException` с путём. Дети, чей тип пропущен политикой `SKIP`, в
+   `usages` не попадают. `ProductNode.version` и `ProductNode.state` всегда заполняются из `prop.version`/`prop.state`.
+
+**Стоимость по API:**
+- Свойства: батч `get-prop-objects` (один на уровень);
+- Узловые атрибуты: один `get-info-about-version-mode-3` на узел (если нужны);
+- Связи: один `get-linked-objects-for-objects` на узел;
+- Атрибуты связей: один `get-link-attributes` на связь (если нужны или есть правила позиции).
 
 ### Что попадает в ProductNode и Usage
 
 - **Обозначение и наименование** — из источников `identity` (с переопределением `byKind`). Пустое значение →
   `Designation.Missing` / `Name.Missing`.
+- **Version и State** — ВСЕГДА из свойств объекта (`prop.version` и `prop.state`, trim). Не настраиваются конфигом.
+  Непустое значение → `Field.Value(строка)`, иначе `Field.Missing`.
 
 ### Состояния значений и доступ к ним
 
-`Designation`, `Name` и `Field<T>` (позиция, единица) — sealed-типы с тремя состояниями:
+`Designation`, `Name` и `Field<T>` (позиция, единица, версия, состояние) — sealed-типы с тремя состояниями:
 `Value` (значение есть), `Missing` (в PDM пусто), `NotLoaded` (не запрашивалось). `null` в API нет. Доступ —
-`orElse(default)`, значение по умолчанию вызывающий указывает явно: `child.name.orElse("—")`.
+`orElse(default)`, значение по умолчанию вызывающий указывает явно: `node.version.orElse("—")`.
 `Missing` даёт `default`, `NotLoaded` бросает `IllegalStateException`: обращение к незапрошенному значению —
-ошибка вызывающего кода, а не пустая ячейка. Адаптер `NotLoaded` сейчас не создаёт, всегда `Value` или `Missing`.
+ошибка вызывающего кода, а не пустая ячейка. Адаптер `NotLoaded` не создаёт (поля заполнены всегда), оно
+остаётся значением по умолчанию у вручную собранных `ProductNode` в тестах.
 Текст для пустых значений (прочерк, «отсутствует», пустая строка) выбирает отчёт, модель его не хранит.
-- **Позиция** (`Usage.position`) — значение из `mapping.position`, прочитанное у **дочернего** объекта.
-  Не число или нет значения → `Field.Missing`. Для её чтения дочерним узлам загружаются атрибуты.
+
+- **Позиция** (`Usage.position`) — выбирается по правилам `mapping.link.position.select(relation, parentKind, childKind)`.
+  Если есть правило, ищется атрибут связи с именем из правила в ответе `/get-link-attributes`. Значение преобразуется
+  в `Int`: успешно → `Field.Value(число)`, нет → `Field.Missing`.
+- **Атрибуты связи** (`Usage.attributes`) — только ключи из `query.linkAttributes`. Для каждого ключа ищется список
+  правил в `mapping.link.attributes[ключ]` и выбирается по специфичности селектора (как для позиции).
+  Если есть правило и атрибут найден в `/get-link-attributes` → `AttributeValue.Text(значение)`, иначе `Empty`.
 - **Количество** (`Usage.quantity`) — из `minQuantity`/`maxQuantity` связи: оба пусты → `Quantity.Missing`;
   одно значение или `min == max` → `Quantity.Exact`; иначе `Quantity.Range`. **Единица** — `unit` связи.
-- **Атрибуты узла** — только те ключи, что перечислены в `query.attributes`. Каждый ключ обязан быть в
-  `mapping.attributes`, источник может быть `prop` (напр. версия и состояние) или `attribute`. Непустое значение →
-  `AttributeValue.Text`, иначе `AttributeValue.Empty`. Не запрошенные ключи в `attributes` отсутствуют.
+- **Атрибуты узла** (`ProductNode.attributes`) — только те ключи, что перечислены в `query.attributes`. Каждый ключ
+  обязан быть в `mapping.attributes`, источник выбирается из `rule.nameFor(kind)` (с учётом переопределения `byKind`).
+  Непустое значение → `AttributeValue.Text`, иначе `Empty`. Не запрошенные ключи отсутствуют.
 - `query.includeUnmappedAttributes = true` — остальные непустые атрибуты объекта добавляются как
-  `AttributeKey.Unmapped(name)`.
+  `AttributeKey.Unmapped(name)`. Исключаются все известные имена: из `mapping.attributes.*.name` и
+  `mapping.attributes.*.byKind.*`, из `mapping.identity.*.{name}` и их `byKind` переопределений.
 
 ### Env-переменная
 

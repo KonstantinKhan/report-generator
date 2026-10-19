@@ -1,6 +1,7 @@
 package dev.reportgenerator.loodsman
 
 import dev.reportgenerator.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
+import dev.reportgenerator.loodsman.dto.LinkAttributeOutputDto
 import dev.reportgenerator.loodsman.dto.ObjectAttributeOutputDto
 import dev.reportgenerator.loodsman.dto.PropObjectOutputDto
 import io.ktor.client.HttpClient
@@ -45,5 +46,11 @@ internal class ObjectInfo(
             parameter("objectsIds", objectId)
             parameter("linksTypesIds", linkTypeIds.joinToString(","))
             parameter("inverse", inverse)
+        }.body()
+
+    internal suspend fun linkAttributes(sessionId: String, linkId: Int): List<LinkAttributeOutputDto> =
+        client.get("$blockBaseUrl/get-link-attributes") {
+            header("web-loodsman-session", sessionId)
+            parameter("linkId", linkId)
         }.body()
 }

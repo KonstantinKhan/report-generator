@@ -6,5 +6,5 @@ data class Usage(
     val position: Field<Int>,
     val quantity: Quantity,
     val unit: Field<String>,
-    val attributes: Map<AttributeKey, AttributeValue> = emptyMap()
+    val attributes: Map<LinkAttributeKey, AttributeValue> = emptyMap()
 )

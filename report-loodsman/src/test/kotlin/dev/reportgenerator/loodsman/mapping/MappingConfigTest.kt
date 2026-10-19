@@ -16,7 +16,9 @@ class MappingConfigTest : ShouldSpec({
                     designation = FieldSource.Prop(PropField.PRODUCT),
                     name = FieldSource.Attribute("Наименование")
                 ),
-                position = FieldSource.Attribute("Позиция")
+                attributes = mapOf(
+                    "mass" to AttributeRule(name = "Масса")
+                )
             )
             config.kinds.shouldContainKey("Деталь")
             config.kinds["Деталь"] shouldBe "PART"
@@ -33,7 +35,9 @@ class MappingConfigTest : ShouldSpec({
                     designation = FieldSource.Prop(PropField.PRODUCT),
                     name = FieldSource.Attribute("Наименование")
                 ),
-                position = FieldSource.Attribute("Позиция")
+                attributes = mapOf(
+                    "mass" to AttributeRule(name = "Масса")
+                )
             )
             config.validate()
         }
@@ -52,9 +56,9 @@ class MappingConfigTest : ShouldSpec({
                   name:
                     type: attribute
                     name: Наименование
-                position:
-                  type: attribute
-                  name: Позиция
+                attributes:
+                  mass:
+                    name: Масса
                 onUnmapped:
                   kind: KEEP
                   relation: SKIP
@@ -80,9 +84,9 @@ class MappingConfigTest : ShouldSpec({
                   name:
                     type: attribute
                     name: Наименование
-                position:
-                  type: attribute
-                  name: Позиция
+                attributes:
+                  mass:
+                    name: Масса
                 onUnmapped:
                   kind: KEEP
                   relation: SKIP
@@ -114,9 +118,35 @@ class MappingConfigTest : ShouldSpec({
                   name:
                     type: attribute
                     name: Наименование
-                position:
-                  type: attribute
-                  name: Позиция
+                attributes:
+                  mass:
+                    name: Масса
+                onUnmapped:
+                  kind: KEEP
+                  relation: SKIP
+            """.trimIndent()
+
+            shouldThrow<IllegalArgumentException> {
+                MappingConfigLoader.parse(invalidYaml)
+            }
+        }
+
+        should("throw error for AttributeRule without name and byKind") {
+            val invalidYaml = """
+                kinds:
+                  Деталь: PART
+                relations:
+                  Состоит из ...: COMPOSITION
+                requiredRelations: []
+                identity:
+                  designation:
+                    type: prop
+                    field: PRODUCT
+                  name:
+                    type: attribute
+                    name: Наименование
+                attributes:
+                  mass: {}
                 onUnmapped:
                   kind: KEEP
                   relation: SKIP

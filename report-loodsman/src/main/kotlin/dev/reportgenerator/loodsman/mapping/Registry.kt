@@ -10,5 +10,7 @@ class Registry<T : Any>(private val kind: String, private val entries: Map<Strin
 
     fun idOf(value: T): String? = entries.entries.firstOrNull { it.value == value }?.key
 
+    val ids: Set<String> get() = entries.keys
+
     val values: Collection<T> get() = entries.values
 }

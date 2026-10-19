@@ -44,13 +44,33 @@ data class UnmappedPolicy(
 )
 
 @Serializable
+data class AttributeRule(
+    val name: String? = null,
+    val byKind: Map<String, String> = emptyMap()
+)
+
+@Serializable
+data class LinkAttributeRule(
+    val relation: String,
+    val parent: Set<String> = emptySet(),
+    val child: Set<String> = emptySet(),
+    val name: String
+)
+
+@Serializable
+data class LinkMapping(
+    val position: List<LinkAttributeRule> = emptyList(),
+    val attributes: Map<String, List<LinkAttributeRule>> = emptyMap()
+)
+
+@Serializable
 data class MappingConfig(
     val kinds: Map<String, String>,
     val relations: Map<String, String>,
     val requiredRelations: Set<String> = emptySet(),
     val identity: IdentityMapping,
-    val position: FieldSource,
-    val attributes: Map<String, FieldSource> = emptyMap(),
+    val attributes: Map<String, AttributeRule> = emptyMap(),
+    val link: LinkMapping = LinkMapping(),
     val onUnmapped: UnmappedPolicy = UnmappedPolicy()
 ) {
     fun validate() {
@@ -58,8 +78,16 @@ data class MappingConfig(
             Registries.itemKinds.resolve(value)
         }
 
-        attributes.forEach { (key, _) ->
+        attributes.forEach { (key, rule) ->
             Registries.attributeKeys.resolve(key)
+            if (rule.name == null && rule.byKind.isEmpty()) {
+                throw IllegalArgumentException(
+                    "AttributeRule for '$key' must have either name or byKind defined"
+                )
+            }
+            rule.byKind.forEach { (kindId, _) ->
+                Registries.itemKinds.resolve(kindId)
+            }
         }
 
         relations.forEach { (_, value) ->
@@ -77,6 +105,44 @@ data class MappingConfig(
 
         identity.byKind.forEach { (kindKey, _) ->
             Registries.itemKinds.resolve(kindKey)
+        }
+
+        link.position.validateRules()
+        link.attributes.forEach { (key, rules) ->
+            Registries.linkAttributeKeys.resolve(key)
+            rules.validateRules()
+        }
+    }
+
+    private fun List<LinkAttributeRule>.validateRules() {
+        forEach { rule ->
+            Registries.relations.resolve(rule.relation)
+            rule.parent.forEach { Registries.itemKinds.resolve(it) }
+            rule.child.forEach { Registries.itemKinds.resolve(it) }
+        }
+
+        for (i in indices) {
+            for (j in i + 1 until size) {
+                val a = this[i]
+                val b = this[j]
+                val sameShape = a.relation == b.relation &&
+                    a.parent.isEmpty() == b.parent.isEmpty() &&
+                    a.child.isEmpty() == b.child.isEmpty()
+                if (!sameShape) continue
+
+                if (a.parent == b.parent && a.child == b.child) {
+                    throw IllegalArgumentException(
+                        "Link attribute rules at indices $i and $j are identical for relation ${a.relation}"
+                    )
+                }
+                val parentsOverlap = a.parent.isEmpty() || a.parent.intersect(b.parent).isNotEmpty()
+                val childrenOverlap = a.child.isEmpty() || a.child.intersect(b.child).isNotEmpty()
+                if (parentsOverlap && childrenOverlap) {
+                    throw IllegalArgumentException(
+                        "Link attribute rules at indices $i and $j have overlapping selectors for relation ${a.relation}"
+                    )
+                }
+            }
         }
     }
 }

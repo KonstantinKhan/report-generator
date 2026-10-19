@@ -1,6 +1,7 @@
 package dev.reportgenerator.loodsman
 
 import dev.reportgenerator.domain.AttributeKey
+import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.ProductId
 import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.domain.orElse
@@ -23,16 +24,19 @@ fun main(): Unit = runBlocking {
             StructureQuery(
                 rootId = ProductId("5697"),
                 depth = 1,
-                attributes = setOf(AttributeKey.Version, AttributeKey.State)
+                linkAttributes = setOf(LinkAttributeKey.Note),
+                attributes = setOf(AttributeKey.Mass)
             )
         )
 
-        println("Корень: ${root.designation.orElse("—")} / ${root.name.orElse("—")}")
+        println("Корень: ${root.designation.orElse("—")} / ${root.name.orElse("—")} (version: ${root.version.orElse("—")}, state: ${root.state.orElse("—")})")
         root.usages.forEach { usage ->
             val child = usage.child
-            println("  Связь: ${usage.relation}, Kind: ${child.kind}, Позиция: ${usage.position}, " +
-                    "Количество: ${usage.quantity}, Единица: ${usage.unit}, " +
-                    "Обозначение: ${child.designation.orElse("—")}, Наименование: ${child.name.orElse("—")}")
+            println("  Связь: ${usage.relation}, Kind: ${child.kind}, Позиция: ${usage.position.orElse("—")}, " +
+                    "Количество: ${usage.quantity}, Единица: ${usage.unit.orElse("—")}, " +
+                    "Обозначение: ${child.designation.orElse("—")}, Наименование: ${child.name.orElse("—")}, " +
+                    "version: ${child.version.orElse("—")}, state: ${child.state.orElse("—")}, " +
+                    "Примечание: ${usage.attributes[LinkAttributeKey.Note]?.toString() ?: "—"}")
         }
     } catch (e: LoodsmanApiException) {
         logger.error(e.message)

@@ -1,8 +1,9 @@
 package dev.reportgenerator.loodsman.mapping
 
+import dev.reportgenerator.domain.AttributeKey
+import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.ProductKind
 import dev.reportgenerator.domain.Relation
-import dev.reportgenerator.domain.AttributeKey
 
 object Registries {
     val itemKinds = Registry(
@@ -30,10 +31,15 @@ object Registries {
     val attributeKeys = Registry(
         "attributeKey",
         mapOf(
-            "version" to AttributeKey.Version,
-            "state" to AttributeKey.State,
             "mass" to AttributeKey.Mass,
             "material" to AttributeKey.Material
+        )
+    )
+
+    val linkAttributeKeys = Registry<LinkAttributeKey>(
+        "linkAttributeKey",
+        mapOf(
+            "note" to LinkAttributeKey.Note
         )
     )
 }

@@ -1,11 +1,12 @@
 package dev.reportgenerator.loodsman.mapping
 
+import dev.reportgenerator.domain.AttributeKey
+import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.ProductKind
 import dev.reportgenerator.domain.Relation
-import dev.reportgenerator.domain.AttributeKey
 import io.kotest.core.spec.style.ShouldSpec
-import io.kotest.matchers.shouldBe
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 
 class RegistriesTest : ShouldSpec({
@@ -50,8 +51,6 @@ class RegistriesTest : ShouldSpec({
 
     context("attributeKeys registry") {
         should("contain known AttributeKey variants") {
-            Registries.attributeKeys.values.shouldContain(AttributeKey.Version)
-            Registries.attributeKeys.values.shouldContain(AttributeKey.State)
             Registries.attributeKeys.values.shouldContain(AttributeKey.Mass)
             Registries.attributeKeys.values.shouldContain(AttributeKey.Material)
         }
@@ -62,6 +61,21 @@ class RegistriesTest : ShouldSpec({
                 throw AssertionError("Should have thrown IllegalArgumentException")
             } catch (e: IllegalArgumentException) {
                 e.message!! shouldContain "Unknown attributeKey"
+            }
+        }
+    }
+
+    context("linkAttributeKeys registry") {
+        should("contain known LinkAttributeKey variants") {
+            Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.Note)
+        }
+
+        should("throw error for unknown link attribute key") {
+            try {
+                Registries.linkAttributeKeys.resolve("unknown")
+                throw AssertionError("Should have thrown IllegalArgumentException")
+            } catch (e: IllegalArgumentException) {
+                e.message!! shouldContain "Unknown linkAttributeKey"
             }
         }
     }

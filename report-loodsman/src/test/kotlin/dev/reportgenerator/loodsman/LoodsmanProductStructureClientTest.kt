@@ -4,12 +4,16 @@ import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.Field
+import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.Name
 import dev.reportgenerator.domain.ProductId
 import dev.reportgenerator.domain.ProductKind
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.StructureQuery
+import dev.reportgenerator.loodsman.mapping.AttributeRule
+import dev.reportgenerator.loodsman.mapping.LinkAttributeRule
+import dev.reportgenerator.loodsman.mapping.LinkMapping
 import dev.reportgenerator.loodsman.mapping.MappingConfig
 import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
 import dev.reportgenerator.loodsman.mapping.OnUnmapped
@@ -48,7 +52,8 @@ private data class Edge(
     val child: Int,
     val min: Double? = null,
     val max: Double? = null,
-    val unit: String? = null
+    val unit: String? = null,
+    val attrs: Map<String, String> = emptyMap()
 )
 
 private class FakeLoodsman(
@@ -58,10 +63,12 @@ private class FakeLoodsman(
 ) {
     val propsCalls: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val linkCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
+    val linkAttributeCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
 
     fun client(
         mapping: MappingConfig = MappingConfigLoader.load(emptyMap())
     ): LoodsmanProductStructureClient {
+        val linkIdToEdge = mutableMapOf<Int, Edge>()
         val engine = MockEngine { request ->
             val params = request.url.parameters
             val body: JsonElement = when (request.url.encodedPath) {
@@ -99,7 +106,27 @@ private class FakeLoodsman(
                 "/api/v4/ObjectInfo/get-linked-objects-for-objects" -> {
                     val parent = params["objectsIds"]!!.toInt()
                     linkCalls.add(parent)
-                    JsonArray(edges.filter { it.parent == parent }.mapIndexed { index, edge -> linkOf(edge, index) })
+                    JsonArray(edges.filter { it.parent == parent }.mapIndexed { index, edge ->
+                        val linkId = edge.parent * 100 + index
+                        linkIdToEdge[linkId] = edge
+                        linkOf(edge, index)
+                    })
+                }
+                "/api/v4/ObjectInfo/get-link-attributes" -> {
+                    val linkId = params["linkId"]!!.toInt()
+                    linkAttributeCalls.add(linkId)
+                    val edge = linkIdToEdge[linkId]
+                    buildJsonArray {
+                        edge?.attrs?.forEach { (name, value) ->
+                            add(buildJsonObject {
+                                put("id", 1)
+                                put("name", name)
+                                put("value", value)
+                                put("type", 0)
+                                put("accessLevel", 0)
+                            })
+                        }
+                    }
                 }
                 else -> error("Unexpected request ${request.url}")
             }
@@ -160,10 +187,16 @@ private val treeEdges = listOf(
     Edge(2, 4)
 )
 
-private fun query(depth: Int, vararg attributes: AttributeKey, includeUnmapped: Boolean = false) = StructureQuery(
+private fun query(
+    depth: Int,
+    vararg attributes: AttributeKey,
+    linkAttributes: Set<LinkAttributeKey> = emptySet(),
+    includeUnmapped: Boolean = false
+) = StructureQuery(
     rootId = ProductId("1"),
     depth = depth,
     attributes = attributes.toSet(),
+    linkAttributes = linkAttributes,
     includeUnmappedAttributes = includeUnmapped
 )
 
@@ -194,7 +227,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         shaftUsage.child.name shouldBe Name.Value("Вал")
         shaftUsage.quantity shouldBe Quantity.Exact(2.0)
         shaftUsage.unit shouldBe Field.Value("шт")
-        shaftUsage.position shouldBe Field.Value(1)
+        shaftUsage.position shouldBe Field.Missing
         shaftUsage.child.usages shouldBe emptyList()
 
         boltUsage.child.kind shouldBe ProductKind.Standard
@@ -202,7 +235,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         boltUsage.child.name shouldBe Name.Value("Болт М6")
         boltUsage.quantity shouldBe Quantity.Range(4.0, 6.0)
         boltUsage.unit shouldBe Field.Missing
-        boltUsage.position shouldBe Field.Value(2)
+        boltUsage.position shouldBe Field.Missing
     }
 
     should("return quantity as missing when the link has no quantity") {
@@ -222,32 +255,12 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         fake.propsCalls[2] shouldBe listOf(4)
     }
 
-    should("fill only requested attributes") {
+    should("return empty attributes when not requested") {
         val fake = FakeLoodsman(tree, treeEdges)
 
-        val withAttributes = fake.client().loadStructure(query(1, AttributeKey.Version, AttributeKey.State))
         val without = fake.client().loadStructure(query(1))
 
-        withAttributes.attributes shouldBe mapOf(
-            AttributeKey.Version to AttributeValue.Text("1"),
-            AttributeKey.State to AttributeValue.Text("Утверждён")
-        )
         without.attributes shouldBe emptyMap()
-    }
-
-    should("read an attribute-sourced value and mark an absent one as empty") {
-        val root = FakeLoodsman(tree, treeEdges).client()
-            .loadStructure(query(1, AttributeKey.Mass))
-
-        root.attributes[AttributeKey.Mass] shouldBe AttributeValue.Empty
-        root.usages[0].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("1.5")
-    }
-
-    should("expose attributes missing in the mapping as unmapped when requested") {
-        val root = FakeLoodsman(tree, treeEdges).client()
-            .loadStructure(query(1, includeUnmapped = true))
-
-        root.usages[0].child.attributes[AttributeKey.Unmapped("Позиция")] shouldBe AttributeValue.Text("1")
     }
 
     should("fail on a cycle") {
@@ -290,11 +303,147 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         root.usages.map { it.child.id } shouldBe listOf(ProductId("2"), ProductId("3"))
     }
 
-    should("fail when a requested attribute is absent in the mapping") {
+    should("fill version and state from object properties") {
+        val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1))
+
+        root.version shouldBe Field.Value("1")
+        root.state shouldBe Field.Value("Утверждён")
+        root.usages[0].child.version shouldBe Field.Value("1")
+        root.usages[0].child.state shouldBe Field.Value("Утверждён")
+    }
+
+    should("load position from link attribute when rule exists") {
+        val edgeWithPosition = Edge(1, 2, min = 2.0, max = 2.0, unit = "шт", attrs = mapOf("Позиция" to "3"))
+        val edges = listOf(edgeWithPosition) + treeEdges.drop(1)
+        val fake = FakeLoodsman(tree, edges)
+
+        val root = fake.client().loadStructure(query(1))
+
+        root.usages[0].position shouldBe Field.Value(3)
+    }
+
+    should("load zero link attributes when no position rules and no link attributes requested") {
+        val fake = FakeLoodsman(tree, treeEdges)
+        val mapping = MappingConfigLoader.load(emptyMap()).copy(
+            link = LinkMapping()
+        )
+
+        fake.client(mapping).loadStructure(query(1))
+
+        fake.linkAttributeCalls.shouldBe(emptyList())
+    }
+
+    should("load link attributes and populate Usage.attributes") {
+        val edgeWithNote = Edge(1, 2, min = 2.0, max = 2.0, unit = "шт", attrs = mapOf("Примечание" to "тест"))
+        val edges = listOf(edgeWithNote) + treeEdges.drop(1)
+        val fake = FakeLoodsman(tree, edges)
+
+        val root = fake.client().loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+        root.usages[0].attributes shouldBe mapOf(LinkAttributeKey.Note to AttributeValue.Text("тест"))
+    }
+
+    should("return Empty for requested linkAttribute without value") {
+        val fake = FakeLoodsman(tree, treeEdges)
+
+        val root = fake.client().loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+        root.usages[0].attributes shouldBe mapOf(LinkAttributeKey.Note to AttributeValue.Empty)
+    }
+
+    should("fail when requested link attribute not in mapping") {
+        val fake = FakeLoodsman(tree, treeEdges)
+        val mapping = MappingConfigLoader.load(emptyMap()).copy(link = LinkMapping())
+
+        shouldThrow<LoodsmanApiException> {
+            fake.client(mapping).loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+        }
+    }
+
+    should("not call get-link-attributes when depth is 0") {
+        val fake = FakeLoodsman(tree, treeEdges)
+
+        fake.client().loadStructure(query(0))
+
+        fake.linkAttributeCalls.shouldBe(emptyList())
+        fake.linkCalls.shouldBe(emptyList())
+    }
+
+    should("fill requested node attributes and mark absent ones as empty") {
+        val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1, AttributeKey.Mass))
+
+        root.attributes shouldBe mapOf(AttributeKey.Mass to AttributeValue.Empty)
+        root.usages[0].child.attributes shouldBe mapOf(AttributeKey.Mass to AttributeValue.Text("1.5"))
+    }
+
+    should("use the attribute name overridden for the object kind") {
+        val standard = bolt.copy(attrs = bolt.attrs + mapOf("Масса" to "9", "Масса изделия" to "0.02"))
+        val mapping = MappingConfigLoader.load(emptyMap()).copy(
+            attributes = mapOf("mass" to AttributeRule(name = "Масса", byKind = mapOf("STANDARD" to "Масса изделия")))
+        )
+
+        val root = FakeLoodsman(listOf(assembly, shaft, standard, pin), treeEdges).client(mapping)
+            .loadStructure(query(1, AttributeKey.Mass))
+
+        root.usages[0].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("1.5")
+        root.usages[1].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("0.02")
+    }
+
+    should("read an attribute defined only for some kinds") {
+        val mapping = MappingConfigLoader.load(emptyMap()).copy(
+            attributes = mapOf("mass" to AttributeRule(byKind = mapOf("PART" to "Масса")))
+        )
+
+        val root = FakeLoodsman(tree, treeEdges).client(mapping).loadStructure(query(1, AttributeKey.Mass))
+
+        root.usages[0].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("1.5")
+        root.usages[1].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Empty
+        root.attributes[AttributeKey.Mass] shouldBe AttributeValue.Empty
+    }
+
+    should("fail when a requested node attribute is absent in the mapping") {
         val mapping = MappingConfigLoader.load(emptyMap()).copy(attributes = emptyMap())
 
         shouldThrow<LoodsmanApiException> {
-            FakeLoodsman(tree, treeEdges).client(mapping).loadStructure(query(1, AttributeKey.Version))
+            FakeLoodsman(tree, treeEdges).client(mapping).loadStructure(query(1, AttributeKey.Mass))
         }
+    }
+
+    should("expose only attributes unknown to the mapping when unmapped ones are requested") {
+        val extra = shaft.copy(attrs = shaft.attrs + ("Прочее" to "x"))
+
+        val root = FakeLoodsman(listOf(assembly, extra, bolt, pin), treeEdges).client()
+            .loadStructure(query(1, includeUnmapped = true))
+
+        val attributes = root.usages[0].child.attributes
+        attributes[AttributeKey.Unmapped("Прочее")] shouldBe AttributeValue.Text("x")
+        attributes.containsKey(AttributeKey.Unmapped("Масса")) shouldBe false
+        attributes.containsKey(AttributeKey.Unmapped("Наименование")) shouldBe false
+    }
+
+    should("choose the position rule by the kinds of the linked objects") {
+        val mapping = MappingConfigLoader.load(emptyMap()).copy(
+            link = LinkMapping(
+                position = listOf(
+                    LinkAttributeRule(relation = "COMPOSITION", name = "Позиция"),
+                    LinkAttributeRule(relation = "COMPOSITION", child = setOf("STANDARD"), name = "Позиция изделия")
+                )
+            )
+        )
+        val edges = listOf(
+            Edge(1, 2, attrs = mapOf("Позиция" to "1")),
+            Edge(1, 3, attrs = mapOf("Позиция" to "7", "Позиция изделия" to "2"))
+        )
+
+        val root = FakeLoodsman(tree, edges).client(mapping).loadStructure(query(1))
+
+        root.usages[0].position shouldBe Field.Value(1)
+        root.usages[1].position shouldBe Field.Value(2)
+    }
+
+    should("return missing position when the link has no position attribute") {
+        val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1))
+
+        root.usages.map { it.position } shouldBe listOf(Field.Missing, Field.Missing)
     }
 })
