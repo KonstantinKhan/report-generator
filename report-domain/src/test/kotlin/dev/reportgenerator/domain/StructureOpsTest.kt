@@ -2,7 +2,6 @@ package dev.reportgenerator.domain
 
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 
 class StructureOpsTest : ShouldSpec({
     context("usagesOf") {
@@ -75,7 +74,7 @@ class StructureOpsTest : ShouldSpec({
 
         should("respect relation filter") {
             val part1 = ProductNode(ProductId("2"), ProductKind.Part, Designation.Value("P1"), Name.Value("Part1"))
-            val doc = ProductNode(ProductId("3"), ProductKind.Document, Designation.Value("D"), Name.Value("Doc"))
+            val doc = ProductNode(ProductId("3"), ProductKind.AssemblyDrawing, Designation.Value("D"), Name.Value("Doc"))
             val assembly = ProductNode(ProductId("1"), ProductKind.Assembly, Designation.Value("A"), Name.Value("Asm"),
                 usages = listOf(
                     Usage(Relation.Composition, part1, Field.Missing, Quantity.Missing, Field.Missing),
@@ -116,7 +115,7 @@ class StructureOpsTest : ShouldSpec({
 
         should("respect relation filter in grouping") {
             val part = ProductNode(ProductId("2"), ProductKind.Part, Designation.Value("P"), Name.Value("Part"))
-            val doc = ProductNode(ProductId("3"), ProductKind.Document, Designation.Value("D"), Name.Value("Doc"))
+            val doc = ProductNode(ProductId("3"), ProductKind.AssemblyDrawing, Designation.Value("D"), Name.Value("Doc"))
 
             val assembly = ProductNode(ProductId("1"), ProductKind.Assembly, Designation.Value("A"), Name.Value("Asm"),
                 usages = listOf(
@@ -128,7 +127,7 @@ class StructureOpsTest : ShouldSpec({
             val compositionGrouped = assembly.groupedByKind(Relation.Composition)
             compositionGrouped.size shouldBe 1
             compositionGrouped.containsKey(ProductKind.Part) shouldBe true
-            compositionGrouped.containsKey(ProductKind.Document) shouldBe false
+            compositionGrouped.containsKey(ProductKind.AssemblyDrawing) shouldBe false
         }
     }
 })

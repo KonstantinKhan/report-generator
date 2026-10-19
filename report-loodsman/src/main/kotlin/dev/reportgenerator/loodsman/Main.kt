@@ -3,6 +3,7 @@ package dev.reportgenerator.loodsman
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.ProductId
+import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.domain.orElse
 import kotlinx.coroutines.runBlocking
@@ -23,9 +24,11 @@ fun main(): Unit = runBlocking {
         val root = client.loadStructure(
             StructureQuery(
                 rootId = ProductId("5697"),
+//                rootId = ProductId("5693"),
                 depth = 1,
                 linkAttributes = setOf(LinkAttributeKey.Note),
-                attributes = setOf(AttributeKey.Mass, AttributeKey.CompanyName)
+                attributes = setOf(AttributeKey.Mass, AttributeKey.CompanyName),
+                relations = setOf(Relation.Composition, Relation.Document)
             )
         )
 

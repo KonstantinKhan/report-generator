@@ -14,7 +14,7 @@ object Registries {
             "STANDARD" to ProductKind.Standard,
             "OTHER" to ProductKind.Other,
             "MATERIAL" to ProductKind.Material,
-            "DOCUMENT" to ProductKind.Document,
+            "ASSEMBLY_DRAWING" to ProductKind.AssemblyDrawing,
             "COMPLEX" to ProductKind.Complex,
             "KIT" to ProductKind.Kit
         )

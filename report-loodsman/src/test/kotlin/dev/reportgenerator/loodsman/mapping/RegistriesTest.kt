@@ -6,7 +6,6 @@ import dev.reportgenerator.domain.ProductKind
 import dev.reportgenerator.domain.Relation
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.collections.shouldContain
-import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 
 class RegistriesTest : ShouldSpec({
@@ -17,7 +16,7 @@ class RegistriesTest : ShouldSpec({
             Registries.itemKinds.values.shouldContain(ProductKind.Standard)
             Registries.itemKinds.values.shouldContain(ProductKind.Other)
             Registries.itemKinds.values.shouldContain(ProductKind.Material)
-            Registries.itemKinds.values.shouldContain(ProductKind.Document)
+            Registries.itemKinds.values.shouldContain(ProductKind.AssemblyDrawing)
             Registries.itemKinds.values.shouldContain(ProductKind.Complex)
             Registries.itemKinds.values.shouldContain(ProductKind.Kit)
         }

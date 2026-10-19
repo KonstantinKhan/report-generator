@@ -11,7 +11,7 @@ sealed interface ProductKind {
 
     data object Material : ProductKind
 
-    data object Document : ProductKind
+    data object AssemblyDrawing : ProductKind
 
     data object Complex : ProductKind
 

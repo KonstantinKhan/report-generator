@@ -1,7 +1,7 @@
 kinds:
   Деталь: PART
   Сборочная единица: ASSEMBLY
-  Сборочный чертеж: DOCUMENT
+  Сборочный чертеж: ASSEMBLY_DRAWING
   Комплекс: COMPLEX
   Стандартное изделие: STANDARD
   Прочее изделие: OTHER
