@@ -308,6 +308,10 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 Значения атрибутов (`ProductNode.attributes`, `Usage.attributes`) читаются так же: `attributes[ключ].orElse("—")`.
 Это функция на `AttributeValue?`: `Text` даёт текст, `Number` — число строкой, `Empty` («запрошено, значения нет»)
 и отсутствие ключа («не запрашивалось») дают `default`.
+
+Количество читается так же: `usage.quantity.orElse("—")`. `Exact` даёт число строкой (`1.0`), `Range` — `min–max`
+(`4.0–6.0`), `Missing` — `default`, `NotLoaded` бросает `IllegalStateException`. Для вычислений (суммирование по
+дереву) вызывающий код разбирает `Quantity` сам и выбирает границу диапазона по смыслу отчёта.
 Текст для пустых значений (прочерк, «отсутствует», пустая строка) выбирает отчёт, модель его не хранит.
 
 - **Позиция** (`Usage.position`) — выбирается по правилам ключа `position` в `mapping.link.attributes` (`select(relation, parentKind, childKind)`).

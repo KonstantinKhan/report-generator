@@ -34,7 +34,7 @@ fun main(): Unit = runBlocking {
         root.usages.forEach { usage ->
             val child = usage.child
             println("  Связь: ${usage.relation}, Kind: ${child.kind}, Позиция: ${usage.position.orElse("—")}, " +
-                    "Количество: ${usage.quantity}, Единица: ${usage.unit.orElse("—")}, " +
+                    "Количество: ${usage.quantity.orElse("—")}, Единица: ${usage.unit.orElse("—")}, " +
                     "Обозначение: ${child.designation.orElse("—")}, Наименование: ${child.name.orElse("—")}, " +
                     "version: ${child.version.orElse("—")}, state: ${child.state.orElse("—")}, " +
                     "Примечание: ${usage.attributes[LinkAttributeKey.Note].orElse("—")}, " +
