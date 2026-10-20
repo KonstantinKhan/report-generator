@@ -109,9 +109,40 @@
 
 - **XLSX-проекция** (фаза 7 по `../dev-plan-0.1.md`) отложена по решению пользователя ("Эксель — рано").
 
+## Loodsman-интеграция (ветка `refactor/loodsman-api`)
+
+Остаточные долги после миграции на `loodsman-client`. Найдены при сверке кода; ничто из них не блокирует работу.
+
+- **Ё не сводится вне `KindMapper`.** Свёртка `ё` → `е` есть только в `KindMapper`. В `RelationMapper.normalizeForComparison`
+  её нет, а `pdmType()` (`report-domain`) сравнивает точные строки. Правило — [loodsman-integration.md](loodsman-integration.md#правила-преобразования-в-спецификацию).
+- **Мёртвый код: `DatabaseOutputDto.toDomain()` и `PdmDatabase`.** `toDomain()` (`Pdm2Domain.kt`) и доменный `PdmDatabase`
+  нигде не используются. Удалить или использовать.
+- **Мёртвый параметр `InMemoryPdmClient`.** Конструктор принимает `data: SpecificationData`, который не используется. Убрать
+  параметр значит поправить 29 вызовов в `report-pdm/src/test/.../BuildTreeTest.kt`.
+- **Косметика в `SpecificationPipelineTest`.** Вспомогательные классы с префиксом `Parity*` (например, `ParityLoodsman`) остались
+  от parity-теста и переименованы не были.
+- **Модель отчёта в `report-domain`.** `SpecificationData`, `SpecificationItem` и `ItemKind` — модель отчёта, а не домен
+  Loodsman. `ItemKind` почти дублирует `ProductKind`; переход через `toItemKind()` в конвертере. Перенос — отдельная задача.
+- **Метаданные связей грузятся в каждом клиенте.** `LoodsmanKtorPdmClient` (`typeMeta`, `linkMeta`) и
+  `LoodsmanProductStructureClient` (`linkMetadata`) держат свой `SuspendLazy` на экземпляр. Два клиента на одном `LoodsmanApi`
+  делают два запроса `get-link-list`.
+- **`LoodsmanKtorPdmClient` не используется в проде.** Только в `LoodsmanKtorPdmClientTest`. Решить: удалить вместе с
+  портом `PdmClient`, если отчёты его не нужны, или оставить как реализацию порта.
+- **Два правила количества для одних данных.** Старый путь (`Pdm2Domain.quantity`, его использует `LoodsmanKtorPdmClient`)
+  при одном `null` даёт `Quantity.Exact`. Новый путь (`LoodsmanProductStructureClient.quantityOf`) даёт `LoodsmanApiException`.
+  Уйдёт вместе со старым путём.
+- **CIO как runtime-зависимость библиотеки.** `loodsman-client` тянет `ktor-client-cio` в `implementation`, а фабрика
+  `loodsmanHttpClient()` строит клиент на CIO. Потребитель с другим engine получает лишнюю зависимость. Варианты:
+  отдельный артефакт, `runtimeOnly` или оставить как есть. Решения пока нет; описание обхода — в
+  [loodsman-integration.md](loodsman-integration.md#зависимости).
+- **Лишняя зависимость `report-loodsman` → `report-pdm`.** В `build.gradle.kts` объявлена `implementation(projects.reportPdm)`,
+  но в `src` модуля нет импорта `dev.reportgenerator.pdm`. Убрать зависимость (правка gradle — отдельная задача).
+
 ## Закрыто (убрано из списка)
 
 Чтобы не искать по истории: **минимальная высота строки 8 мм** (теперь `rowHeight: 8` в YAML, фиксирована);
+**`LoodsmanPdmClient` на java.net.http, `SpecificationAssembly` и `PdmClient.fetchSpecification`** (удалены в ветке
+`refactor/loodsman-api`, см. [development-status.md](development-status.md#ветка-refactorloodsman-api));
 **`report-api` без реализации** (есть `report-loodsman` и `report-server`); **резолвинг шрифта руками в каждом consumer'е**
 (общий `DefaultFontRegistry` в `report-layout`, его используют `report-cli` и `report-server`); **жёстко зашитые группы и
 формат количества в `Specification.kt`** (теперь `groupBy` / `cases` / `format` в YAML); **сборочные единицы терялись при

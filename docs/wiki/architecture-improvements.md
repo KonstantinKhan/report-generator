@@ -10,16 +10,22 @@
 
 > **Статус (2026-10-11).** Решение реализовано полностью: модули `report-api`, `report-data` и `report-common` удалены.
 > Интерфейс `PdmClient` перемещён в `report-domain` вместе с доменной моделью (`SpecificationData`, `SpecificationItem`, `ItemKind`).
-> Обе реализации (`LoodsmanPdmClient` на java.net.http и `LoodsmanKtorPdmClient` на Ktor) в `report-loodsman`,
-> `InMemoryPdmClient` для тестов также в `report-domain`. Маппинг типов Loodsman → ItemKind (`mapItemKind`) — internal функция в `report-loodsman`.
+> В момент записи: `LoodsmanKtorPdmClient` в `report-loodsman` (с ветки `refactor/loodsman-api` поверх `LoodsmanApi`, в проде не
+> используется), `InMemoryPdmClient` для тестов в `report-domain`. Маппинг типов Loodsman → ItemKind (`mapItemKind`) тогда был
+> internal функцией в `report-loodsman`; сейчас его заменили `KindMapper` и секция `kinds` в YAML.
+>
+> **Обновление (ветка `refactor/loodsman-api`).** `LoodsmanPdmClient`, `SpecificationAssembly` и `PdmClient.fetchSpecification()`
+> удалены. Актуальный поток: `loodsman-client` (`LoodsmanApi`, DTO) → `report-loodsman` (`LoodsmanProductStructureClient`,
+> `ProductNode`) → `ProductNode.toSpecificationData()` → `specification()`. Описание: [architecture.md](architecture.md),
+> [loodsman-integration.md](loodsman-integration.md). Пункты ниже про эти классы — история, не актуальное состояние.
 
 **Реализовано:**
 - `report-api`: удалён, контракт `PdmClient` переместился в `report-domain`
-- `report-data`: удалён, маппинг DTO → доменная модель теперь inside `report-loodsman.SpecificationAssembly.buildItems()`
+- `report-data`: удалён, маппинг DTO → доменная модель был в `report-loodsman.SpecificationAssembly.buildItems()` (`SpecificationAssembly` удалён в `refactor/loodsman-api`)
 - `report-common`: удалён, типы перемещены в `report-domain`
-- `PdmClient.fetchSpecification()` возвращает напрямую `SpecificationData` (без промежуточного DTO)
-- Поток: Loodsman API → `LoodsmanPdmClient/LoodsmanKtorPdmClient` → `SpecificationData`
-- Потребители (report-server, report-cli, reports/specification) зависят только от `report-domain`
+- `PdmClient.fetchSpecification()` возвращал напрямую `SpecificationData` (без промежуточного DTO); метод удалён в `refactor/loodsman-api`
+- Поток на момент записи: Loodsman API → `LoodsmanPdmClient/LoodsmanKtorPdmClient` → `SpecificationData` (устарел, см. обновление выше)
+- Доменные типы для потребителей (`reports/specification`, `report-server`) — из `report-domain`; `report-server` дополнительно зависит от `report-loodsman` (и через него от `loodsman-client`)
 
 **Результат:**
 - Одна граница между внешним миром и доменой логикой (вместо двух)

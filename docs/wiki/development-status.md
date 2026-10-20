@@ -15,7 +15,7 @@
 | 3 | Layout Engine MVP: пагинация, `keepWithNext`/`keepTogether`, overflow hard-error | `report-layout` | `2900795` |
 | 4 | SVG renderer (debug-first) + golden snapshot | `report-render-svg` | `b601519` |
 | 5 | PDF renderer через PDFBox, Y-flip, font registry по id | `report-render-pdf` | `38c14e3` |
-| 6 | End-to-end на mock-данных: `report-api`/`report-data`/`reports/specification` | `report-api`, `report-data`, `reports/specification` | `c94b574` |
+| 6 | End-to-end на mock-данных: `report-api`/`report-data`/`reports/specification` (модули `report-api` и `report-data` позже удалены, см. [architecture-improvements.md](architecture-improvements.md)) | `report-api`, `report-data`, `reports/specification` | `c94b574` |
 | — | `report-cli` — раннер полного пайплайна | `report-cli` | `375a8a6` |
 | — | Фикс: `fontSizePt` был реально `fontSizeMm` (баг единиц измерения) | `report-ir`, `report-layout` | `15839e6` |
 | — | ЕСКД-заголовок: вертикальный текст, `manualLines`, фиксированная высота | `report-ir`, `report-layout-ir`, `report-layout`, рендереры, `reports/specification` | `0d409db` |
@@ -61,18 +61,41 @@
 Шаблоны практикума реально запускались через `runTemplate` (числа в `template-guide.md` взяты из SVG), но PDF шаблонов глазами не проверялся:
 см. [known-gaps.md](known-gaps.md).
 
+## Ветка `refactor/loodsman-api`
+
+Интеграция с Loodsman переведена на слои: `loodsman-client` (библиотека: `LoodsmanApi`, DTO, сессия) →
+`report-loodsman` (`ProductStructureClient`, DTO → домен) → `reports/specification` (`ProductNode.toSpecificationData()`) →
+`report-server`. Легаси-путь (`PdmClient.fetchSpecification`, `LoodsmanPdmClient`, `SpecificationAssembly`) удалён.
+Правила — [loodsman-integration.md](loodsman-integration.md), решения — [design-decisions.md](design-decisions.md#решения-ветки-refactorloodsman-api),
+остаток — [known-gaps.md](known-gaps.md#loodsman-интеграция-ветка-refactorloodsman-api).
+
+Коммиты (от старого к новому, 18 шт., поверх `refactor/pdm-domain-port`):
+
+| Этап | Что | Коммиты |
+|---|---|---|
+| Фасад и клиенты | `LoodsmanApi` поверх ktor-клиентов; `ProductStructureClient` и `LoodsmanKtorPdmClient` на `LoodsmanApi` | `03f71f7`, `bd2c4ba`, `2ced4be` |
+| Правила данных | отказ от полузаполненного диапазона количества; `ProductNode` → `SpecificationData`; материал в столбец «Наименование»; сведение ё к е в `KindMapper` | `bbe2af5`, `5a7f8be`, `2724c00`, `2f14321` |
+| Регрессия | parity-тест добавлен, затем превращён в регрессионный тест конвейера `SpecificationPipelineTest` | `2117681`, `460fa32` |
+| Сервер | `specificationQuery`; спецификация из структуры; `SpecificationDataException` и 502; не глотать отмену при остановке | `e0d215a`, `560ea9b`, `7b753d1`, `9e209da`, `5a02a32` |
+| Легаси | удалён старый путь `fetchSpecification` | `306aebf` |
+| Библиотека | модуль `loodsman-client` выделен; пакет `io.github.konstantinkhan.loodsman`; настроена Maven-публикация | `c5d12a0`, `14159c7`, `c36cadb` |
+
+`settings.gradle.kts` содержит 14 модулей (13 верхнего уровня и `reports:specification`). Число тестов в эту запись не
+пересчитывалось.
+
 ## Loodsman API интеграция
 
 **Статус:** Работает (feature/service). Клиент + сервер end-to-end проверены на
 реальном Loodsman, известные баги с классификацией типов объектов исправлены.
 
-- `report-loodsman`: клиент Loodsman API v4, преобразование спецификации в DTO
+- `loodsman-client`: клиент Loodsman API v4 (библиотека, `LoodsmanApi`)
+- `report-loodsman`: DTO → домен (`LoodsmanProductStructureClient`, маппинг по YAML)
 - `report-server`: REST server (Ktor) обслуживает `POST /specifications/{versionId}`
 
 Все особенности и грабли API (авторизация, разделение свойств/атрибутов, правило
 ключевого атрибута по типу объекта, путаница `idType` связи vs типа объекта,
 нерабочие batch-эндпоинты) — **[loodsman-integration.md](loodsman-integration.md)**.
-Читать перед любыми правками `report-loodsman`.
+Читать перед любыми правками `loodsman-client` и `report-loodsman`.
 
 ## Что сознательно НЕ начато
 

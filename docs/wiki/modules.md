@@ -1,7 +1,8 @@
 # Модули
 
-11 Gradle-модулей (10 верхнего уровня + `reports:specification`), `settings.gradle.kts` — источник истины по списку. См.
-[architecture.md](architecture.md) для графа зависимостей целиком.
+14 Gradle-модулей (13 верхнего уровня + `reports:specification`), `settings.gradle.kts` — источник истины по списку. См.
+[architecture.md](architecture.md) для графа зависимостей целиком. Модули Loodsman (`loodsman-client`, `report-loodsman`,
+`report-server`) и их роли — [loodsman-integration.md](loodsman-integration.md).
 
 | Модуль | Пакет | Назначение | Зависит от (main) |
 |---|---|---|---|
@@ -13,11 +14,12 @@
 | `report-render-svg` | `dev.reportgenerator.rendersvg` | `render()`/`renderPage()`: Layout IR → SVG-строка | `report-layout-ir` только |
 | `report-render-pdf` | `dev.reportgenerator.renderpdf` | `renderToPdf()`: Layout IR → байты PDF через PDFBox | `report-layout-ir`, `report-layout` (только `FontRegistry`) |
 | `report-domain` | `dev.reportgenerator.domain` | Доменная модель: `SpecificationData`, `SpecificationItem`, `ItemKind`; интерфейс `PdmClient`; реализация `InMemoryPdmClient` для тестов. Модель структуры изделия: `ProductNode`, `Usage`, `Field<T>`/`Designation`/`Name` (`Value`/`Missing`/`NotLoaded`, доступ через `orElse(default)`), `ProductKind`, `Relation`, `AttributeKey`/`LinkAttributeKey`/`AttributeValue`, `StructureQuery`; порт `ProductStructureClient`; утилиты обхода `walk`/`groupedByKind` | — |
-| `reports/specification` | `dev.reportgenerator.reports.specification` | Report Builder спецификации: `specification()` = адаптер `SpecificationData.toDataContext()` / `itemRecords()` + `FlowTables.build` по `gost-spec.yaml`; правил таблицы в коде нет. Тесты: golden-эталоны раскладки, parity со старым кодом | `report-domain`, `report-ir`, `report-geometry` |
+| `reports/specification` | `dev.reportgenerator.reports.specification` | Report Builder спецификации: `specification()` = адаптер `SpecificationData.toDataContext()` / `itemRecords()` + `FlowTables.build` по `gost-spec.yaml`; правил таблицы в коде нет. Конвертация структуры изделия в данные отчёта: `specificationQuery(rootId)` (какой запрос структуры нужен), `ProductNode.toSpecificationData()` (правила отчёта, см. [loodsman-integration.md](loodsman-integration.md#правила-преобразования-в-спецификацию)), `SpecificationDataException` (ошибка данных изделия). Тесты: golden-эталоны раскладки, parity со старым кодом | `report-domain`, `report-ir`, `report-geometry` |
 | `report-cli` | `dev.reportgenerator.cli` | Раннеры: `Main.kt` (`./gradlew :report-cli:run`, спецификация на зашитой фикстуре) и `TemplateMain.kt` (`./gradlew :report-cli:runTemplate`, свой YAML + `--data`), пишут `.svg`/`.pdf`; шаблоны `src/main/resources/templates/` (`tutorial/`, `purchased-list.yaml`, `sheet-frame.yaml`, `table-demo.yaml`). См. [running-the-project.md](running-the-project.md) | `reports/specification`, `report-layout`, `report-template`, рендереры, Kotlin `application` plugin |
-| `report-loodsman` | `dev.reportgenerator.loodsman` | Реализация `PdmClient` поверх реального Loodsman API v4 (HTTP, авторизация по сессии): `LoodsmanPdmClient` (java.net.http) и `LoodsmanKtorPdmClient` (Ktor). Маппинг типов Loodsman → `ItemKind` (`mapItemKind`, internal). `LoodsmanProductStructureClient` — реализация `ProductStructureClient` с YAML-конфигом маппинга (`loodsman-mapping.yaml`: правила атрибутов узла с `byKind`, правила атрибутов связи по тройке отношение/вид родителя/вид ребёнка) и реестрами. См. [loodsman-integration.md](loodsman-integration.md) | `report-domain`, `report-pdm` |
+| `loodsman-client` | `io.github.konstantinkhan.loodsman` | Клиент Loodsman PDM REST API v4, отдельная библиотека (`io.github.konstantinkhan:loodsman-client:0.1.0`), без зависимостей от доменных модулей. `LoodsmanApi` (9 методов, 1 эндпоинт = 1 метод), `KtorLoodsmanApi`, DTO, `LoodsmanConfig`, `LoodsmanApiException`, `loodsmanHttpClient()` / `HttpClientConfig.installLoodsman()`. Сессия (login, повтор при 401/419) внутри. См. [loodsman-integration.md](loodsman-integration.md#loodsman-client) | Ktor client (CIO — runtime) |
+| `report-loodsman` | `dev.reportgenerator.loodsman` | Слой DTO → домен поверх `loodsman-client`: `LoodsmanProductStructureClient` — реализация `ProductStructureClient` (обход по уровням, конфиг `loodsman-mapping.yaml`, реестры `mapping/Registries`, `KindMapper`, `RelationMapper`); маппинг DTO → `ProductNode` / `Usage`. `LoodsmanKtorPdmClient` — порт старого `PdmClient` поверх `LoodsmanApi`, в проде не используется (только тесты). `Main.kt` — dev-запуск по переменным окружения. См. [loodsman-integration.md](loodsman-integration.md) | `report-domain`, `loodsman-client` (api), `report-pdm` (объявлен, импортов нет) |
 | `report-pdm` | `dev.reportgenerator.pdm` | `PdmClient.buildTree(rootId, levels, concurrency)` — рекурсивная загрузка дерева изделия через примитивы старого `PdmClient` (`getObject`, `getDirectLinks`); защита от циклов, ограничение параллелизма. Предшественник `LoodsmanProductStructureClient`, остаётся до миграции отчётов | `report-domain` |
-| `report-server` | `dev.reportgenerator.server` | Ktor REST-сервер: `POST /specifications/{versionId}` — тянет данные из Loodsman через `PdmClient`, рендерит PDF | `report-domain`, `report-loodsman`, `reports/specification`, `report-layout`, `report-render-pdf` |
+| `report-server` | `dev.reportgenerator.server` | Ktor REST-сервер: `POST /specifications/{versionId}` — `ProductStructureClient.loadStructure(specificationQuery(...))` → `toSpecificationData()` → `specification()` → PDF. Закрывает сессию Loodsman при остановке. Коды ошибок — [loodsman-integration.md](loodsman-integration.md#http-статусы-маршрута-спецификации) | `report-domain`, `report-loodsman`, `reports/specification`, `report-layout`, `report-render-pdf` |
 
 ## Тестовые (не main) зависимости стоит знать
 
@@ -28,6 +30,8 @@
 - `reports/specification` в тестах зависит от `report-layout`,
   `report-render-svg`, `report-render-pdf` — по той же причине
   (end-to-end тест).
+- `report-loodsman` в тестах зависит от `reports/specification` — регрессионный тест конвейера
+  `SpecificationPipelineTest` собирает спецификацию так же, как `report-server`.
 
 ## Общие тестовые ресурсы
 
