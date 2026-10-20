@@ -1,5 +1,13 @@
 package dev.reportgenerator.server
 
+import dev.reportgenerator.domain.CompositionUsage
+import dev.reportgenerator.domain.Designation
+import dev.reportgenerator.domain.Field
+import dev.reportgenerator.domain.Name
+import dev.reportgenerator.domain.ProductId
+import dev.reportgenerator.domain.ProductKind
+import dev.reportgenerator.domain.ProductNode
+import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.layout.DefaultFontRegistry
 import dev.reportgenerator.loodsman.LoodsmanApiException
 import io.ktor.client.request.post
@@ -46,6 +54,33 @@ class SpecificationRouteTest {
         val response = client.post("/specifications/7")
 
         assertEquals(HttpStatusCode.BadGateway, response.status)
+        assertEquals(0, tempDir.listFiles()!!.size)
+    }
+
+    @Test
+    fun `invalid product data maps to 502 with the data error message`() = testApplication {
+        val root = ProductNode(
+            id = ProductId("1"),
+            kind = ProductKind.Assembly,
+            designation = Designation.Value("ИЗД.001"),
+            name = Name.Value("Изделие"),
+            usages = listOf(
+                CompositionUsage(
+                    child = ProductNode(ProductId("2"), ProductKind.Part, Designation.Value("АБ.002"), Name.Value("Вал")),
+                    position = Field.Missing,
+                    quantity = Quantity.Missing,
+                    unit = Field.Missing,
+                ),
+            ),
+        )
+        application {
+            reportServerModule(FakeProductStructureClient(structure = root), tempDir, DefaultFontRegistry.load())
+        }
+
+        val response = client.post("/specifications/7")
+
+        assertEquals(HttpStatusCode.BadGateway, response.status)
+        assertTrue(response.bodyAsText().contains("quantity is missing"))
         assertEquals(0, tempDir.listFiles()!!.size)
     }
 

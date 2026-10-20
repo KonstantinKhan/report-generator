@@ -14,15 +14,17 @@ import dev.reportgenerator.domain.StructureQuery
 
 // Returns the same structure for every query and records the queries it got.
 // If failure is set, loadStructure throws it instead.
+// If structure is set, it is returned instead of the sample one.
 class FakeProductStructureClient(
     private val failure: Throwable? = null,
+    private val structure: ProductNode? = null,
 ) : ProductStructureClient {
     val queries = mutableListOf<StructureQuery>()
 
     override suspend fun loadStructure(query: StructureQuery): ProductNode {
         queries += query
         failure?.let { throw it }
-        return sampleStructure()
+        return structure ?: sampleStructure()
     }
 
     private fun sampleStructure() = ProductNode(

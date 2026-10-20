@@ -8,6 +8,7 @@ import dev.reportgenerator.layout.layOut
 import dev.reportgenerator.loodsman.LoodsmanApiException
 import dev.reportgenerator.renderpdf.renderToPdf
 import dev.reportgenerator.reports.specification.specification
+import dev.reportgenerator.reports.specification.SpecificationDataException
 import dev.reportgenerator.reports.specification.specificationQuery
 import dev.reportgenerator.reports.specification.toSpecificationData
 import io.ktor.http.ContentType
@@ -56,6 +57,12 @@ fun Application.reportServerModule(
         exception<LoodsmanApiException> { call, cause ->
             call.application.log.error("Upstream Loodsman error", cause)
             call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "upstream error"))
+        }
+        // Product data that cannot be turned into a specification (missing quantity, missing designation, ...)
+        // is an upstream data problem, not a server bug: 502 as before the migration.
+        exception<SpecificationDataException> { call, cause ->
+            call.application.log.warn("Invalid product data for specification: ${cause.message}")
+            call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "invalid product data"))
         }
         // Fallback for network-level failures not wrapped in LoodsmanApiException.
         exception<IOException> { call, cause ->
