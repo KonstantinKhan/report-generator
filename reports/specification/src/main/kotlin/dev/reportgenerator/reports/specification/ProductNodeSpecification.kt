@@ -66,6 +66,21 @@ private fun CompositionUsage.unitOf(): String? = when (val value = unit) {
 
 private fun ProductNode.toItem(quantity: Double, unit: String?): SpecificationItem {
     val itemKind = kind.toItemKind() ?: error("Node ${id.value}: product kind $kind has no specification kind")
+    if (kind == ProductKind.Material) {
+        // In the specification the material designation is shown in the name column, the designation column stays empty.
+        val materialName = when (val value = designation) {
+            is Designation.Value -> value.text
+            is Designation.Missing -> error("Node ${id.value}: designation is missing for a material")
+            is Designation.NotLoaded -> error("Node ${id.value}: designation is not loaded")
+        }
+        return SpecificationItem(
+            designation = null,
+            name = materialName,
+            kind = itemKind,
+            quantity = quantity,
+            unit = unit
+        )
+    }
     val designationText = when (val value = designation) {
         is Designation.Value -> value.text
         is Designation.Missing -> null

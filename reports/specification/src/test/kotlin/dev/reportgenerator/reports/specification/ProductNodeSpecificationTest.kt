@@ -97,10 +97,29 @@ class ProductNodeSpecificationTest : ShouldSpec({
     }
 
     should("map exact quantity amount and usage unit to the item") {
-        val child = node("2", kind = ProductKind.Material)
+        val child = node("2", kind = ProductKind.Part)
         val data = root(composition(child, Quantity.Exact(2.5), Field.Value("кг"))).toSpecificationData()
 
-        data.single() shouldBe SpecificationItem("АБ.2", "Имя 2", ItemKind.MATERIAL, 2.5, "кг")
+        data.single() shouldBe SpecificationItem("АБ.2", "Имя 2", ItemKind.PART, 2.5, "кг")
+    }
+
+    should("show a material designation in the name column and leave the designation empty") {
+        val child = node("2", kind = ProductKind.Material, designation = Designation.Value("Сталь 09Г2С"), name = Name.Value("Лист"))
+        val data = root(composition(child, Quantity.Exact(2.5), Field.Value("кг"))).toSpecificationData()
+
+        data.single() shouldBe SpecificationItem(null, "Сталь 09Г2С", ItemKind.MATERIAL, 2.5, "кг")
+    }
+
+    should("fail on a material with a missing designation") {
+        val child = node("2", kind = ProductKind.Material, designation = Designation.Missing)
+
+        shouldThrow<IllegalStateException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+    }
+
+    should("fail on a material with a not loaded designation") {
+        val child = node("2", kind = ProductKind.Material, designation = Designation.NotLoaded)
+
+        shouldThrow<IllegalStateException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
     should("map missing usage unit to null") {
