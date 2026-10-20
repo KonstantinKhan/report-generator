@@ -23,16 +23,16 @@ SVG/PDF рендереры, end-to-end), плюс то, чего в плане �
   `where` / `sortBy` / `computed` / `cases` / `format` / `totals`, нумерация строк `${line.number}`, стили, `\n`,
   `remainder`), CLI `runTemplate`, golden- и parity-тесты. Подробно: [changelog-engine.md](changelog-engine.md).
 
-14 Gradle-модулей (`settings.gradle.kts`), **368 тестов, 0 падений** (`./gradlew test`, 2026-10-03; по модулям:
-`report-template` 146, `report-layout` 91, `reports/specification` 44, `report-ir` 40, `report-cli` 13, `report-geometry` 13,
-`report-loodsman` 8, `report-data` 3, `report-layout-ir` 3, `report-render-pdf` 3, `report-render-svg` 2, `report-api` 1,
-`report-server` 1). Подробно — [development-status.md](development-status.md).
+13 Gradle-модулей (`settings.gradle.kts`), **582 теста** (на 2026-10-20, после удаления `report-pdm`, коммит `8ccefb1`; по модулям:
+`report-template` 149, `report-layout` 97, `reports/specification` 73, `report-loodsman` 109, `report-ir` 42, `report-domain` 51,
+`loodsman-client` 19, `report-cli` 13, `report-geometry` 13, `report-server` 8, `report-layout-ir` 3, `report-render-pdf` 3,
+`report-render-svg` 2). Числа по модулям взяты из сводки ветки, `./gradlew test` после правки не запускался. Подробно — [development-status.md](development-status.md).
 
 ## Карта wiki
 
 - **[architecture.md](architecture.md)** — pipeline, границы модулей, откуда
   куда данные текут
-- **[modules.md](modules.md)** — таблица всех 14 Gradle-модулей: назначение,
+- **[modules.md](modules.md)** — таблица всех 13 Gradle-модулей: назначение,
   зависимости, ключевые типы
 - **[design-decisions.md](design-decisions.md)** — почему сделано именно так
   (fixed-point Length, FontRegistry на байтах не PDFont, overflow policy,

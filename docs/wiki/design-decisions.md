@@ -335,4 +335,21 @@ API Loodsman, маппинг структуры, правила отчёта. `S
 
 Удалены `PdmClient.fetchSpecification`, `LoodsmanPdmClient` (java.net.http) и `SpecificationAssembly`. **Почему:** два пути
 сборки спецификации не должны существовать параллельно: правка в одном не дошла бы до другого. `LoodsmanKtorPdmClient`
-оставлен как порт `PdmClient` поверх `LoodsmanApi`; его судьба — в known-gaps.
+оставлен как порт `PdmClient` поверх `LoodsmanApi`. Вопрос о нём закрыт позже, в коммите `8ccefb1`: удалён, см. ниже.
+
+### Удаление старого пути PdmClient и report-pdm
+
+Коммит `8ccefb1` удалил порт `PdmClient`, модуль `report-pdm` (`PdmClient.buildTree`), `InMemoryPdmClient`, `LoodsmanKtorPdmClient`,
+`Pdm2Domain` и доменные типы старой модели (`PdmObject`, `PdmDatabase`, связи). Останется один порт доступа к PDM:
+`ProductStructureClient`, один сценарий — `loadStructure(StructureQuery)`.
+
+**Почему:** старый путь не выполнялся ни в проде, ни в CLI, ни в сервере. `buildTree` дублировал
+`LoodsmanProductStructureClient.loadStructure`, а количество для одних и тех же данных считалось двумя правилами
+(`Pdm2Domain.quantity` давал `Exact` при одном `null`, новый путь бросал ошибку). Держать два пути значит держать два правила.
+
+**Что сознательно сохранено:** весь библиотечный слой `loodsman-client`, включая `databases()` и `typeList()`. Он зеркалит
+Loodsman REST API v4, а не текущего потребителя. Удаление методов под текущий отчёт сузило бы клиент до одного сценария и
+потребовало бы вернуть их при первом же новом отчёте. `DatabaseOutputDto` остался по той же причине.
+
+**Цена:** история `buildTree` и тестов `BuildTreeTest` (28) и `LoodsmanKtorPdmClientTest` (7) живёт только в git. Если понадобится
+сравнить правила старого пути, брать их из коммита до `8ccefb1`.

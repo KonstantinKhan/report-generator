@@ -5,6 +5,9 @@
 тем, как строить сверху что-то, что этих гэпов не переживёт. Закрытое в ветке `engine` см. в конце страницы и в
 [changelog-engine.md](changelog-engine.md).
 
+> **Обновление 2026-10-20 (`refactor/loodsman-api`, коммит `8ccefb1`).** Пункты раздела «Loodsman-интеграция» сверены с кодом:
+> закрытые перенесены в конец страницы, добавлены новые. Остальные разделы этой сверкой не затронуты.
+
 ## Layout Engine
 
 - **Горизонтальный overflow не проверяется.** `LayoutOverflowException` ловит только вертикальное переполнение
@@ -113,34 +116,26 @@
 
 Остаточные долги после миграции на `loodsman-client`. Найдены при сверке кода; ничто из них не блокирует работу.
 
-- **Ё не сводится вне `KindMapper`.** Свёртка `ё` → `е` есть только в `KindMapper`. В `RelationMapper.normalizeForComparison`
-  её нет, а `pdmType()` (`report-domain`) сравнивает точные строки. Правило — [loodsman-integration.md](loodsman-integration.md#правила-преобразования-в-спецификацию).
-- **Мёртвый код: `DatabaseOutputDto.toDomain()` и `PdmDatabase`.** `toDomain()` (`Pdm2Domain.kt`) и доменный `PdmDatabase`
-  нигде не используются. Удалить или использовать.
-- **Мёртвый параметр `InMemoryPdmClient`.** Конструктор принимает `data: SpecificationData`, который не используется. Убрать
-  параметр значит поправить 29 вызовов в `report-pdm/src/test/.../BuildTreeTest.kt`.
+- **Ё не сводится в `RelationMapper`.** Свёртка `ё` → `е` есть только в `KindMapper`; `RelationMapper.normalizeForComparison`
+  её не делает. Правило — [loodsman-integration.md](loodsman-integration.md#правила-преобразования-в-спецификацию).
+- **Остаточное старое имя: параметр `pdmTypeName` в `KindMapper.map`.** Имя из эпохи `PdmClient`, на поведение не влияет.
+  Переименовать в `typeName` (косметика, отдельным коммитом).
+- **Проверить лишние зависимости `report-loodsman/build.gradle.kts`.** Не проверялось: `testImplementation(libs.kotlin.reflect)`,
+  `implementation(libs.kaml)`, `implementation(libs.logback.classic)`, `implementation(libs.kotlinx.serialization.json)`.
+  Нужны ли они модулю, не установлено; проверка — правка gradle, отдельная задача.
 - **Косметика в `SpecificationPipelineTest`.** Вспомогательные классы с префиксом `Parity*` (например, `ParityLoodsman`) остались
   от parity-теста и переименованы не были.
 - **Модель отчёта в `report-domain`.** `SpecificationData`, `SpecificationItem` и `ItemKind` — модель отчёта, а не домен
   Loodsman. `ItemKind` почти дублирует `ProductKind`; переход через `toItemKind()` в конвертере. Перенос — отдельная задача.
-- **Метаданные связей грузятся в каждом клиенте.** `LoodsmanKtorPdmClient` (`typeMeta`, `linkMeta`) и
-  `LoodsmanProductStructureClient` (`linkMetadata`) держат свой `SuspendLazy` на экземпляр. Два клиента на одном `LoodsmanApi`
-  делают два запроса `get-link-list`.
-- **`LoodsmanKtorPdmClient` не используется в проде.** Только в `LoodsmanKtorPdmClientTest`. Решить: удалить вместе с
-  портом `PdmClient`, если отчёты его не нужны, или оставить как реализацию порта.
-- **Два правила количества для одних данных.** Старый путь (`Pdm2Domain.quantity`, его использует `LoodsmanKtorPdmClient`)
-  при одном `null` даёт `Quantity.Exact`. Новый путь (`LoodsmanProductStructureClient.quantityOf`) даёт `LoodsmanApiException`.
-  Уйдёт вместе со старым путём.
 - **CIO как runtime-зависимость библиотеки.** `loodsman-client` тянет `ktor-client-cio` в `implementation`, а фабрика
   `loodsmanHttpClient()` строит клиент на CIO. Потребитель с другим engine получает лишнюю зависимость. Варианты:
   отдельный артефакт, `runtimeOnly` или оставить как есть. Решения пока нет; описание обхода — в
   [loodsman-integration.md](loodsman-integration.md#зависимости).
-- **Лишняя зависимость `report-loodsman` → `report-pdm`.** В `build.gradle.kts` объявлена `implementation(projects.reportPdm)`,
-  но в `src` модуля нет импорта `dev.reportgenerator.pdm`. Убрать зависимость (правка gradle — отдельная задача).
 - **Группы эндпоинтов описаны вручную.** `LoodsmanApi` содержит 3 группы (`auth`, `objectInfo`, `metaData`) и 8 эндпоинтов
   плюс `logout()`; каждый метод написан по контроллеру Loodsman. При росте до сотен эндпоинтов ручной набор станет
-  узким местом. Открытый вопрос: есть ли схема Loodsman (swagger/OpenAPI) файлом. Если есть, стоит рассмотреть генерацию
-  групп и DTO из неё. Решения нет. Состав групп и правила добавления эндпоинта — [loodsman-integration.md](loodsman-integration.md#группы-эндпоинтов).
+  узким местом. Схема Loodsman лежит файлом: `docs/raw/swagger.json` (исходная, не править). Её можно использовать для
+  генерации групп и DTO `loodsman-client`. Оценка трудоёмкости не делалась, решения нет. Состав групп и правила добавления
+  эндпоинта — [loodsman-integration.md](loodsman-integration.md#группы-эндпоинтов).
 
 ## Закрыто (убрано из списка)
 
@@ -152,6 +147,20 @@
 формат количества в `Specification.kt`** (теперь `groupBy` / `cases` / `format` в YAML); **сборочные единицы терялись при
 выгрузке из Loodsman**; **заголовок группы-сирота в конце страницы** (цепочка `keep.titleChain`); **параметры `${...}` в
 `text:`** (литерал, подстановки нет по решению, см. [changelog-engine.md](changelog-engine.md)).
+
+Закрыто в ветке `refactor/loodsman-api` (коммит `8ccefb1`, удаление старого пути `PdmClient` и модуля `report-pdm`; решение —
+[design-decisions.md](design-decisions.md#удаление-старого-пути-pdmclient-и-report-pdm)):
+
+- **Сироты `DatabaseOutputDto.toDomain()` и доменный `PdmDatabase`.** Удалены вместе со старым путём. Класс `DatabaseOutputDto`
+  остался в `loodsman-client`: его читает `AuthApi.databases()`.
+- **Мёртвый параметр `data` у `InMemoryPdmClient`.** Тестовый клиент удалён вместе с портом `PdmClient`.
+- **Лишняя зависимость `report-loodsman` → `report-pdm`.** Модуль удалён; в `report-loodsman/build.gradle.kts` его нет (проверено).
+- **`LoodsmanKtorPdmClient` не используется в проде.** Класс удалён; вопрос «удалить или оставить» снят.
+- **Дубль запроса `get-link-list` и два `SuspendLazy` метаданных связей.** Второго клиента на `LoodsmanApi` в коде нет, остался
+  один `linkMetadata` в `LoodsmanProductStructureClient`.
+- **Два правила количества для одних данных.** Старый путь (`Pdm2Domain.quantity`) удалён; единственное правило —
+  `LoodsmanProductStructureClient.quantityOf`.
+- **Свёртка `ё` в `pdmType()` (`report-domain`).** Функции `pdmType()` в коде больше нет.
 
 ## Прочее
 

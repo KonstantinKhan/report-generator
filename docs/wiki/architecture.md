@@ -25,7 +25,7 @@ report-loodsman   — DTO → домен: LoodsmanProductStructureClient (Produc
       │             конфиг маппинга (YAML), обход дерева, KindMapper / RelationMapper
       ▼  ProductNode / Usage (модель структуры)
 report-domain     — модель структуры изделия: ProductNode, Usage, Field<T>, ProductKind, Relation,
-      │             AttributeKey, AttributeValue, StructureQuery; порты ProductStructureClient и PdmClient;
+      │             AttributeKey, AttributeValue, StructureQuery; порт ProductStructureClient (единственный путь к PDM);
       │             а также SpecificationData / SpecificationItem / ItemKind (модель отчёта, см. known-gaps)
       ▼  ProductNode.toSpecificationData()
 reports/specification  — specificationQuery (запрос структуры), toSpecificationData() (правила отчёта,

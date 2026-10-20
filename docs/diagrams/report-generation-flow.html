@@ -4840,7 +4840,7 @@
       </div>
     </div>
 
-    <script id="archify-guided-views-data" type="application/json">[{"id":"source-to-document","label":"Вход и данные","focus":["server","pdm","mapper"],"note":"report-server принимает задание, report-loodsman идёт в PDM, report-data превращает DTO в записи item.*"},{"id":"two-ir-boundary","label":"Смысл и раскладка","focus":["template","builder","ir","layout","layoutir"],"note":"report-ir хранит смысл без координат, report-layout считает физику, report-layout-ir хранит результат."},{"id":"render-from-layout-ir","label":"Рендер из Layout IR","focus":["layoutir","renders"],"note":"Рендереры читают только Layout IR; третий рендерер не затронет ни report-ir, ни report-layout."}]</script>
+    <script id="archify-guided-views-data" type="application/json">[{"id":"source-to-document","label":"Вход и данные","focus":["server","pdm","mapper"],"note":"report-server принимает задание, report-loodsman идёт в PDM и отдаёт ProductNode, reports/specification превращает его в записи item.*"},{"id":"two-ir-boundary","label":"Смысл и раскладка","focus":["template","builder","ir","layout","layoutir"],"note":"report-ir хранит смысл без координат, report-layout считает физику, report-layout-ir хранит результат."},{"id":"render-from-layout-ir","label":"Рендер из Layout IR","focus":["layoutir","renders"],"note":"Рендереры читают только Layout IR; третий рендерер не затронет ни report-ir, ни report-layout."}]</script>
 
     <div class="guided-views no-print" id="guided-views" hidden aria-label="Guided diagram views">
       <button id="guided-view-prev" type="button" aria-label="Previous guided view" title="Previous guided view ([)">&#8592;</button>
@@ -4926,7 +4926,7 @@
 
         <!-- Flow paths -->
         <path data-edge-from="server" data-edge-to="pdm" data-edge-label="fetch" data-edge-key="0" data-edge-id="server_fetch" data-composition-points="100,282;100,186" d="M 100 282 L 100 186" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="pdm" data-edge-to="mapper" data-edge-label="SpecificationDto" data-edge-key="1" data-edge-id="pdm_dto" data-composition-points="156,157;259,157" d="M 156 157 L 259 157" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="pdm" data-edge-to="mapper" data-edge-label="DTO Loodsman" data-edge-key="1" data-edge-id="pdm_dto" data-composition-points="156,157;259,157" d="M 156 157 L 259 157" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
         <path data-edge-from="mapper" data-edge-to="builder" data-edge-label="SpecificationData" data-edge-key="2" data-edge-id="mapper_records" data-composition-points="371,157;474,157" d="M 371 157 L 474 157" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
         <path data-edge-from="template" data-edge-to="builder" data-edge-label="FlowTableSpec" data-edge-key="3" data-edge-id="template_flow" data-composition-points="530,282;530,186" d="M 530 282 L 530 186" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
         <path data-edge-from="builder" data-edge-to="ir" data-edge-label="IrTable" data-edge-key="4" data-edge-id="builder_table" data-composition-points="586,157;637.5,157;637.5,311;689,311" d="M 586 157 L 637.5 157 L 637.5 311 L 689 311" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
@@ -4960,16 +4960,16 @@
         <text data-detail="fine" x="100" y="175" class="t-external" font-size="7" text-anchor="middle">REST API v4</text>
         </g>
 
-        <g id="node-mapper" data-node-id="mapper" data-node-label="Маппинг DTO" tabindex="0" role="button" aria-label="Focus Маппинг DTO, report-data, 02 / Данные" aria-pressed="false" data-node-kind="backend" data-node-sublabel="report-data" data-node-tag="mapToSpecificationData()" data-node-context="02 / Данные">
-          <title>Маппинг DTO · report-data · 02 / Данные · mapToSpecificationData()</title>
+        <g id="node-mapper" data-node-id="mapper" data-node-label="Маппинг DTO" tabindex="0" role="button" aria-label="Focus Маппинг DTO, report-loodsman, 02 / Данные" aria-pressed="false" data-node-kind="backend" data-node-sublabel="report-loodsman" data-node-tag="toSpecificationData()" data-node-context="02 / Данные">
+          <title>Маппинг DTO · report-loodsman · 02 / Данные · toSpecificationData()</title>
           <rect x="259" y="128" width="112" height="58" rx="6" class="c-mask"/>
           <rect x="259" y="128" width="112" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(265 134) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-detail-anchor x="315" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Маппинг DTO</text>
-          <text data-detail="context" x="315" y="165" class="t-muted" font-size="7" text-anchor="middle">report-data</text>
-        <text data-detail="fine" x="315" y="175" class="t-backend" font-size="7" text-anchor="middle">mapToSpecificationData()</text>
+          <text data-detail="context" x="315" y="165" class="t-muted" font-size="7" text-anchor="middle">report-loodsman</text>
+        <text data-detail="fine" x="315" y="175" class="t-backend" font-size="7" text-anchor="middle">toSpecificationData()</text>
         </g>
 
         <g id="node-template" data-node-id="template" data-node-label="Шаблон ГОСТ" tabindex="0" role="button" aria-label="Focus Шаблон ГОСТ, YAML-шаблон, 03 / Документ" aria-pressed="false" data-node-kind="database" data-node-sublabel="YAML-шаблон" data-node-tag="gost-spec.yaml" data-node-context="03 / Документ">
@@ -5052,9 +5052,9 @@
           <rect x="81.75" y="261" width="36.5" height="16" rx="4" class="c-mask"/>
           <text x="100" y="272" class="t-muted" font-size="8" text-anchor="middle">fetch</text>
         </g>
-        <g data-detail="context" data-edge-from="pdm" data-edge-to="mapper" data-edge-label="SpecificationDto" data-edge-key="1" data-edge-id="pdm_dto">
+        <g data-detail="context" data-edge-from="pdm" data-edge-to="mapper" data-edge-label="DTO Loodsman" data-edge-key="1" data-edge-id="pdm_dto">
           <rect x="162.3" y="136" width="90.4" height="16" rx="4" class="c-mask"/>
-          <text x="207.5" y="147" class="t-muted" font-size="8" text-anchor="middle">SpecificationDto</text>
+          <text x="207.5" y="147" class="t-muted" font-size="8" text-anchor="middle">DTO Loodsman</text>
         </g>
         <g data-detail="context" data-edge-from="mapper" data-edge-to="builder" data-edge-label="SpecificationData" data-edge-key="2" data-edge-id="mapper_records">
           <rect x="374.85" y="136" width="95.3" height="16" rx="4" class="c-mask"/>
@@ -5283,8 +5283,8 @@
         </div>
         <ul>
           <li>&bull; report-server — приём POST /specifications/{versionId}, оркестрация пайплайна</li>
-          <li>&bull; report-loodsman — сессия Loodsman, PdmClient поверх REST API v4</li>
-          <li>&bull; report-data — маппинг SpecificationDto в типизированные записи item.*</li>
+          <li>&bull; report-loodsman — сессия Loodsman, ProductStructureClient поверх LoodsmanApi (REST API v4)</li>
+          <li>&bull; reports/specification — ProductNode → SpecificationData, записи item.*</li>
         </ul>
       </div>
 

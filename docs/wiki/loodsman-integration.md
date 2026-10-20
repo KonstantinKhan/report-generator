@@ -9,9 +9,9 @@
 - **`report-server`** (`dev.reportgenerator.server`) — Ktor REST: `POST /specifications/{versionId}` тянет структуру
   изделия, собирает спецификацию (`reports/specification`) и рендерит PDF.
 
-Старый путь (`PdmClient.fetchSpecification`, `LoodsmanPdmClient` на java.net.http, `SpecificationAssembly`) удалён в ветке
-`refactor/loodsman-api`. `LoodsmanKtorPdmClient` (порт `PdmClient` поверх `LoodsmanApi`) остался, но в проде не используется,
-только в тестах. История миграции — [development-status.md](development-status.md).
+Старый путь сборки (`PdmClient`, модуль `report-pdm`, `LoodsmanKtorPdmClient`, `Pdm2Domain`, а раньше `LoodsmanPdmClient` и
+`SpecificationAssembly`) удалён в ветке `refactor/loodsman-api`. Единственный путь к структуре изделия — `ProductStructureClient`.
+История миграции — [development-status.md](development-status.md).
 
 Этот документ — не общее описание модуля, а список конкретных грабель API, на которые уже наступили. Каждый пункт стоил
 минимум одной сессии отладки.
@@ -220,9 +220,6 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 В спецификации `Exact` даёт число, `Range` и `Missing` — `SpecificationDataException` (диапазон в спецификации не
 выводится). У документации количество не читается: в спецификации 0.0 и пустая ячейка.
-
-> Расхождение: старый путь `LoodsmanKtorPdmClient` (функция `quantity` в `Pdm2Domain.kt`) при одном `null` даёт
-> `Quantity.Exact`, а не ошибку. Он не используется в проде, см. [known-gaps.md](known-gaps.md).
 
 **(б) Материал.** У `ProductKind.Material` в домене `designation` берётся из `product` (свойство `PRODUCT`), `name` —
 из атрибута «Наименование» (`byKind` для материала нет). В спецификации обозначение **выводится в столбец «Наименование»**,
@@ -534,14 +531,13 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
   - `SpecificationPipelineTest` — регрессионный тест конвейера: структура → спецификация. Фиксирует правила прежней сборки
     (материал и столбец «Наименование», ё, стандартные и прочие изделия, документы). Если правило меняется намеренно,
     тест обновляется вместе с правилом.
-  - `LoodsmanKtorPdmClientTest` — тесты порта `PdmClient` на `LoodsmanApi`.
 
 ## См. также
 
 - `loodsman-client/src/main/kotlin/io/github/konstantinkhan/loodsman/` — клиент (`LoodsmanApi`, группы `AuthApi` / `ObjectInfoApi` /
   `MetaDataApi`, `SessionClient`, `SessionHolder`, DTO)
-- `report-loodsman/src/main/kotlin/dev/reportgenerator/loodsman/` — `LoodsmanProductStructureClient.kt`, `LoodsmanKtorPdmClient.kt`,
-  `Pdm2Domain.kt`, `mapping/` (`KindMapper`, `RelationMapper`, `Registries`, `MappingConfig`)
+- `report-loodsman/src/main/kotlin/dev/reportgenerator/loodsman/` — `LoodsmanProductStructureClient.kt`,
+  `mapping/` (`KindMapper`, `RelationMapper`, `Registries`, `MappingConfig`)
 - `reports/specification/src/main/kotlin/dev/reportgenerator/reports/specification/` — `SpecificationQuery.kt`,
   `ProductNodeSpecification.kt` (правила отчёта)
 - [development-status.md](development-status.md) — статус интеграции по коммитам

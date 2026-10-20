@@ -21,6 +21,11 @@
 >
 > **Обновление 2 (ветка `refactor/loodsman-api`, коммит `bd5afc1`).** Плоский `LoodsmanApi` (интерфейс) и `KtorLoodsmanApi` заменены
 > на группы эндпоинтов (`auth`, `objectInfo`, `metaData`). Пункты про `LoodsmanApi` ниже читать с этой поправкой. Пункты ниже про эти классы — история, не актуальное состояние.
+>
+> **Обновление 3 (ветка `refactor/loodsman-api`, коммит `8ccefb1`).** Удалён старый путь: `PdmClient` (порт и `buildTree`),
+> модуль `report-pdm`, `InMemoryPdmClient`, `LoodsmanKtorPdmClient`, `Pdm2Domain`. Упоминания `PdmClient` и `LoodsmanKtorPdmClient`
+> в этом документе относятся к истории. Актуальный порт — `ProductStructureClient` в `report-domain`. Решение —
+> [design-decisions.md](design-decisions.md#удаление-старого-пути-pdmclient-и-report-pdm).
 
 **Реализовано:**
 - `report-api`: удалён, контракт `PdmClient` переместился в `report-domain`
