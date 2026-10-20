@@ -375,8 +375,10 @@ class LoodsmanProductStructureClient(
         val max = dto.number(mapping.link.fields.quantityMax)
         return when {
             min == null && max == null -> Quantity.Missing
-            min == null -> Quantity.Exact(max!!)
-            max == null || min == max -> Quantity.Exact(min)
+            min == null || max == null -> throw LoodsmanApiException(
+                "Link ${dto.idLink}: quantity range is half-filled (min=$min, max=$max)"
+            )
+            min == max -> Quantity.Exact(min)
             else -> Quantity.Range(min, max)
         }
     }

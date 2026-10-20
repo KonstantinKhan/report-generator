@@ -243,6 +243,34 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         composition.quantity shouldBe Quantity.Missing
     }
 
+    should("map equal min and max to exact quantity") {
+        val fake = FakeLoodsman(tree, listOf(Edge(1, 2, min = 3.0, max = 3.0)))
+
+        val composition = fake.client().loadStructure(query(1)).usages.single() as CompositionUsage
+        composition.quantity shouldBe Quantity.Exact(3.0)
+    }
+
+    should("map different min and max to quantity range") {
+        val fake = FakeLoodsman(tree, listOf(Edge(1, 2, min = 1.0, max = 5.0)))
+
+        val composition = fake.client().loadStructure(query(1)).usages.single() as CompositionUsage
+        composition.quantity shouldBe Quantity.Range(1.0, 5.0)
+    }
+
+    should("reject a quantity range with only min filled") {
+        val fake = FakeLoodsman(tree, listOf(Edge(1, 2, min = 2.0)))
+
+        val error = shouldThrow<LoodsmanApiException> { fake.client().loadStructure(query(1)) }
+        error.message shouldBe "Link 100: quantity range is half-filled (min=2.0, max=null)"
+    }
+
+    should("reject a quantity range with only max filled") {
+        val fake = FakeLoodsman(tree, listOf(Edge(1, 2, max = 2.0)))
+
+        val error = shouldThrow<LoodsmanApiException> { fake.client().loadStructure(query(1)) }
+        error.message shouldBe "Link 100: quantity range is half-filled (min=null, max=2.0)"
+    }
+
     should("load grandchildren when depth is 2 and request properties once per level") {
         val fake = FakeLoodsman(tree, treeEdges)
 
