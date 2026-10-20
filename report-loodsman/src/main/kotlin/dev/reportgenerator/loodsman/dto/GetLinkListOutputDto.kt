@@ -3,7 +3,7 @@ package dev.reportgenerator.loodsman.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-internal data class GetLinkListOutputDto(
+data class GetLinkListOutputDto(
     val id: Int,
     val name: String? = null,
     val type: Int,

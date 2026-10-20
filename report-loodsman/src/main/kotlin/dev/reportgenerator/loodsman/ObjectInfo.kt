@@ -37,13 +37,13 @@ internal class ObjectInfo(
 
     internal suspend fun linkedObjects(
         sessionId: String,
-        objectId: Int,
+        objectIds: List<Int>,
         linkTypeIds: List<Int>,
         inverse: Boolean
     ): List<GetLinkedObjectsForObjectsOutputDto_V4> =
         client.get("$blockBaseUrl/get-linked-objects-for-objects") {
             header("web-loodsman-session", sessionId)
-            parameter("objectsIds", objectId)
+            parameter("objectsIds", objectIds.joinToString(","))
             parameter("linksTypesIds", linkTypeIds.joinToString(","))
             parameter("inverse", inverse)
         }.body()

@@ -32,66 +32,19 @@ import dev.reportgenerator.loodsman.mapping.RelationMapper
 import dev.reportgenerator.loodsman.mapping.nameFor
 import dev.reportgenerator.loodsman.mapping.select
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.HttpResponseValidator
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.ResponseException
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.cookies.HttpCookies
-import io.ktor.client.plugins.logging.LogLevel
-import io.ktor.client.plugins.logging.Logging
-import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import java.net.ConnectException
-import java.nio.channels.UnresolvedAddressException
 
 private const val PROPS_BATCH_SIZE = 100
-
-fun defaultLoodsmanHttpClient(): HttpClient = HttpClient(CIO) {
-    expectSuccess = true
-    install(ContentNegotiation) {
-        json(Json { ignoreUnknownKeys = true })
-    }
-    install(HttpCookies)
-    install(HttpTimeout)
-    install(Logging) {
-        level = LogLevel.INFO
-    }
-    HttpResponseValidator {
-        handleResponseExceptionWithRequest { cause, request ->
-            if (cause is CancellationException || cause is LoodsmanApiException) throw cause
-            if (cause is ResponseException) {
-                throw LoodsmanApiException(
-                    "Loodsman API error ${cause.response.status.value} for " +
-                            "${request.method.value} ${request.url}",
-                    cause,
-                    cause.response.status.value
-                )
-            }
-            val reason = when (cause) {
-                is UnresolvedAddressException -> "host not resolved: ${request.url.host}"
-                is ConnectException -> "connection refused: ${request.url.host}:${request.url.port}"
-                else -> cause.message ?: cause::class.simpleName
-            }
-            throw LoodsmanApiException(
-                "Loodsman request failed: ${request.method.value} ${request.url}: $reason",
-                cause
-            )
-        }
-    }
-}
 
 class LoodsmanProductStructureClient(
     config: LoodsmanConfig,
     private val mapping: MappingConfig = MappingConfigLoader.load(),
-    httpClient: HttpClient = defaultLoodsmanHttpClient(),
+    httpClient: HttpClient = loodsmanHttpClient(),
     private val concurrency: Int = 8
 ) : ProductStructureClient {
 
@@ -210,7 +163,7 @@ class LoodsmanProductStructureClient(
         if (relationByLinkTypeId.isEmpty()) return ids.associateWith { emptyList() }
         val linkTypeIds = relationByLinkTypeId.keys.toList()
         return withPermits(ids) { id ->
-            sessions.withSession { objectInfo.linkedObjects(it, id, linkTypeIds, inverse = false) }
+            sessions.withSession { objectInfo.linkedObjects(it, listOf(id), linkTypeIds, inverse = false) }
                 .mapNotNull { dto -> relationByLinkTypeId[dto.idLinkType]?.let { Link(it, dto) } }
         }
     }

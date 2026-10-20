@@ -36,7 +36,7 @@ private const val ATTR_QUANTITY = "Количество"
 
 class LoodsmanKtorPdmClient(
     private val config: LoodsmanConfig,
-    private val httpClient: HttpClient = defaultLoodsmanHttpClient()
+    private val httpClient: HttpClient = loodsmanHttpClient()
 ) : PdmClient {
 
     private val baseUrl = config.baseUrl.trimEnd('/')
@@ -248,7 +248,7 @@ class LoodsmanKtorPdmClient(
         if (verticalLinkTypeIds.isEmpty()) return emptyList()
 
         val dtos = sessions.withSession { sessionId ->
-            objectInfo.linkedObjects(sessionId, objectId, verticalLinkTypeIds, inverse = false)
+            objectInfo.linkedObjects(sessionId, listOf(objectId), verticalLinkTypeIds, inverse = false)
         }
 
         return dtos.map { dto ->
@@ -263,7 +263,7 @@ class LoodsmanKtorPdmClient(
         if (verticalLinkTypeIds.isEmpty()) return emptyList()
 
         val dtos = sessions.withSession { sessionId ->
-            objectInfo.linkedObjects(sessionId, objectId, verticalLinkTypeIds, inverse = true)
+            objectInfo.linkedObjects(sessionId, listOf(objectId), verticalLinkTypeIds, inverse = true)
         }
 
         return dtos.map { dto ->
@@ -278,7 +278,7 @@ class LoodsmanKtorPdmClient(
         if (horizontalLinkTypeIds.isEmpty()) return emptyList()
 
         val dtos = sessions.withSession { sessionId ->
-            objectInfo.linkedObjects(sessionId, objectId, horizontalLinkTypeIds, inverse = false)
+            objectInfo.linkedObjects(sessionId, listOf(objectId), horizontalLinkTypeIds, inverse = false)
         }
 
         return dtos.map { dto ->

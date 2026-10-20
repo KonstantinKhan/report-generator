@@ -3,7 +3,7 @@ package dev.reportgenerator.loodsman.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-internal data class PropObjectOutputDto(
+data class PropObjectOutputDto(
     val idVersion: Int,
     val type: String? = null,
     val document: Int,

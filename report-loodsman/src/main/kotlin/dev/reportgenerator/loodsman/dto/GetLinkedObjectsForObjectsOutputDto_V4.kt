@@ -3,7 +3,7 @@ package dev.reportgenerator.loodsman.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-internal data class GetLinkedObjectsForObjectsOutputDto_V4(
+data class GetLinkedObjectsForObjectsOutputDto_V4(
     val idLink: Int,
     val idParent: Int,
     val idChild: Int,
