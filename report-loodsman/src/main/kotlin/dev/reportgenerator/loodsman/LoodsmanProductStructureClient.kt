@@ -17,9 +17,9 @@ import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.domain.UnmappedUsage
 import dev.reportgenerator.domain.Usage
-import dev.reportgenerator.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
-import dev.reportgenerator.loodsman.dto.ObjectAttributeOutputDto
-import dev.reportgenerator.loodsman.dto.PropObjectOutputDto
+import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
+import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
+import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
 import dev.reportgenerator.loodsman.mapping.AttributeRule
 import dev.reportgenerator.loodsman.mapping.FieldSource
 import dev.reportgenerator.loodsman.mapping.KindMapper
@@ -37,6 +37,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import org.slf4j.LoggerFactory
+import io.github.konstantinkhan.loodsman.LoodsmanApi
+import io.github.konstantinkhan.loodsman.LoodsmanApiException
 
 private const val PROPS_BATCH_SIZE = 100
 

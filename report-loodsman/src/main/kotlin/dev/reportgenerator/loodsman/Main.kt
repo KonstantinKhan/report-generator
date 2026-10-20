@@ -9,6 +9,10 @@ import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.domain.orElse
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
+import io.github.konstantinkhan.loodsman.KtorLoodsmanApi
+import io.github.konstantinkhan.loodsman.LoodsmanApiException
+import io.github.konstantinkhan.loodsman.LoodsmanConfig
+import io.github.konstantinkhan.loodsman.loodsmanHttpClient
 
 private val logger = LoggerFactory.getLogger("loodsman")
 

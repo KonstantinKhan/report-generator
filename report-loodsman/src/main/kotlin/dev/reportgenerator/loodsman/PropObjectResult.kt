@@ -1,6 +1,6 @@
 package dev.reportgenerator.loodsman
 
-import dev.reportgenerator.loodsman.dto.PropObjectOutputDto
+import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
 
 internal sealed class PropObjectResult {
     data class Found(val value: PropObjectOutputDto) : PropObjectResult()

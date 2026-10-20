@@ -13,7 +13,8 @@ import dev.reportgenerator.domain.directLinkType
 import dev.reportgenerator.domain.horizontalLinkType
 import dev.reportgenerator.domain.inverseLinkType
 import dev.reportgenerator.domain.pdmType
-import dev.reportgenerator.loodsman.dto.ObjectAttributeOutputDto
+import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
+import io.github.konstantinkhan.loodsman.LoodsmanApi
 
 class LoodsmanKtorPdmClient(private val api: LoodsmanApi) : PdmClient {
 

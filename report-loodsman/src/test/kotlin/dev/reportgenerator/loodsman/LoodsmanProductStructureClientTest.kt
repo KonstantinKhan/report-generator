@@ -34,6 +34,10 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.Collections
+import io.github.konstantinkhan.loodsman.KtorLoodsmanApi
+import io.github.konstantinkhan.loodsman.LoodsmanApiException
+import io.github.konstantinkhan.loodsman.LoodsmanConfig
+import io.github.konstantinkhan.loodsman.installLoodsman
 
 private const val COMPOSITION = "Состоит из ..."
 

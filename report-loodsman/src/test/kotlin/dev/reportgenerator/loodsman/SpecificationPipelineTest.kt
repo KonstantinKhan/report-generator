@@ -19,6 +19,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import io.github.konstantinkhan.loodsman.KtorLoodsmanApi
+import io.github.konstantinkhan.loodsman.LoodsmanConfig
+import io.github.konstantinkhan.loodsman.installLoodsman
 
 // Regression test for the production specification pipeline:
 // LoodsmanProductStructureClient.loadStructure(specificationQuery(...)) -> toSpecificationData().

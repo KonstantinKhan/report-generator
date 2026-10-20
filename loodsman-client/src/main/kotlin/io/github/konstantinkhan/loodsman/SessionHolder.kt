@@ -1,4 +1,4 @@
-package dev.reportgenerator.loodsman
+package io.github.konstantinkhan.loodsman
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock

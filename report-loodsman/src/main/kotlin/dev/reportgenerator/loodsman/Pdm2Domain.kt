@@ -15,10 +15,10 @@ import dev.reportgenerator.domain.PdmObject
 import dev.reportgenerator.domain.PdmObjectResult
 import dev.reportgenerator.domain.PdmType
 import dev.reportgenerator.domain.pdmType
-import dev.reportgenerator.loodsman.dto.DatabaseOutputDto
-import dev.reportgenerator.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
-import dev.reportgenerator.loodsman.dto.ObjectAttributeOutputDto
-import dev.reportgenerator.loodsman.dto.PropObjectOutputDto
+import io.github.konstantinkhan.loodsman.dto.DatabaseOutputDto
+import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
+import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
+import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
 
 internal fun DatabaseOutputDto.toDomain() = PdmDatabase(
     name = name ?: ""

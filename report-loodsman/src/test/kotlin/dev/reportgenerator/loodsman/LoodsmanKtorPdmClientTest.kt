@@ -23,6 +23,9 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headers
+import io.github.konstantinkhan.loodsman.KtorLoodsmanApi
+import io.github.konstantinkhan.loodsman.LoodsmanConfig
+import io.github.konstantinkhan.loodsman.installLoodsman
 
 class LoodsmanKtorPdmClientTest : ShouldSpec({
     should("getDirectLinks returns composition links with correct mapping") {

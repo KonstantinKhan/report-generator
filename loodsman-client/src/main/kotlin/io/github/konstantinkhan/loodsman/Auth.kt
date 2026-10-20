@@ -1,8 +1,8 @@
-package dev.reportgenerator.loodsman
+package io.github.konstantinkhan.loodsman
 
-import dev.reportgenerator.loodsman.dto.DatabaseOutputDto
-import dev.reportgenerator.loodsman.dto.LoginInputDto
-import dev.reportgenerator.loodsman.dto.SessionOutputDto
+import io.github.konstantinkhan.loodsman.dto.DatabaseOutputDto
+import io.github.konstantinkhan.loodsman.dto.LoginInputDto
+import io.github.konstantinkhan.loodsman.dto.SessionOutputDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get

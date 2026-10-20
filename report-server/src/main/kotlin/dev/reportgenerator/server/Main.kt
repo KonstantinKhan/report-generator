@@ -2,10 +2,10 @@ package dev.reportgenerator.server
 
 import dev.reportgenerator.domain.ProductStructureClient
 import dev.reportgenerator.layout.DefaultFontRegistry
-import dev.reportgenerator.loodsman.KtorLoodsmanApi
-import dev.reportgenerator.loodsman.LoodsmanConfig
+import io.github.konstantinkhan.loodsman.KtorLoodsmanApi
+import io.github.konstantinkhan.loodsman.LoodsmanConfig
 import dev.reportgenerator.loodsman.LoodsmanProductStructureClient
-import dev.reportgenerator.loodsman.loodsmanHttpClient
+import io.github.konstantinkhan.loodsman.loodsmanHttpClient
 import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.log
 import io.ktor.server.engine.applicationEnvironment

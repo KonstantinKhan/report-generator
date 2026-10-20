@@ -5,7 +5,7 @@ import dev.reportgenerator.domain.ProductStructureClient
 import dev.reportgenerator.layout.DefaultFontRegistry
 import dev.reportgenerator.layout.PdfBoxTextMeasurer
 import dev.reportgenerator.layout.layOut
-import dev.reportgenerator.loodsman.LoodsmanApiException
+import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import dev.reportgenerator.renderpdf.renderToPdf
 import dev.reportgenerator.reports.specification.specification
 import dev.reportgenerator.reports.specification.SpecificationDataException

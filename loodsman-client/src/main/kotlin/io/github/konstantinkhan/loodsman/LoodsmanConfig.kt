@@ -1,4 +1,4 @@
-package dev.reportgenerator.loodsman
+package io.github.konstantinkhan.loodsman
 
 data class LoodsmanConfig(
     val baseUrl: String,

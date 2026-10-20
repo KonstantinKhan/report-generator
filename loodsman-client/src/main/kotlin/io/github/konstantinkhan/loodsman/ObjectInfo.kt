@@ -1,9 +1,9 @@
-package dev.reportgenerator.loodsman
+package io.github.konstantinkhan.loodsman
 
-import dev.reportgenerator.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
-import dev.reportgenerator.loodsman.dto.LinkAttributeOutputDto
-import dev.reportgenerator.loodsman.dto.ObjectAttributeOutputDto
-import dev.reportgenerator.loodsman.dto.PropObjectOutputDto
+import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
+import io.github.konstantinkhan.loodsman.dto.LinkAttributeOutputDto
+import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
+import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get

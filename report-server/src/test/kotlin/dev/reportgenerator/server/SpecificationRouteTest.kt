@@ -9,7 +9,7 @@ import dev.reportgenerator.domain.ProductKind
 import dev.reportgenerator.domain.ProductNode
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.layout.DefaultFontRegistry
-import dev.reportgenerator.loodsman.LoodsmanApiException
+import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode

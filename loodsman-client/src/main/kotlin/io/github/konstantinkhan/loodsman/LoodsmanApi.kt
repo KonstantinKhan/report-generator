@@ -1,12 +1,12 @@
-package dev.reportgenerator.loodsman
+package io.github.konstantinkhan.loodsman
 
-import dev.reportgenerator.loodsman.dto.DatabaseOutputDto
-import dev.reportgenerator.loodsman.dto.GetLinkListOutputDto
-import dev.reportgenerator.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
-import dev.reportgenerator.loodsman.dto.LinkAttributeOutputDto
-import dev.reportgenerator.loodsman.dto.ObjectAttributeOutputDto
-import dev.reportgenerator.loodsman.dto.PropObjectOutputDto
-import dev.reportgenerator.loodsman.dto.TypeListOutputDto
+import io.github.konstantinkhan.loodsman.dto.DatabaseOutputDto
+import io.github.konstantinkhan.loodsman.dto.GetLinkListOutputDto
+import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
+import io.github.konstantinkhan.loodsman.dto.LinkAttributeOutputDto
+import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
+import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
+import io.github.konstantinkhan.loodsman.dto.TypeListOutputDto
 
 interface LoodsmanApi {
     suspend fun databases(): List<DatabaseOutputDto>
