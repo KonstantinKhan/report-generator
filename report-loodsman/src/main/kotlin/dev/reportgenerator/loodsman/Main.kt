@@ -13,14 +13,14 @@ import org.slf4j.LoggerFactory
 private val logger = LoggerFactory.getLogger("loodsman")
 
 fun main(): Unit = runBlocking {
-    val client = LoodsmanProductStructureClient(
-        config = LoodsmanConfig(
-            baseUrl = "https://impulsively-undamaged-amberjack.cloudpub.ru/",
-            dbName = "loodsman",
-            username = "Администратор",
-            password = "Администратор"
-        )
+    val config = LoodsmanConfig(
+        baseUrl = requiredEnv("LOODSMAN_BASE_URL"),
+        dbName = requiredEnv("LOODSMAN_DB_NAME"),
+        username = requiredEnv("LOODSMAN_USERNAME"),
+        password = requiredEnv("LOODSMAN_PASSWORD")
     )
+    val api = KtorLoodsmanApi(config, loodsmanHttpClient())
+    val client = LoodsmanProductStructureClient(api)
     try {
         val root = client.loadStructure(
             StructureQuery(
@@ -60,6 +60,9 @@ fun main(): Unit = runBlocking {
         logger.error(e.message)
         logger.debug("Details", e)
     } finally {
-        client.logout()
+        api.logout()
     }
 }
+
+private fun requiredEnv(name: String): String =
+    System.getenv(name) ?: error("Environment variable $name is required")

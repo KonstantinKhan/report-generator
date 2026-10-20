@@ -31,7 +31,6 @@ import dev.reportgenerator.loodsman.mapping.Registries
 import dev.reportgenerator.loodsman.mapping.RelationMapper
 import dev.reportgenerator.loodsman.mapping.nameFor
 import dev.reportgenerator.loodsman.mapping.select
-import io.ktor.client.HttpClient
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -42,25 +41,16 @@ import org.slf4j.LoggerFactory
 private const val PROPS_BATCH_SIZE = 100
 
 class LoodsmanProductStructureClient(
-    config: LoodsmanConfig,
+    private val api: LoodsmanApi,
     private val mapping: MappingConfig = MappingConfigLoader.load(),
-    httpClient: HttpClient = loodsmanHttpClient(),
     private val concurrency: Int = 8
 ) : ProductStructureClient {
 
     private val log = LoggerFactory.getLogger(this::class.java)
-    private val baseUrl = config.baseUrl.trimEnd('/')
 
-    private val auth = Auth(httpClient, baseUrl)
-    private val objectInfo = ObjectInfo(httpClient, baseUrl)
-    private val metaData = MetaData(httpClient, baseUrl)
-    private val sessions = SessionHolder(auth, config)
-
-    private val linkMetadata = SuspendLazy { sessions.withSession { metaData.linkList(it) } }
+    private val linkMetadata = SuspendLazy { api.linkList() }
     private val kindMapper = KindMapper(mapping, log)
     private val relationMapper = RelationMapper(mapping, log)
-
-    suspend fun logout() = sessions.close()
 
     override suspend fun loadStructure(query: StructureQuery): ProductNode {
         val rootId = query.rootId.value.toIntOrNull()
@@ -141,7 +131,7 @@ class LoodsmanProductStructureClient(
         nodes: MutableMap<Int, LoadedNode>
     ) {
         val props = ids.chunked(PROPS_BATCH_SIZE).flatMap { chunk ->
-            sessions.withSession { objectInfo.pdmObjects(it, chunk) }
+            api.propObjects(chunk)
         }.associateBy { it.idVersion }
 
         val prepared = ids.map { id ->
@@ -152,7 +142,7 @@ class LoodsmanProductStructureClient(
         val attributes = withPermits(prepared.filter { (_, pair) ->
             val kind = pair.second
             kind != null && needsAttributes(kind, query, attributeRules)
-        }.map { it.first }) { id -> sessions.withSession { objectInfo.infoAboutVersion(it, id) } }
+        }.map { it.first }) { id -> api.infoAboutVersion(id) }
 
         prepared.forEach { (id, pair) ->
             nodes[id] = LoadedNode(pair.first, pair.second, attributes[id].orEmpty())
@@ -163,7 +153,7 @@ class LoodsmanProductStructureClient(
         if (relationByLinkTypeId.isEmpty()) return ids.associateWith { emptyList() }
         val linkTypeIds = relationByLinkTypeId.keys.toList()
         return withPermits(ids) { id ->
-            sessions.withSession { objectInfo.linkedObjects(it, listOf(id), linkTypeIds, inverse = false) }
+            api.linkedObjects(listOf(id), linkTypeIds, inverse = false)
                 .mapNotNull { dto -> relationByLinkTypeId[dto.idLinkType]?.let { Link(it, dto) } }
         }
     }
@@ -226,7 +216,7 @@ class LoodsmanProductStructureClient(
                 return@withPermits mapOf<String, String>()
             }
 
-            sessions.withSession { objectInfo.linkAttributes(it, linkId) }
+            api.linkAttributes(linkId)
                 .associate { it.name?.trim().orEmpty() to (it.value?.trim().orEmpty()) }
                 .filterKeys { it.isNotEmpty() }
         }
