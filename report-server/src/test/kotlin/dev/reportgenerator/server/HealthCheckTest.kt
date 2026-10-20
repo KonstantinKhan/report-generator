@@ -1,13 +1,5 @@
 package dev.reportgenerator.server
 
-import dev.reportgenerator.domain.DirectLink
-import dev.reportgenerator.domain.HorizontalLink
-import dev.reportgenerator.domain.ItemKind
-import dev.reportgenerator.domain.InverseLink
-import dev.reportgenerator.domain.PdmClient
-import dev.reportgenerator.domain.PdmObjectResult
-import dev.reportgenerator.domain.SpecificationData
-import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.layout.DefaultFontRegistry
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
@@ -22,20 +14,6 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-private class StubPdmClient : PdmClient {
-    override fun fetchSpecification(documentId: String): SpecificationData =
-        SpecificationData(
-            documentDesignation = "AAA.00.000",
-            documentName = "Test",
-            items = listOf(SpecificationItem("AAA.01.000", "Part", ItemKind.PART, 1.0)),
-        )
-
-    override suspend fun getObject(objectId: Int): PdmObjectResult = PdmObjectResult.NotFound(objectId)
-    override suspend fun getDirectLinks(objectId: Int): List<DirectLink> = emptyList()
-    override suspend fun getInverseLinks(objectId: Int): List<InverseLink> = emptyList()
-    override suspend fun getHorizontalLinks(objectId: Int): List<HorizontalLink> = emptyList()
-}
-
 class HealthCheckTest {
     private val tempDir: File = Files.createTempDirectory("report-server-test").toFile()
 
@@ -47,7 +25,7 @@ class HealthCheckTest {
     @Test
     fun `health endpoint returns OK`() = testApplication {
         application {
-            reportServerModule(StubPdmClient(), tempDir, DefaultFontRegistry.load())
+            reportServerModule(FakeProductStructureClient(), tempDir, DefaultFontRegistry.load())
         }
 
         val response = client.get("/health")
@@ -59,7 +37,7 @@ class HealthCheckTest {
     @Test
     fun `report download returns generated pdf`() = testApplication {
         application {
-            reportServerModule(StubPdmClient(), tempDir, DefaultFontRegistry.load())
+            reportServerModule(FakeProductStructureClient(), tempDir, DefaultFontRegistry.load())
         }
         val id = "123e4567-e89b-12d3-a456-426614174000"
         File(tempDir, "$id.pdf").writeBytes("%PDF-test".toByteArray())
@@ -74,7 +52,7 @@ class HealthCheckTest {
     @Test
     fun `report download rejects non-uuid id and unknown id`() = testApplication {
         application {
-            reportServerModule(StubPdmClient(), tempDir, DefaultFontRegistry.load())
+            reportServerModule(FakeProductStructureClient(), tempDir, DefaultFontRegistry.load())
         }
 
         assertEquals(HttpStatusCode.BadRequest, client.get("/reports/not-a-uuid").status)

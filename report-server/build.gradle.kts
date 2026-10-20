@@ -16,6 +16,7 @@ dependencies {
     implementation(projects.reportLayout)
     implementation(projects.reportRenderPdf)
 
+    implementation(libs.ktor.client.core)
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
     implementation(libs.ktor.server.content.negotiation)

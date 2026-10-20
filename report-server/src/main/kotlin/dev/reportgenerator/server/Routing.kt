@@ -1,12 +1,15 @@
 package dev.reportgenerator.server
 
-import dev.reportgenerator.domain.PdmClient
+import dev.reportgenerator.domain.ProductId
+import dev.reportgenerator.domain.ProductStructureClient
 import dev.reportgenerator.layout.DefaultFontRegistry
 import dev.reportgenerator.layout.PdfBoxTextMeasurer
 import dev.reportgenerator.layout.layOut
 import dev.reportgenerator.loodsman.LoodsmanApiException
 import dev.reportgenerator.renderpdf.renderToPdf
 import dev.reportgenerator.reports.specification.specification
+import dev.reportgenerator.reports.specification.specificationQuery
+import dev.reportgenerator.reports.specification.toSpecificationData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -39,7 +42,7 @@ data class SpecificationResponse(val id: String, val path: String)
 data class ErrorResponse(val error: String)
 
 fun Application.reportServerModule(
-    pdmClient: PdmClient,
+    structureClient: ProductStructureClient,
     outputDir: File,
     fonts: DefaultFontRegistry,
 ) {
@@ -108,8 +111,9 @@ fun Application.reportServerModule(
             val customerRepresentative = call.parameters["customerRepresentative"]?.toBooleanStrictOrNull() ?: true
 
             val id = UUID.randomUUID().toString()
+            val structure = structureClient.loadStructure(specificationQuery(ProductId(versionId.toString())))
             val file = withContext(Dispatchers.IO) {
-                val data = pdmClient.fetchSpecification(versionId.toString())
+                val data = structure.toSpecificationData()
 
                 val document = specification(data, customerRepresentative = customerRepresentative)
                 val laidOut = layOut(document, textMeasurer, fonts::resolve)

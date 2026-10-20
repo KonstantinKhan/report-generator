@@ -1,12 +1,17 @@
 package dev.reportgenerator.server
 
-import dev.reportgenerator.domain.PdmClient
+import dev.reportgenerator.domain.ProductStructureClient
 import dev.reportgenerator.layout.DefaultFontRegistry
+import dev.reportgenerator.loodsman.KtorLoodsmanApi
 import dev.reportgenerator.loodsman.LoodsmanConfig
-import dev.reportgenerator.loodsman.LoodsmanPdmClient
+import dev.reportgenerator.loodsman.LoodsmanProductStructureClient
+import dev.reportgenerator.loodsman.loodsmanHttpClient
+import io.ktor.server.application.ApplicationStopped
+import io.ktor.server.application.log
 import io.ktor.server.engine.applicationEnvironment
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import kotlinx.coroutines.runBlocking
 import java.io.File
 
 fun main() {
@@ -14,14 +19,16 @@ fun main() {
     // config (Loodsman credentials) is missing, before the engine binds its port.
     val config = AppConfig(applicationEnvironment {})
 
-    val pdmClient: PdmClient = LoodsmanPdmClient(
+    val loodsmanApi = KtorLoodsmanApi(
         LoodsmanConfig(
             baseUrl = config.loodsmanBaseUrl,
             dbName = config.loodsmanDbName,
             username = config.loodsmanUsername,
             password = config.loodsmanPassword,
-        )
+        ),
+        loodsmanHttpClient(),
     )
+    val structureClient: ProductStructureClient = LoodsmanProductStructureClient(loodsmanApi)
 
     val outputDir = File(config.outputDir).apply { mkdirs() }
     val fonts = DefaultFontRegistry.load()
@@ -29,6 +36,18 @@ fun main() {
     embeddedServer(
         factory = Netty,
         port = config.serverPort,
-        module = { reportServerModule(pdmClient, outputDir, fonts) },
+        module = {
+            reportServerModule(structureClient, outputDir, fonts)
+            // Closes the Loodsman session on shutdown. A failed logout must not break the stop.
+            monitor.subscribe(ApplicationStopped) {
+                runBlocking {
+                    try {
+                        loodsmanApi.logout()
+                    } catch (e: Exception) {
+                        log.warn("Loodsman logout failed on shutdown", e)
+                    }
+                }
+            }
+        },
     ).start(wait = true)
 }
