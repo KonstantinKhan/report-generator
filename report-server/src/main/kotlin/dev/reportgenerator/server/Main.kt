@@ -11,6 +11,7 @@ import io.ktor.server.application.log
 import io.ktor.server.engine.applicationEnvironment
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import java.io.File
 
@@ -43,6 +44,8 @@ fun main() {
                 runBlocking {
                     try {
                         loodsmanApi.logout()
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         log.warn("Loodsman logout failed on shutdown", e)
                     }
