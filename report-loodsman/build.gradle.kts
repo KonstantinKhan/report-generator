@@ -21,4 +21,5 @@ dependencies {
     testImplementation(libs.ktor.client.mock)
     testImplementation(libs.kotest.runner.junit5)
     testImplementation(libs.kotest.assertions.core)
+    testImplementation(projects.reports.specification)
 }

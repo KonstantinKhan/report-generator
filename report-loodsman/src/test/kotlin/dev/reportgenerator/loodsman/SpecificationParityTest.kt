@@ -1,0 +1,276 @@
+package dev.reportgenerator.loodsman
+
+import dev.reportgenerator.domain.ProductId
+import dev.reportgenerator.domain.Relation
+import dev.reportgenerator.domain.SpecificationData
+import dev.reportgenerator.domain.StructureQuery
+import dev.reportgenerator.reports.specification.toSpecificationData
+import io.kotest.core.spec.style.ShouldSpec
+import io.kotest.matchers.shouldBe
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+
+// Checks that the old pipeline (LoodsmanKtorPdmClient.fetchSpecification) and the new one
+// (LoodsmanProductStructureClient -> toSpecificationData) give the same SpecificationData on the same Loodsman responses.
+
+private const val COMPOSITION_LINK = "Состоит из ..."
+private const val DOCUMENT_LINK = "Документы"
+private const val COMPOSITION_LINK_ID = 1
+private const val DOCUMENT_LINK_ID = 2
+
+private data class ParityObj(
+    val id: Int,
+    val type: String,
+    val product: String,
+    val attrs: Map<String, String> = emptyMap(),
+)
+
+private data class ParityEdge(
+    val parent: Int,
+    val child: Int,
+    val link: String = COMPOSITION_LINK,
+    val min: Double? = null,
+    val max: Double? = null,
+    val unit: String? = null,
+)
+
+private class ParityLoodsman(
+    private val objects: List<ParityObj>,
+    private val edges: List<ParityEdge>,
+) {
+    fun httpClient(): HttpClient {
+        val engine = MockEngine { request ->
+            val params = request.url.parameters
+            val body: JsonElement = when (request.url.encodedPath) {
+                "/api/v4/Auth/login" -> buildJsonObject {
+                    put("sessionId", "s1")
+                    put("userId", 1)
+                    put("isEditable", true)
+                }
+                "/api/v4/MetaData/get-link-list" -> buildJsonArray {
+                    listOf(COMPOSITION_LINK_ID to COMPOSITION_LINK, DOCUMENT_LINK_ID to DOCUMENT_LINK).forEach { (id, name) ->
+                        add(buildJsonObject {
+                            put("id", id)
+                            put("name", name)
+                            put("type", 0)
+                            put("order", id)
+                        })
+                    }
+                }
+                "/api/v4/ObjectInfo/get-prop-objects" -> {
+                    val ids = params["objectList"]!!.split(",").map { it.toInt() }
+                    JsonArray(ids.mapNotNull { id -> objects.find { it.id == id }?.let(::propOf) })
+                }
+                "/api/v4/ObjectInfo/get-info-about-version-mode-3" -> {
+                    val obj = objects.first { it.id == params["idVersion"]!!.toInt() }
+                    buildJsonArray {
+                        obj.attrs.forEach { (name, value) ->
+                            add(buildJsonObject {
+                                put("name", name)
+                                put("value", value)
+                            })
+                        }
+                    }
+                }
+                "/api/v4/ObjectInfo/get-linked-objects-for-objects" -> {
+                    val parent = params["objectsIds"]!!.toInt()
+                    val linkTypes = params["linksTypesIds"]!!.split(",").map { it.toInt() }.toSet()
+                    JsonArray(edges.withIndex()
+                        .filter { (_, edge) -> edge.parent == parent && linkTypeId(edge.link) in linkTypes }
+                        .map { (index, edge) -> linkOf(edge, index + 1) })
+                }
+                // Link attributes (position, note) are not part of SpecificationItem: no values needed.
+                "/api/v4/ObjectInfo/get-link-attributes" -> buildJsonArray {}
+                else -> error("Unexpected request ${request.url}")
+            }
+            respond(
+                content = body.toString(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        }
+        return HttpClient(engine) { installLoodsman() }
+    }
+
+    private fun linkTypeId(name: String): Int = when (name) {
+        COMPOSITION_LINK -> COMPOSITION_LINK_ID
+        DOCUMENT_LINK -> DOCUMENT_LINK_ID
+        else -> error("Unknown link $name")
+    }
+
+    private fun propOf(obj: ParityObj) = buildJsonObject {
+        put("idVersion", obj.id)
+        put("type", obj.type)
+        put("document", 0)
+        put("product", obj.product)
+        put("version", "1")
+        put("state", "Утверждён")
+        put("locked", 0)
+        put("accessLevel", 0)
+        put("label", 0)
+        put("hasLink", 0)
+        put("mainId", obj.id)
+    }
+
+    private fun linkOf(edge: ParityEdge, idLink: Int) = buildJsonObject {
+        put("idLink", idLink)
+        put("idParent", edge.parent)
+        put("idChild", edge.child)
+        put("idLinkType", linkTypeId(edge.link))
+        put("linkTypeName", edge.link)
+        put("idType", 0)
+        put("idState", 0)
+        edge.min?.let { put("minQuantity", it) }
+        edge.max?.let { put("maxQuantity", it) }
+        edge.unit?.let { put("unit", it) }
+    }
+}
+
+private suspend fun oldAndNew(
+    objects: List<ParityObj>,
+    edges: List<ParityEdge>,
+): Pair<SpecificationData, SpecificationData> {
+    val config = LoodsmanConfig("http://localhost", "db", "user", "pass")
+    val httpClient = ParityLoodsman(objects, edges).httpClient()
+    val old = LoodsmanKtorPdmClient(config, httpClient).fetchSpecification("1")
+    val new = LoodsmanProductStructureClient(KtorLoodsmanApi(config, httpClient))
+        .loadStructure(
+            StructureQuery(
+                rootId = ProductId("1"),
+                depth = 1,
+                relations = setOf(Relation.Composition, Relation.Document),
+            )
+        )
+        .toSpecificationData()
+    return old to new
+}
+
+class SpecificationParityTest : ShouldSpec({
+    should("match assembly with a part and an assembly unit") {
+        val (old, new) = oldAndNew(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
+                ParityObj(3, "Сборочная единица", "АБ.003", mapOf("Наименование" to "Крышка")),
+            ),
+            edges = listOf(
+                ParityEdge(1, 2, min = 2.0, max = 2.0, unit = "шт"),
+                ParityEdge(1, 3, min = 1.0, max = 1.0, unit = "шт"),
+            ),
+        )
+
+        new shouldBe old
+    }
+
+    should("match standard and other products with the designation attribute") {
+        val (old, new) = oldAndNew(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(4, "Стандартное изделие", "Болт М6", mapOf("Обозначение изделия" to "ГОСТ 7798-70")),
+                ParityObj(5, "Прочее изделие", "Заглушка", mapOf("Обозначение изделия" to "ИЗД.5")),
+            ),
+            edges = listOf(
+                ParityEdge(1, 4, min = 4.0, max = 4.0, unit = "шт"),
+                ParityEdge(1, 5, min = 1.0, max = 1.0),
+            ),
+        )
+
+        new shouldBe old
+    }
+
+    should("match material with quantity and unit") {
+        val (old, new) = oldAndNew(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(6, "Материал по КД", "Сталь 09Г2С", mapOf("Наименование" to "Лист")),
+            ),
+            edges = listOf(ParityEdge(1, 6, min = 1.5, max = 1.5, unit = "кг")),
+        )
+
+        new shouldBe old
+    }
+
+    should("match document by the Документы link without quantity") {
+        val (old, new) = oldAndNew(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(7, "Сборочный чертеж", "АБ.001 СБ", mapOf("Наименование" to "Корпус. Сборочный чертеж")),
+            ),
+            edges = listOf(ParityEdge(1, 7, link = DOCUMENT_LINK)),
+        )
+
+        new shouldBe old
+    }
+
+    should("match document of the Сборочный чертёж type written with ё") {
+        val (old, new) = oldAndNew(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(10, "Сборочный чертёж", "АБ.010 СБ", mapOf("Наименование" to "Корпус. Сборочный чертёж")),
+            ),
+            edges = listOf(ParityEdge(1, 10, link = DOCUMENT_LINK)),
+        )
+
+        new shouldBe old
+    }
+
+    should("exclude an assembly drawing written with ё from the composition") {
+        val (old, new) = oldAndNew(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
+                ParityObj(11, "Сборочный чертёж", "АБ.011 СБ", mapOf("Наименование" to "Чертёж в составе")),
+            ),
+            edges = listOf(
+                ParityEdge(1, 2, min = 1.0, max = 1.0),
+                ParityEdge(1, 11, min = 1.0, max = 1.0),
+            ),
+        )
+
+        new shouldBe old
+        // Observable exclusion: only the part stays in items, the drawing written with ё is dropped on both paths.
+        old.items.map { it.name } shouldBe listOf("Вал")
+        new.items.map { it.name } shouldBe listOf("Вал")
+    }
+
+    should("exclude an assembly drawing from the composition") {
+        val (old, new) = oldAndNew(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
+                ParityObj(8, "Сборочный чертеж", "АБ.008 СБ", mapOf("Наименование" to "Чертеж в составе")),
+            ),
+            edges = listOf(
+                ParityEdge(1, 2, min = 1.0, max = 1.0),
+                ParityEdge(1, 8, min = 1.0, max = 1.0),
+            ),
+        )
+
+        new shouldBe old
+    }
+
+    should("skip an object of unknown type") {
+        val (old, new) = oldAndNew(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
+                ParityObj(9, "Неведомый тип", "XX.009"),
+            ),
+            edges = listOf(
+                ParityEdge(1, 2, min = 1.0, max = 1.0),
+                ParityEdge(1, 9, min = 1.0, max = 1.0),
+            ),
+        )
+
+        new shouldBe old
+    }
+})
