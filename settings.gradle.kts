@@ -16,10 +16,10 @@ include(
     "report-template",
     "report-render-svg",
     "report-render-pdf",
-    "report-api",
-    "report-data",
+    "report-domain",
     "reports:specification",
     "report-cli",
+    "loodsman-client",
     "report-loodsman",
     "report-server",
 )

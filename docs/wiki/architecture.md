@@ -15,18 +15,22 @@
 Путь спецификации (боевой движок):
 
 ```text
-PDM (Loodsman REST API)
+Loodsman REST API v4
       │
       ▼
-report-loodsman   — реализация PdmClient поверх Loodsman API v4 (report-server — Ktor-обёртка)
-      │
-      ▼
-report-api        — DTO + интерфейс PdmClient (контракт, без HTTP-библиотеки)
-      ▼
-report-data       — mapping DTO → Report Data (SpecificationData)
-      │
-      ▼
-reports/specification  — Report Builder = адаптер данных: Report Data → DataContext
+loodsman-client   — LoodsmanApi: группы эндпоинтов (auth, objectInfo, metaData), DTO, сессия (повтор при 401/419).
+      │             Ничего о доменной модели не знает
+      ▼  LoodsmanApi (DTO)
+report-loodsman   — DTO → домен: LoodsmanProductStructureClient (ProductStructureClient),
+      │             конфиг маппинга (YAML), обход дерева, KindMapper / RelationMapper
+      ▼  ProductNode / Usage (модель структуры)
+report-domain     — модель структуры изделия: ProductNode, Usage, Field<T>, ProductKind, Relation,
+      │             AttributeKey, AttributeValue, StructureQuery; порт ProductStructureClient (единственный путь к PDM);
+      │             а также SpecificationData / SpecificationItem / ItemKind (модель отчёта, см. known-gaps)
+      ▼  ProductNode.toSpecificationData()
+reports/specification  — specificationQuery (запрос структуры), toSpecificationData() (правила отчёта,
+      │                   SpecificationDataException при плохих данных), specification() = Report Builder:
+      │                   адаптер данных SpecificationData → DataContext
       │                   (схема + значения doc.*, типизированные записи item.*)
       │                   + document { pageSetup, table(FlowTables.build(...)) }
       ▼
@@ -47,7 +51,7 @@ Layout IR (report-layout-ir)
 report-render-svg  report-render-pdf   (XLSX — не начато)
 ```
 
-Путь своего шаблона (`report-cli` `TemplateMain`, `runTemplate`): минуя `report-api`/`report-data`/Report Builder.
+Путь своего шаблона (`report-cli` `TemplateMain`, `runTemplate`): минуя Report Builder.
 
 ```text
 template.yaml ──► TemplateLoader (разбор + валидация)
@@ -111,11 +115,24 @@ report-geometry  ← report-layout-ir      (НЕ зависит от report-ir �
 report-ir + report-layout-ir  ← report-layout     (+ PDFBox)
 report-layout-ir  ← report-render-svg    (main-код, только это)
 report-layout-ir + report-layout(FontRegistry)  ← report-render-pdf
-report-api ← report-data ← reports/specification (+ report-ir)
-report-api ← report-loodsman
+loodsman-client  (нет зависимостей от доменных модулей; api в report-loodsman)
+loodsman-client ← report-loodsman (api)
+report-domain ← report-loodsman
+report-domain ← reports/specification (+ report-ir)
 reports/specification, report-layout, report-template, рендереры ← report-cli
-report-loodsman, report-data, reports/specification, report-layout, report-render-pdf ← report-server
+report-loodsman, reports/specification, report-layout, report-render-pdf ← report-server
 ```
+
+Граница `loodsman-client` проверяется grep'ом (должно быть пусто):
+
+```bash
+grep -rn "import dev.reportgenerator" loodsman-client/src/main/     # библиотека не знает о доменных модулях
+```
+
+Границы ответственности слоёв Loodsman: `loodsman-client` — HTTP, DTO, сессия; `report-loodsman` — маппинг
+Loodsman → домен, без правил отчёта; `reports/specification` — правила спецификации (материалы, ошибки данных);
+`report-server` — HTTP-статусы и жизненный цикл сессии. Подробности и правила — [loodsman-integration.md](loodsman-integration.md),
+почему так — [design-decisions.md](design-decisions.md#решения-ветки-refactorloodsman-api).
 
 `report-template` это самый нижний слой после геометрии: он знает про YAML, данные и геометрию блоков, но ничего про
 `IrTable`, раскладку и рендер. `report-ir` зависит от него (api), потому что `FlowTables` и `FrameSpecs` читают шаблоны, а

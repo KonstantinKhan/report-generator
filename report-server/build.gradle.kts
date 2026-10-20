@@ -11,8 +11,7 @@ application {
 
 dependencies {
     implementation(projects.reportLoodsman)
-    implementation(projects.reportApi)
-    implementation(projects.reportData)
+    implementation(projects.reportDomain)
     implementation(projects.reports.specification)
     implementation(projects.reportLayout)
     implementation(projects.reportRenderPdf)

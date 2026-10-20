@@ -1,6 +1,6 @@
 package dev.reportgenerator.reports.specification
 
-import dev.reportgenerator.data.SpecificationData
+import dev.reportgenerator.domain.SpecificationData
 import dev.reportgenerator.ir.FlowTables
 import dev.reportgenerator.ir.IrDocument
 import dev.reportgenerator.ir.document

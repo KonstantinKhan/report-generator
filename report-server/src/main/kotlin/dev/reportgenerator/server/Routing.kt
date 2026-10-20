@@ -1,13 +1,16 @@
 package dev.reportgenerator.server
 
-import dev.reportgenerator.api.PdmClient
-import dev.reportgenerator.data.mapToSpecificationData
+import dev.reportgenerator.domain.ProductId
+import dev.reportgenerator.domain.ProductStructureClient
 import dev.reportgenerator.layout.DefaultFontRegistry
 import dev.reportgenerator.layout.PdfBoxTextMeasurer
 import dev.reportgenerator.layout.layOut
-import dev.reportgenerator.loodsman.LoodsmanApiException
+import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import dev.reportgenerator.renderpdf.renderToPdf
 import dev.reportgenerator.reports.specification.specification
+import dev.reportgenerator.reports.specification.SpecificationDataException
+import dev.reportgenerator.reports.specification.specificationQuery
+import dev.reportgenerator.reports.specification.toSpecificationData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -40,7 +43,7 @@ data class SpecificationResponse(val id: String, val path: String)
 data class ErrorResponse(val error: String)
 
 fun Application.reportServerModule(
-    pdmClient: PdmClient,
+    structureClient: ProductStructureClient,
     outputDir: File,
     fonts: DefaultFontRegistry,
 ) {
@@ -54,6 +57,12 @@ fun Application.reportServerModule(
         exception<LoodsmanApiException> { call, cause ->
             call.application.log.error("Upstream Loodsman error", cause)
             call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "upstream error"))
+        }
+        // Product data that cannot be turned into a specification (missing quantity, missing designation, ...)
+        // is an upstream data problem, not a server bug: 502 as before the migration.
+        exception<SpecificationDataException> { call, cause ->
+            call.application.log.warn("Invalid product data for specification: ${cause.message}")
+            call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "invalid product data"))
         }
         // Fallback for network-level failures not wrapped in LoodsmanApiException.
         exception<IOException> { call, cause ->
@@ -109,10 +118,10 @@ fun Application.reportServerModule(
             val customerRepresentative = call.parameters["customerRepresentative"]?.toBooleanStrictOrNull() ?: true
 
             val id = UUID.randomUUID().toString()
+            val structure = structureClient.loadStructure(specificationQuery(ProductId(versionId.toString())))
             val file = withContext(Dispatchers.IO) {
-                val dto = pdmClient.fetchSpecification(versionId.toString())
+                val data = structure.toSpecificationData()
 
-                val data = mapToSpecificationData(dto)
                 val document = specification(data, customerRepresentative = customerRepresentative)
                 val laidOut = layOut(document, textMeasurer, fonts::resolve)
                 val pdfBytes = renderToPdf(laidOut, fonts.registry)

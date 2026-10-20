@@ -18,7 +18,7 @@
           "pdm",
           "mapper"
         ],
-        "note": "report-server принимает задание, report-loodsman идёт в PDM, report-data превращает DTO в записи item.*"
+        "note": "report-server принимает задание, report-loodsman идёт в PDM и отдаёт ProductNode, reports/specification превращает его в записи item.*"
       },
       {
         "id": "two-ir-boundary",
@@ -94,7 +94,7 @@
       "id": "mapper",
       "type": "backend",
       "label": "Маппинг DTO",
-      "sublabel": "report-data",
+      "sublabel": "report-loodsman",
       "stage": 1,
       "row": 0,
       "tag": "mapToSpecificationData()"
@@ -171,7 +171,7 @@
       "id": "pdm_dto",
       "from": "pdm",
       "to": "mapper",
-      "label": "SpecificationDto"
+      "label": "DTO Loodsman"
     },
     {
       "id": "mapper_records",
@@ -225,8 +225,8 @@
       "title": "Вход и данные",
       "items": [
         "report-server — приём POST /specifications/{versionId}, оркестрация пайплайна",
-        "report-loodsman — сессия Loodsman, PdmClient поверх REST API v4",
-        "report-data — маппинг SpecificationDto в типизированные записи item.*"
+        "report-loodsman — сессия Loodsman, ProductStructureClient поверх LoodsmanApi (REST API v4)",
+        "reports/specification — ProductNode → SpecificationData, записи item.*"
       ]
     },
     {
