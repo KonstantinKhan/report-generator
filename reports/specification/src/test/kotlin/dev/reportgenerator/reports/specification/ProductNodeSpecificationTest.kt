@@ -68,14 +68,14 @@ class ProductNodeSpecificationTest : ShouldSpec({
         val missing = root().copy(designation = Designation.Missing)
         val notLoaded = root().copy(designation = Designation.NotLoaded)
 
-        shouldThrow<IllegalStateException> { missing.toSpecificationData() }.message shouldContain "1"
-        shouldThrow<IllegalStateException> { notLoaded.toSpecificationData() }.message shouldContain "1"
+        shouldThrow<SpecificationDataException> { missing.toSpecificationData() }.message shouldContain "1"
+        shouldThrow<SpecificationDataException> { notLoaded.toSpecificationData() }.message shouldContain "1"
     }
 
     should("fail when the root name is not loaded") {
         val node = root().copy(name = Name.NotLoaded)
 
-        shouldThrow<IllegalStateException> { node.toSpecificationData() }.message shouldContain "1"
+        shouldThrow<SpecificationDataException> { node.toSpecificationData() }.message shouldContain "1"
     }
 
     should("map each product kind to its item kind") {
@@ -113,13 +113,13 @@ class ProductNodeSpecificationTest : ShouldSpec({
     should("fail on a material with a missing designation") {
         val child = node("2", kind = ProductKind.Material, designation = Designation.Missing)
 
-        shouldThrow<IllegalStateException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+        shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
     should("fail on a material with a not loaded designation") {
         val child = node("2", kind = ProductKind.Material, designation = Designation.NotLoaded)
 
-        shouldThrow<IllegalStateException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+        shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
     should("map missing usage unit to null") {
@@ -131,21 +131,21 @@ class ProductNodeSpecificationTest : ShouldSpec({
     should("fail on a quantity range because it is not supported") {
         val usage = composition(node("2"), Quantity.Range(1.0, 3.0))
 
-        shouldThrow<IllegalStateException> { root(usage).toSpecificationData() }.message shouldContain "2"
+        shouldThrow<SpecificationDataException> { root(usage).toSpecificationData() }.message shouldContain "2"
     }
 
     should("fail on a missing or not loaded quantity") {
         val missing = composition(node("2"), Quantity.Missing)
         val notLoaded = composition(node("3"), Quantity.NotLoaded)
 
-        shouldThrow<IllegalStateException> { root(missing).toSpecificationData() }.message shouldContain "2"
-        shouldThrow<IllegalStateException> { root(notLoaded).toSpecificationData() }.message shouldContain "3"
+        shouldThrow<SpecificationDataException> { root(missing).toSpecificationData() }.message shouldContain "2"
+        shouldThrow<SpecificationDataException> { root(notLoaded).toSpecificationData() }.message shouldContain "3"
     }
 
     should("fail on a not loaded usage unit") {
         val usage = composition(node("2"), unit = Field.NotLoaded)
 
-        shouldThrow<IllegalStateException> { root(usage).toSpecificationData() }.message shouldContain "2"
+        shouldThrow<SpecificationDataException> { root(usage).toSpecificationData() }.message shouldContain "2"
     }
 
     should("map a document usage to zero quantity and no unit") {
@@ -203,7 +203,7 @@ class ProductNodeSpecificationTest : ShouldSpec({
     should("fail on a not loaded designation") {
         val child = node("2", designation = Designation.NotLoaded)
 
-        shouldThrow<IllegalStateException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+        shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
     should("use the designation as item name when the name is missing") {
@@ -216,12 +216,18 @@ class ProductNodeSpecificationTest : ShouldSpec({
     should("fail when the name and designation of an item are both missing") {
         val child = node("2", designation = Designation.Missing, name = Name.Missing)
 
-        shouldThrow<IllegalStateException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+        shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
     should("fail on a not loaded item name") {
         val child = node("2", name = Name.NotLoaded)
 
-        shouldThrow<IllegalStateException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+        shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+    }
+
+    should("not treat a data error as an IllegalStateException so the generic handler does not catch it") {
+        val exception: Throwable = SpecificationDataException("data")
+
+        (exception is IllegalStateException) shouldBe false
     }
 })

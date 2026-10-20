@@ -20,13 +20,13 @@ import dev.reportgenerator.domain.UnmappedUsage
 fun ProductNode.toSpecificationData(): SpecificationData {
     val documentDesignation = when (val value = designation) {
         is Designation.Value -> value.text
-        is Designation.Missing -> error("Root node ${id.value}: designation is missing")
-        is Designation.NotLoaded -> error("Root node ${id.value}: designation is not loaded")
+        is Designation.Missing -> throw SpecificationDataException("Root node ${id.value}: designation is missing")
+        is Designation.NotLoaded -> throw SpecificationDataException("Root node ${id.value}: designation is not loaded")
     }
     val documentName = when (val value = name) {
         is Name.Value -> value.text
         is Name.Missing -> documentDesignation
-        is Name.NotLoaded -> error("Root node ${id.value}: name is not loaded")
+        is Name.NotLoaded -> throw SpecificationDataException("Root node ${id.value}: name is not loaded")
     }
     val composition = usages.filter { it.group() == UsageGroup.COMPOSITION }.map { it.toItem() }
     val documents = usages.filter { it.group() == UsageGroup.DOCUMENT }.map { it.toItem() }
@@ -51,17 +51,17 @@ private fun Usage.toItem(): SpecificationItem = when (this) {
 
 private fun CompositionUsage.quantityOf(): Double = when (val value = quantity) {
     is Quantity.Exact -> value.amount
-    is Quantity.Range -> error(
+    is Quantity.Range -> throw SpecificationDataException(
         "Node ${child.id.value}: quantity range ${value.min}..${value.max} is not supported in specification"
     )
-    is Quantity.Missing -> error("Node ${child.id.value}: quantity is missing")
-    is Quantity.NotLoaded -> error("Node ${child.id.value}: quantity is not loaded")
+    is Quantity.Missing -> throw SpecificationDataException("Node ${child.id.value}: quantity is missing")
+    is Quantity.NotLoaded -> throw SpecificationDataException("Node ${child.id.value}: quantity is not loaded")
 }
 
 private fun CompositionUsage.unitOf(): String? = when (val value = unit) {
     is Field.Value -> value.value
     is Field.Missing -> null
-    is Field.NotLoaded -> error("Node ${child.id.value}: unit is not loaded")
+    is Field.NotLoaded -> throw SpecificationDataException("Node ${child.id.value}: unit is not loaded")
 }
 
 private fun ProductNode.toItem(quantity: Double, unit: String?): SpecificationItem {
@@ -70,8 +70,8 @@ private fun ProductNode.toItem(quantity: Double, unit: String?): SpecificationIt
         // In the specification the material designation is shown in the name column, the designation column stays empty.
         val materialName = when (val value = designation) {
             is Designation.Value -> value.text
-            is Designation.Missing -> error("Node ${id.value}: designation is missing for a material")
-            is Designation.NotLoaded -> error("Node ${id.value}: designation is not loaded")
+            is Designation.Missing -> throw SpecificationDataException("Node ${id.value}: designation is missing for a material")
+            is Designation.NotLoaded -> throw SpecificationDataException("Node ${id.value}: designation is not loaded")
         }
         return SpecificationItem(
             designation = null,
@@ -84,12 +84,13 @@ private fun ProductNode.toItem(quantity: Double, unit: String?): SpecificationIt
     val designationText = when (val value = designation) {
         is Designation.Value -> value.text
         is Designation.Missing -> null
-        is Designation.NotLoaded -> error("Node ${id.value}: designation is not loaded")
+        is Designation.NotLoaded -> throw SpecificationDataException("Node ${id.value}: designation is not loaded")
     }
     val nameText = when (val value = name) {
         is Name.Value -> value.text
-        is Name.Missing -> designationText ?: error("Node ${id.value}: name and designation are both missing")
-        is Name.NotLoaded -> error("Node ${id.value}: name is not loaded")
+        is Name.Missing -> designationText
+            ?: throw SpecificationDataException("Node ${id.value}: name and designation are both missing")
+        is Name.NotLoaded -> throw SpecificationDataException("Node ${id.value}: name is not loaded")
     }
     return SpecificationItem(
         designation = designationText,
