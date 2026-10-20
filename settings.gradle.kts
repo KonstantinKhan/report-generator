@@ -20,6 +20,7 @@ include(
     "report-pdm",
     "reports:specification",
     "report-cli",
+    "loodsman-client",
     "report-loodsman",
     "report-server",
 )

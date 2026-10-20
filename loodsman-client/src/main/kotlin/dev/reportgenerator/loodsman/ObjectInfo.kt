@@ -30,11 +30,6 @@ internal class ObjectInfo(
             parameter("parameters", 0)
         }.body()
 
-    internal suspend fun pdmObject(sessionId: String, versionId: Int): PropObjectResult =
-        pdmObjects(sessionId, listOf(versionId)).firstOrNull()
-            ?.let { PropObjectResult.Found(it) }
-            ?: PropObjectResult.NotFound(versionId)
-
     internal suspend fun linkedObjects(
         sessionId: String,
         objectIds: List<Int>,

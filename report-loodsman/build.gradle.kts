@@ -5,15 +5,11 @@ plugins {
 
 dependencies {
     api(projects.reportDomain)
+    api(projects.loodsmanClient)
     implementation(projects.reportPdm)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kaml)
-    implementation(libs.ktor.client.core)
-    implementation(libs.ktor.client.cio)
-    implementation(libs.ktor.client.content.negotiation)
-    implementation(libs.ktor.client.logging)
     implementation(libs.logback.classic)
-    implementation(libs.ktor.serialization.kotlinx.json)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.reflect)
