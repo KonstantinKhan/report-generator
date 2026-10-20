@@ -22,7 +22,7 @@ import kotlinx.serialization.json.put
 
 // Regression test for the production specification pipeline:
 // LoodsmanProductStructureClient.loadStructure(specificationQuery(...)) -> toSpecificationData().
-// Expected values were fixed against the legacy LoodsmanKtorPdmClient.fetchSpecification output on the same Loodsman responses.
+// Expected values were fixed against the output of the legacy path (removed) on the same Loodsman responses.
 
 private const val COMPOSITION_LINK = "Состоит из ..."
 private const val DOCUMENT_LINK = "Документы"
