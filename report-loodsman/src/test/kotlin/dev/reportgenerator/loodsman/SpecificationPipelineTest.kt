@@ -1,7 +1,9 @@
 package dev.reportgenerator.loodsman
 
+import dev.reportgenerator.domain.ItemKind
 import dev.reportgenerator.domain.ProductId
 import dev.reportgenerator.domain.SpecificationData
+import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.reports.specification.specificationQuery
 import dev.reportgenerator.reports.specification.toSpecificationData
 import io.kotest.core.spec.style.ShouldSpec
@@ -18,8 +20,9 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-// Checks that the old pipeline (LoodsmanKtorPdmClient.fetchSpecification) and the new one
-// (LoodsmanProductStructureClient -> toSpecificationData) give the same SpecificationData on the same Loodsman responses.
+// Regression test for the production specification pipeline:
+// LoodsmanProductStructureClient.loadStructure(specificationQuery(...)) -> toSpecificationData().
+// Expected values were fixed against the legacy LoodsmanKtorPdmClient.fetchSpecification output on the same Loodsman responses.
 
 private const val COMPOSITION_LINK = "Состоит из ..."
 private const val DOCUMENT_LINK = "Документы"
@@ -134,22 +137,20 @@ private class ParityLoodsman(
     }
 }
 
-private suspend fun oldAndNew(
+private suspend fun loadPipeline(
     objects: List<ParityObj>,
     edges: List<ParityEdge>,
-): Pair<SpecificationData, SpecificationData> {
+): SpecificationData {
     val config = LoodsmanConfig("http://localhost", "db", "user", "pass")
     val httpClient = ParityLoodsman(objects, edges).httpClient()
-    val old = LoodsmanKtorPdmClient(config, httpClient).fetchSpecification("1")
-    val new = LoodsmanProductStructureClient(KtorLoodsmanApi(config, httpClient))
+    return LoodsmanProductStructureClient(KtorLoodsmanApi(config, httpClient))
         .loadStructure(specificationQuery(ProductId("1")))
         .toSpecificationData()
-    return old to new
 }
 
-class SpecificationParityTest : ShouldSpec({
+class SpecificationPipelineTest : ShouldSpec({
     should("match assembly with a part and an assembly unit") {
-        val (old, new) = oldAndNew(
+        val actual = loadPipeline(
             objects = listOf(
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
                 ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
@@ -161,11 +162,18 @@ class SpecificationParityTest : ShouldSpec({
             ),
         )
 
-        new shouldBe old
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            items = listOf(
+                SpecificationItem("АБ.002", "Вал", ItemKind.PART, 2.0, "шт"),
+                SpecificationItem("АБ.003", "Крышка", ItemKind.ASSEMBLY, 1.0, "шт"),
+            ),
+        )
     }
 
     should("match standard and other products with the designation attribute") {
-        val (old, new) = oldAndNew(
+        val actual = loadPipeline(
             objects = listOf(
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
                 ParityObj(4, "Стандартное изделие", "Болт М6", mapOf("Обозначение изделия" to "ГОСТ 7798-70")),
@@ -177,11 +185,18 @@ class SpecificationParityTest : ShouldSpec({
             ),
         )
 
-        new shouldBe old
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            items = listOf(
+                SpecificationItem("ГОСТ 7798-70", "Болт М6", ItemKind.STANDARD, 4.0, "шт"),
+                SpecificationItem("ИЗД.5", "Заглушка", ItemKind.OTHER, 1.0, null),
+            ),
+        )
     }
 
     should("match material with quantity and unit") {
-        val (old, new) = oldAndNew(
+        val actual = loadPipeline(
             objects = listOf(
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
                 ParityObj(6, "Материал по КД", "Сталь 09Г2С", mapOf("Наименование" to "Лист")),
@@ -189,11 +204,17 @@ class SpecificationParityTest : ShouldSpec({
             edges = listOf(ParityEdge(1, 6, min = 1.5, max = 1.5, unit = "кг")),
         )
 
-        new shouldBe old
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            items = listOf(
+                SpecificationItem(null, "Сталь 09Г2С", ItemKind.MATERIAL, 1.5, "кг"),
+            ),
+        )
     }
 
     should("match document by the Документы link without quantity") {
-        val (old, new) = oldAndNew(
+        val actual = loadPipeline(
             objects = listOf(
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
                 ParityObj(7, "Сборочный чертеж", "АБ.001 СБ", mapOf("Наименование" to "Корпус. Сборочный чертеж")),
@@ -201,11 +222,17 @@ class SpecificationParityTest : ShouldSpec({
             edges = listOf(ParityEdge(1, 7, link = DOCUMENT_LINK)),
         )
 
-        new shouldBe old
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            items = listOf(
+                SpecificationItem("АБ.001 СБ", "Корпус. Сборочный чертеж", ItemKind.DOCUMENTATION, 0.0, null),
+            ),
+        )
     }
 
     should("match document of the Сборочный чертёж type written with ё") {
-        val (old, new) = oldAndNew(
+        val actual = loadPipeline(
             objects = listOf(
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
                 ParityObj(10, "Сборочный чертёж", "АБ.010 СБ", mapOf("Наименование" to "Корпус. Сборочный чертёж")),
@@ -213,11 +240,17 @@ class SpecificationParityTest : ShouldSpec({
             edges = listOf(ParityEdge(1, 10, link = DOCUMENT_LINK)),
         )
 
-        new shouldBe old
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            items = listOf(
+                SpecificationItem("АБ.010 СБ", "Корпус. Сборочный чертёж", ItemKind.DOCUMENTATION, 0.0, null),
+            ),
+        )
     }
 
     should("exclude an assembly drawing written with ё from the composition") {
-        val (old, new) = oldAndNew(
+        val actual = loadPipeline(
             objects = listOf(
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
                 ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
@@ -229,14 +262,19 @@ class SpecificationParityTest : ShouldSpec({
             ),
         )
 
-        new shouldBe old
-        // Observable exclusion: only the part stays in items, the drawing written with ё is dropped on both paths.
-        old.items.map { it.name } shouldBe listOf("Вал")
-        new.items.map { it.name } shouldBe listOf("Вал")
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            items = listOf(
+                SpecificationItem("АБ.002", "Вал", ItemKind.PART, 1.0, null),
+            ),
+        )
+        // Observable exclusion: only the part stays in items, the drawing written with ё is dropped.
+        actual.items.map { it.name } shouldBe listOf("Вал")
     }
 
     should("exclude an assembly drawing from the composition") {
-        val (old, new) = oldAndNew(
+        val actual = loadPipeline(
             objects = listOf(
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
                 ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
@@ -248,11 +286,17 @@ class SpecificationParityTest : ShouldSpec({
             ),
         )
 
-        new shouldBe old
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            items = listOf(
+                SpecificationItem("АБ.002", "Вал", ItemKind.PART, 1.0, null),
+            ),
+        )
     }
 
     should("skip an object of unknown type") {
-        val (old, new) = oldAndNew(
+        val actual = loadPipeline(
             objects = listOf(
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
                 ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
@@ -264,6 +308,12 @@ class SpecificationParityTest : ShouldSpec({
             ),
         )
 
-        new shouldBe old
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            items = listOf(
+                SpecificationItem("АБ.002", "Вал", ItemKind.PART, 1.0, null),
+            ),
+        )
     }
 })
