@@ -36,6 +36,6 @@ class KindMapper(private val config: MappingConfig, private val log: Logger) {
     }
 
     private fun normalizeForComparison(name: String): String {
-        return name.lowercase().replace("\\s+".toRegex(), " ").trim()
+        return name.lowercase().replace('ё', 'е').replace("\\s+".toRegex(), " ").trim()
     }
 }

@@ -10,7 +10,8 @@ class KindMapperTest : ShouldSpec({
     val config = MappingConfig(
         kinds = mapOf(
             "Деталь" to "PART",
-            "Сборочная единица" to "ASSEMBLY"
+            "Сборочная единица" to "ASSEMBLY",
+            "Сборочный чертеж" to "ASSEMBLY_DRAWING"
         ),
         relations = mapOf(
             "Состоит из ..." to "COMPOSITION"
@@ -39,6 +40,19 @@ class KindMapperTest : ShouldSpec({
         should("map known name ignoring whitespace") {
             val mapper = KindMapper(config, log)
             mapper.map("  Деталь  ") shouldBe ProductKind.Part
+        }
+
+        should("map name with yo the same as name with ye") {
+            val mapper = KindMapper(config, log)
+            mapper.map("Сборочный чертеж") shouldBe ProductKind.AssemblyDrawing
+            mapper.map("Сборочный чертёж") shouldBe ProductKind.AssemblyDrawing
+            mapper.map("СБОРОЧНЫЙ ЧЕРТЁЖ") shouldBe ProductKind.AssemblyDrawing
+            mapper.map("Сборочный  чертёж") shouldBe ProductKind.AssemblyDrawing
+        }
+
+        should("keep unknown name with yo unmapped and unchanged") {
+            val mapper = KindMapper(config, log)
+            mapper.map("Неизвестный чертёж") shouldBe ProductKind.Unmapped("Неизвестный чертёж")
         }
 
         should("return Unmapped when KEEP policy and unknown kind") {
