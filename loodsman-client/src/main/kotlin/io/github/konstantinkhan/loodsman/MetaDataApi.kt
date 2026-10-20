@@ -6,19 +6,19 @@ import io.ktor.client.plugins.timeout
 
 private const val TYPE_LIST_REQUEST_TIMEOUT_MS = 60_000L
 
-internal class MetaData(
+class MetaDataApi internal constructor(
     private val http: SessionClient,
     baseUrl: String
 ) {
 
     private val blockBaseUrl = "$baseUrl/api/v4/MetaData"
 
-    internal suspend fun typeList(): List<TypeListOutputDto> =
+    suspend fun typeList(): List<TypeListOutputDto> =
         http.get("$blockBaseUrl/get-type-list") {
             timeout { requestTimeoutMillis = TYPE_LIST_REQUEST_TIMEOUT_MS }
         }
 
-    internal suspend fun linkList(): List<GetLinkListOutputDto> =
+    suspend fun linkList(): List<GetLinkListOutputDto> =
         http.get("$blockBaseUrl/get-link-list") {
             timeout { requestTimeoutMillis = TYPE_LIST_REQUEST_TIMEOUT_MS }
         }

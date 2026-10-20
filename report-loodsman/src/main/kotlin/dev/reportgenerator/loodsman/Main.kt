@@ -9,7 +9,7 @@ import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.domain.orElse
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import io.github.konstantinkhan.loodsman.KtorLoodsmanApi
+import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import io.github.konstantinkhan.loodsman.LoodsmanConfig
 import io.github.konstantinkhan.loodsman.loodsmanHttpClient
@@ -23,7 +23,7 @@ fun main(): Unit = runBlocking {
         username = requiredEnv("LOODSMAN_USERNAME"),
         password = requiredEnv("LOODSMAN_PASSWORD")
     )
-    val api = KtorLoodsmanApi(config, loodsmanHttpClient())
+    val api = LoodsmanApi(config, loodsmanHttpClient())
     val client = LoodsmanProductStructureClient(api)
     try {
         val root = client.loadStructure(

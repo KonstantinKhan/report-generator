@@ -18,11 +18,11 @@ import io.github.konstantinkhan.loodsman.LoodsmanApi
 
 class LoodsmanKtorPdmClient(private val api: LoodsmanApi) : PdmClient {
 
-    private val typeMeta = SuspendLazy { api.typeList() }
-    private val linkMeta = SuspendLazy { api.linkList() }
+    private val typeMeta = SuspendLazy { api.metaData.typeList() }
+    private val linkMeta = SuspendLazy { api.metaData.linkList() }
 
     override suspend fun getObject(objectId: Int): PdmObjectResult {
-        val result = api.propObjects(listOf(objectId)).firstOrNull()
+        val result = api.objectInfo.propObjects(listOf(objectId)).firstOrNull()
             ?.let { PropObjectResult.Found(it) }
             ?: PropObjectResult.NotFound(objectId)
         val attributes = when (result) {
@@ -33,7 +33,7 @@ class LoodsmanKtorPdmClient(private val api: LoodsmanApi) : PdmClient {
     }
 
     private suspend fun objectAttributes(versionId: Int): List<ObjectAttributeOutputDto> =
-        api.infoAboutVersion(versionId)
+        api.objectInfo.infoAboutVersion(versionId)
 
     private suspend fun keyAttributeByType(): Map<PdmType, String> = typeMeta.get()
         .mapNotNull { dto ->
@@ -74,7 +74,7 @@ class LoodsmanKtorPdmClient(private val api: LoodsmanApi) : PdmClient {
         val verticalLinkTypeIds = typeById.keys.toList()
         if (verticalLinkTypeIds.isEmpty()) return emptyList()
 
-        val dtos = api.linkedObjects(listOf(objectId), verticalLinkTypeIds, inverse = false)
+        val dtos = api.objectInfo.linkedObjects(listOf(objectId), verticalLinkTypeIds, inverse = false)
 
         return dtos.map { dto ->
             val type = typeById[dto.idLinkType] ?: DirectLinkType.Unused(dto.linkTypeName.orEmpty())
@@ -87,7 +87,7 @@ class LoodsmanKtorPdmClient(private val api: LoodsmanApi) : PdmClient {
         val verticalLinkTypeIds = typeById.keys.toList()
         if (verticalLinkTypeIds.isEmpty()) return emptyList()
 
-        val dtos = api.linkedObjects(listOf(objectId), verticalLinkTypeIds, inverse = true)
+        val dtos = api.objectInfo.linkedObjects(listOf(objectId), verticalLinkTypeIds, inverse = true)
 
         return dtos.map { dto ->
             val type = typeById[dto.idLinkType] ?: InverseLinkType.Unused(dto.linkTypeName.orEmpty())
@@ -100,7 +100,7 @@ class LoodsmanKtorPdmClient(private val api: LoodsmanApi) : PdmClient {
         val horizontalLinkTypeIds = typeById.keys.toList()
         if (horizontalLinkTypeIds.isEmpty()) return emptyList()
 
-        val dtos = api.linkedObjects(listOf(objectId), horizontalLinkTypeIds, inverse = false)
+        val dtos = api.objectInfo.linkedObjects(listOf(objectId), horizontalLinkTypeIds, inverse = false)
 
         return dtos.map { dto ->
             val type = typeById[dto.idLinkType] ?: HorizontalLinkType.Unused(dto.linkTypeName.orEmpty())

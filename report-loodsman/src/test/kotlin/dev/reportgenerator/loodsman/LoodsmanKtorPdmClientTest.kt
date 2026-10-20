@@ -23,7 +23,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headers
-import io.github.konstantinkhan.loodsman.KtorLoodsmanApi
+import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanConfig
 import io.github.konstantinkhan.loodsman.installLoodsman
 
@@ -82,7 +82,7 @@ class LoodsmanKtorPdmClientTest : ShouldSpec({
         }
 
         val httpClient = HttpClient(mockEngine) { installLoodsman() }
-        val client = LoodsmanKtorPdmClient(KtorLoodsmanApi(config, httpClient))
+        val client = LoodsmanKtorPdmClient(LoodsmanApi(config, httpClient))
 
         val links = client.getDirectLinks(100)
 
@@ -150,7 +150,7 @@ class LoodsmanKtorPdmClientTest : ShouldSpec({
         }
 
         val httpClient = HttpClient(mockEngine) { installLoodsman() }
-        val client = LoodsmanKtorPdmClient(KtorLoodsmanApi(config, httpClient))
+        val client = LoodsmanKtorPdmClient(LoodsmanApi(config, httpClient))
 
         val links = client.getInverseLinks(100)
 
@@ -218,7 +218,7 @@ class LoodsmanKtorPdmClientTest : ShouldSpec({
         }
 
         val httpClient = HttpClient(mockEngine) { installLoodsman() }
-        val client = LoodsmanKtorPdmClient(KtorLoodsmanApi(config, httpClient))
+        val client = LoodsmanKtorPdmClient(LoodsmanApi(config, httpClient))
 
         val links = client.getHorizontalLinks(100)
 
@@ -268,7 +268,7 @@ class LoodsmanKtorPdmClientTest : ShouldSpec({
         }
 
         val httpClient = HttpClient(mockEngine) { installLoodsman() }
-        val client = LoodsmanKtorPdmClient(KtorLoodsmanApi(config, httpClient))
+        val client = LoodsmanKtorPdmClient(LoodsmanApi(config, httpClient))
 
         val directLinks = client.getDirectLinks(100)
         val inverseLinks = client.getInverseLinks(100)
@@ -350,5 +350,5 @@ private fun objectClient(
         }
     }
     val httpClient = HttpClient(mockEngine) { installLoodsman() }
-    return LoodsmanKtorPdmClient(KtorLoodsmanApi(config, httpClient)) to requested
+    return LoodsmanKtorPdmClient(LoodsmanApi(config, httpClient)) to requested
 }

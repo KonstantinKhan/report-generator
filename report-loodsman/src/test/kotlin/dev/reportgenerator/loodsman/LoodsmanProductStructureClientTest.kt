@@ -34,7 +34,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.Collections
-import io.github.konstantinkhan.loodsman.KtorLoodsmanApi
+import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import io.github.konstantinkhan.loodsman.LoodsmanConfig
 import io.github.konstantinkhan.loodsman.installLoodsman
@@ -138,7 +138,7 @@ private class FakeLoodsman(
             )
         }
         val config = LoodsmanConfig("http://localhost", "db", "user", "pass")
-        val api = KtorLoodsmanApi(config, HttpClient(engine) { installLoodsman() })
+        val api = LoodsmanApi(config, HttpClient(engine) { installLoodsman() })
         return LoodsmanProductStructureClient(api, mapping)
     }
 

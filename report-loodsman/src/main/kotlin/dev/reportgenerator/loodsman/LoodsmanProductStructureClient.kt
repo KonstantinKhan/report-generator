@@ -50,7 +50,7 @@ class LoodsmanProductStructureClient(
 
     private val log = LoggerFactory.getLogger(this::class.java)
 
-    private val linkMetadata = SuspendLazy { api.linkList() }
+    private val linkMetadata = SuspendLazy { api.metaData.linkList() }
     private val kindMapper = KindMapper(mapping, log)
     private val relationMapper = RelationMapper(mapping, log)
 
@@ -133,7 +133,7 @@ class LoodsmanProductStructureClient(
         nodes: MutableMap<Int, LoadedNode>
     ) {
         val props = ids.chunked(PROPS_BATCH_SIZE).flatMap { chunk ->
-            api.propObjects(chunk)
+            api.objectInfo.propObjects(chunk)
         }.associateBy { it.idVersion }
 
         val prepared = ids.map { id ->
@@ -144,7 +144,7 @@ class LoodsmanProductStructureClient(
         val attributes = withPermits(prepared.filter { (_, pair) ->
             val kind = pair.second
             kind != null && needsAttributes(kind, query, attributeRules)
-        }.map { it.first }) { id -> api.infoAboutVersion(id) }
+        }.map { it.first }) { id -> api.objectInfo.infoAboutVersion(id) }
 
         prepared.forEach { (id, pair) ->
             nodes[id] = LoadedNode(pair.first, pair.second, attributes[id].orEmpty())
@@ -155,7 +155,7 @@ class LoodsmanProductStructureClient(
         if (relationByLinkTypeId.isEmpty()) return ids.associateWith { emptyList() }
         val linkTypeIds = relationByLinkTypeId.keys.toList()
         return withPermits(ids) { id ->
-            api.linkedObjects(listOf(id), linkTypeIds, inverse = false)
+            api.objectInfo.linkedObjects(listOf(id), linkTypeIds, inverse = false)
                 .mapNotNull { dto -> relationByLinkTypeId[dto.idLinkType]?.let { Link(it, dto) } }
         }
     }
@@ -218,7 +218,7 @@ class LoodsmanProductStructureClient(
                 return@withPermits mapOf<String, String>()
             }
 
-            api.linkAttributes(linkId)
+            api.objectInfo.linkAttributes(linkId)
                 .associate { it.name?.trim().orEmpty() to (it.value?.trim().orEmpty()) }
                 .filterKeys { it.isNotEmpty() }
         }

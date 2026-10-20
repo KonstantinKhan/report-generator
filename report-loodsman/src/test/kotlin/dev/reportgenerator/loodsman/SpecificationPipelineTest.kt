@@ -19,7 +19,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import io.github.konstantinkhan.loodsman.KtorLoodsmanApi
+import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanConfig
 import io.github.konstantinkhan.loodsman.installLoodsman
 
@@ -146,7 +146,7 @@ private suspend fun loadPipeline(
 ): SpecificationData {
     val config = LoodsmanConfig("http://localhost", "db", "user", "pass")
     val httpClient = ParityLoodsman(objects, edges).httpClient()
-    return LoodsmanProductStructureClient(KtorLoodsmanApi(config, httpClient))
+    return LoodsmanProductStructureClient(LoodsmanApi(config, httpClient))
         .loadStructure(specificationQuery(ProductId("1")))
         .toSpecificationData()
 }

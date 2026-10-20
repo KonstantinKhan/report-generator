@@ -2,7 +2,7 @@ package dev.reportgenerator.server
 
 import dev.reportgenerator.domain.ProductStructureClient
 import dev.reportgenerator.layout.DefaultFontRegistry
-import io.github.konstantinkhan.loodsman.KtorLoodsmanApi
+import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanConfig
 import dev.reportgenerator.loodsman.LoodsmanProductStructureClient
 import io.github.konstantinkhan.loodsman.loodsmanHttpClient
@@ -20,7 +20,7 @@ fun main() {
     // config (Loodsman credentials) is missing, before the engine binds its port.
     val config = AppConfig(applicationEnvironment {})
 
-    val loodsmanApi = KtorLoodsmanApi(
+    val loodsmanApi = LoodsmanApi(
         LoodsmanConfig(
             baseUrl = config.loodsmanBaseUrl,
             dbName = config.loodsmanDbName,

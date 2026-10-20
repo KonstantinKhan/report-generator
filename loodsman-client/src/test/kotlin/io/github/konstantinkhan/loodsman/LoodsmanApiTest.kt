@@ -36,7 +36,7 @@ private fun ktorApi(
     requests: MutableList<HttpRequestData>,
     logins: AtomicInteger,
     route: Route,
-): KtorLoodsmanApi {
+): LoodsmanApi {
     val engine = MockEngine { request ->
         requests += request
         if (request.url.encodedPath == LOGIN_PATH) {
@@ -45,7 +45,7 @@ private fun ktorApi(
             route(request)
         }
     }
-    return KtorLoodsmanApi(testConfig, HttpClient(engine) { installLoodsman() })
+    return LoodsmanApi(testConfig, HttpClient(engine) { installLoodsman() })
 }
 
 private const val TYPE_LIST_JSON = """[{"id":1,"typeName":"Деталь","attrName":"Обозначение изделия","document":0}]"""
@@ -58,14 +58,14 @@ private const val LINKED_OBJECTS_JSON = """[{"idLink":7,"idParent":10,"idChild":
     "minQuantity":2.0,"maxQuantity":2.0,"unit":"шт"}]"""
 private const val LINK_ATTRIBUTES_JSON = """[{"id":5,"name":"Позиция","value":"1","type":0,"accessLevel":1}]"""
 
-class KtorLoodsmanApiTest : ShouldSpec({
+class LoodsmanApiTest : ShouldSpec({
 
     should("list databases without session") {
         val requests = mutableListOf<HttpRequestData>()
         val logins = AtomicInteger()
         val api = ktorApi(requests, logins) { reply("""[{"name":"db1"}]""") }
 
-        api.databases().map { it.name } shouldBe listOf("db1")
+        api.auth.databases().map { it.name } shouldBe listOf("db1")
 
         val request = requests.single()
         request.method shouldBe HttpMethod.Get
@@ -79,7 +79,7 @@ class KtorLoodsmanApiTest : ShouldSpec({
         val logins = AtomicInteger()
         val api = ktorApi(requests, logins) { reply("true") }
 
-        api.isAdmin() shouldBe true
+        api.auth.isAdmin() shouldBe true
 
         val request = requests.last { it.url.encodedPath == "/api/v4/Auth/is-admin" }
         request.method shouldBe HttpMethod.Get
@@ -91,7 +91,7 @@ class KtorLoodsmanApiTest : ShouldSpec({
         val logins = AtomicInteger()
         val api = ktorApi(requests, logins) { reply(TYPE_LIST_JSON) }
 
-        val types = api.typeList()
+        val types = api.metaData.typeList()
 
         types.single().also {
             it.id shouldBe 1
@@ -108,7 +108,7 @@ class KtorLoodsmanApiTest : ShouldSpec({
         val logins = AtomicInteger()
         val api = ktorApi(requests, logins) { reply(LINK_LIST_JSON) }
 
-        val links = api.linkList()
+        val links = api.metaData.linkList()
 
         links.single().also {
             it.id shouldBe 2
@@ -126,7 +126,7 @@ class KtorLoodsmanApiTest : ShouldSpec({
         val logins = AtomicInteger()
         val api = ktorApi(requests, logins) { reply(PROP_OBJECTS_JSON) }
 
-        val objects = api.propObjects(listOf(100, 101))
+        val objects = api.objectInfo.propObjects(listOf(100, 101))
 
         objects.single().also {
             it.idVersion shouldBe 100
@@ -145,7 +145,7 @@ class KtorLoodsmanApiTest : ShouldSpec({
         val logins = AtomicInteger()
         val api = ktorApi(requests, logins) { reply(OBJECT_INFO_JSON) }
 
-        api.infoAboutVersion(100).single().value shouldBe "Test"
+        api.objectInfo.infoAboutVersion(100).single().value shouldBe "Test"
 
         val request = requests.last { it.url.encodedPath == "/api/v4/ObjectInfo/get-info-about-version-mode-3" }
         request.method shouldBe HttpMethod.Get
@@ -158,7 +158,7 @@ class KtorLoodsmanApiTest : ShouldSpec({
         val logins = AtomicInteger()
         val api = ktorApi(requests, logins) { reply(LINKED_OBJECTS_JSON) }
 
-        val links = api.linkedObjects(objectIds = listOf(10), linkTypeIds = listOf(1))
+        val links = api.objectInfo.linkedObjects(objectIds = listOf(10), linkTypeIds = listOf(1))
 
         links.single().also {
             it.idChild shouldBe 20
@@ -177,7 +177,7 @@ class KtorLoodsmanApiTest : ShouldSpec({
         val logins = AtomicInteger()
         val api = ktorApi(requests, logins) { reply("[]") }
 
-        api.linkedObjects(objectIds = listOf(10, 11), linkTypeIds = listOf(3, 4), inverse = true)
+        api.objectInfo.linkedObjects(objectIds = listOf(10, 11), linkTypeIds = listOf(3, 4), inverse = true)
 
         val request = requests.last { it.url.encodedPath == "/api/v4/ObjectInfo/get-linked-objects-for-objects" }
         request.url.parameters["objectsIds"] shouldBe "10,11"
@@ -190,7 +190,7 @@ class KtorLoodsmanApiTest : ShouldSpec({
         val logins = AtomicInteger()
         val api = ktorApi(requests, logins) { reply(LINK_ATTRIBUTES_JSON) }
 
-        api.linkAttributes(5).single().also {
+        api.objectInfo.linkAttributes(5).single().also {
             it.id shouldBe 5
             it.value shouldBe "1"
         }
@@ -211,12 +211,58 @@ class KtorLoodsmanApiTest : ShouldSpec({
             }
         }
 
-        api.typeList()
-        api.linkList()
-        api.propObjects(listOf(100))
+        api.metaData.typeList()
+        api.metaData.linkList()
+        api.objectInfo.propObjects(listOf(100))
 
         logins.get() shouldBe 1
         requests.count { it.url.encodedPath == LOGIN_PATH } shouldBe 1
+        requests.filter { it.url.encodedPath != LOGIN_PATH }.map { it.session() }.distinct() shouldBe listOf("s1")
+    }
+
+    should("check admin logs in once before is-admin call") {
+        val requests = mutableListOf<HttpRequestData>()
+        val logins = AtomicInteger()
+        val api = ktorApi(requests, logins) { reply("true") }
+
+        api.auth.isAdmin() shouldBe true
+
+        logins.get() shouldBe 1
+        requests.map { it.url.encodedPath } shouldBe listOf(LOGIN_PATH, "/api/v4/Auth/is-admin")
+        requests.last().session() shouldBe "s1"
+    }
+
+    should("list databases without session header and without login after session exists") {
+        val requests = mutableListOf<HttpRequestData>()
+        val logins = AtomicInteger()
+        val api = ktorApi(requests, logins) { request ->
+            if (request.url.encodedPath == "/api/v4/Auth/databases") reply("""[{"name":"db1"}]""")
+            else reply(TYPE_LIST_JSON)
+        }
+
+        api.metaData.typeList()
+        api.auth.databases().map { it.name } shouldBe listOf("db1")
+
+        logins.get() shouldBe 1
+        requests.last { it.url.encodedPath == "/api/v4/Auth/databases" }.session() shouldBe null
+    }
+
+    should("share one session between auth, objectInfo and metaData groups") {
+        val requests = mutableListOf<HttpRequestData>()
+        val logins = AtomicInteger()
+        val api = ktorApi(requests, logins) { request ->
+            when (request.url.encodedPath) {
+                "/api/v4/Auth/is-admin" -> reply("true")
+                "/api/v4/ObjectInfo/get-prop-objects" -> reply(PROP_OBJECTS_JSON)
+                else -> reply(TYPE_LIST_JSON)
+            }
+        }
+
+        api.auth.isAdmin()
+        api.objectInfo.propObjects(listOf(100))
+        api.metaData.typeList()
+
+        logins.get() shouldBe 1
         requests.filter { it.url.encodedPath != LOGIN_PATH }.map { it.session() }.distinct() shouldBe listOf("s1")
     }
 
@@ -228,7 +274,7 @@ class KtorLoodsmanApiTest : ShouldSpec({
                 if (request.session() == "s1") reply("", HttpStatusCode.fromValue(status)) else reply(TYPE_LIST_JSON)
             }
 
-            api.typeList().single().id shouldBe 1
+            api.metaData.typeList().single().id shouldBe 1
 
             logins.get() shouldBe 2
             requests.filter { it.url.encodedPath == "/api/v4/MetaData/get-type-list" }
@@ -240,7 +286,7 @@ class KtorLoodsmanApiTest : ShouldSpec({
             val logins = AtomicInteger()
             val api = ktorApi(requests, logins) { reply("", HttpStatusCode.fromValue(status)) }
 
-            val error = shouldThrow<LoodsmanApiException> { api.typeList() }
+            val error = shouldThrow<LoodsmanApiException> { api.metaData.typeList() }
 
             error.status shouldBe status
             logins.get() shouldBe 2
@@ -253,7 +299,7 @@ class KtorLoodsmanApiTest : ShouldSpec({
         val logins = AtomicInteger()
         val api = ktorApi(requests, logins) { reply("""{"error":"boom"}""", HttpStatusCode.InternalServerError) }
 
-        val error = shouldThrow<LoodsmanApiException> { api.linkedObjects(listOf(10), listOf(1)) }
+        val error = shouldThrow<LoodsmanApiException> { api.objectInfo.linkedObjects(listOf(10), listOf(1)) }
 
         error.status shouldBe 500
         logins.get() shouldBe 1
@@ -264,13 +310,13 @@ class KtorLoodsmanApiTest : ShouldSpec({
         val logins = AtomicInteger()
         val api = ktorApi(requests, logins) { reply(TYPE_LIST_JSON) }
 
-        api.typeList()
+        api.metaData.typeList()
         api.logout()
 
         val logout = requests.last { it.url.encodedPath == "/api/v4/Auth/logout" }
         logout.method shouldBe HttpMethod.Post
 
-        api.typeList()
+        api.metaData.typeList()
 
         logins.get() shouldBe 2
         requests.last { it.url.encodedPath == "/api/v4/MetaData/get-type-list" }.session() shouldBe "s2"
