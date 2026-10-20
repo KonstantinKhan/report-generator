@@ -24,8 +24,8 @@ class StructureOpsTest : ShouldSpec({
                 designation = Designation.Value("A1"),
                 name = Name.Value("Assembly"),
                 usages = listOf(
-                    Usage(Relation.Composition, part1, Field.Value(1), Quantity.Exact(1.0), Field.Value("шт")),
-                    Usage(Relation.Document, part2, Field.Missing, Quantity.Missing, Field.Missing)
+                    CompositionUsage(part1, Field.Value(1), Quantity.Exact(1.0), Field.Value("шт")),
+                    DocumentUsage(part2)
                 )
             )
 
@@ -58,13 +58,13 @@ class StructureOpsTest : ShouldSpec({
             val leaf2 = ProductNode(ProductId("5"), ProductKind.Part, Designation.Value("L2"), Name.Value("Leaf2"))
             val parent = ProductNode(ProductId("2"), ProductKind.Assembly, Designation.Value("P"), Name.Value("Parent"),
                 usages = listOf(
-                    Usage(Relation.Composition, leaf1, Field.Missing, Quantity.Missing, Field.Missing),
-                    Usage(Relation.Composition, leaf2, Field.Missing, Quantity.Missing, Field.Missing)
+                    CompositionUsage(leaf1, Field.Missing, Quantity.Missing, Field.Missing),
+                    CompositionUsage(leaf2, Field.Missing, Quantity.Missing, Field.Missing)
                 )
             )
             val root = ProductNode(ProductId("1"), ProductKind.Assembly, Designation.Value("R"), Name.Value("Root"),
                 usages = listOf(
-                    Usage(Relation.Composition, parent, Field.Missing, Quantity.Missing, Field.Missing)
+                    CompositionUsage(parent, Field.Missing, Quantity.Missing, Field.Missing)
                 )
             )
 
@@ -77,8 +77,8 @@ class StructureOpsTest : ShouldSpec({
             val doc = ProductNode(ProductId("3"), ProductKind.AssemblyDrawing, Designation.Value("D"), Name.Value("Doc"))
             val assembly = ProductNode(ProductId("1"), ProductKind.Assembly, Designation.Value("A"), Name.Value("Asm"),
                 usages = listOf(
-                    Usage(Relation.Composition, part1, Field.Missing, Quantity.Missing, Field.Missing),
-                    Usage(Relation.Document, doc, Field.Missing, Quantity.Missing, Field.Missing)
+                    CompositionUsage(part1, Field.Missing, Quantity.Missing, Field.Missing),
+                    DocumentUsage(doc)
                 )
             )
 
@@ -100,9 +100,9 @@ class StructureOpsTest : ShouldSpec({
 
             val assembly = ProductNode(ProductId("1"), ProductKind.Assembly, Designation.Value("A"), Name.Value("Asm"),
                 usages = listOf(
-                    Usage(Relation.Composition, part, Field.Missing, Quantity.Missing, Field.Missing),
-                    Usage(Relation.Composition, std, Field.Missing, Quantity.Missing, Field.Missing),
-                    Usage(Relation.Composition, mat, Field.Missing, Quantity.Missing, Field.Missing)
+                    CompositionUsage(part, Field.Missing, Quantity.Missing, Field.Missing),
+                    CompositionUsage(std, Field.Missing, Quantity.Missing, Field.Missing),
+                    CompositionUsage(mat, Field.Missing, Quantity.Missing, Field.Missing)
                 )
             )
 
@@ -119,8 +119,8 @@ class StructureOpsTest : ShouldSpec({
 
             val assembly = ProductNode(ProductId("1"), ProductKind.Assembly, Designation.Value("A"), Name.Value("Asm"),
                 usages = listOf(
-                    Usage(Relation.Composition, part, Field.Missing, Quantity.Missing, Field.Missing),
-                    Usage(Relation.Document, doc, Field.Missing, Quantity.Missing, Field.Missing)
+                    CompositionUsage(part, Field.Missing, Quantity.Missing, Field.Missing),
+                    DocumentUsage(doc)
                 )
             )
 

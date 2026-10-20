@@ -2,7 +2,9 @@ package dev.reportgenerator.loodsman
 
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
+import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.Designation
+import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.Name
@@ -13,6 +15,7 @@ import dev.reportgenerator.domain.ProductStructureClient
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.StructureQuery
+import dev.reportgenerator.domain.UnmappedUsage
 import dev.reportgenerator.domain.Usage
 import dev.reportgenerator.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
 import dev.reportgenerator.loodsman.dto.ObjectAttributeOutputDto
@@ -313,20 +316,28 @@ class LoodsmanProductStructureClient(
                 if (child.kind == null) return@mapNotNull null
                 val childKind = child.kind
                 val linkAttrs = linkAttributes[link.linkId]?.attributes ?: emptyMap()
-                val positionRule = mapping.link.positionRules.select(link.relation, kind, childKind)
-                val position = positionRule?.name
-                    ?.let { posName -> linkAttrs[posName]?.toIntOrNull() }
-                    ?.let { Field.Value(it) } ?: Field.Missing
-                Usage(
-                    relation = link.relation,
-                    child = buildNode(
-                        link.dto.idChild, remaining - 1, query, attributeRules, nodes, links, linkAttributes, path + id
-                    ),
-                    position = position,
-                    quantity = quantityOf(link.dto),
-                    unit = link.dto.text(mapping.link.fields.unit)?.let { Field.Value(it) } ?: Field.Missing,
-                    attributes = linkAttributesOf(link.relation, kind, childKind, query, linkAttrs)
+                val attrs = linkAttributesOf(link.relation, kind, childKind, query, linkAttrs)
+                val childNode = buildNode(
+                    link.dto.idChild, remaining - 1, query, attributeRules, nodes, links, linkAttributes, path + id
                 )
+
+                when (link.relation) {
+                    Relation.Composition -> {
+                        val positionRule = mapping.link.positionRules.select(link.relation, kind, childKind)
+                        val position = positionRule?.name
+                            ?.let { posName -> linkAttrs[posName]?.toIntOrNull() }
+                            ?.let { Field.Value(it) } ?: Field.Missing
+                        CompositionUsage(
+                            child = childNode,
+                            position = position,
+                            quantity = quantityOf(link.dto),
+                            unit = link.dto.text(mapping.link.fields.unit)?.let { Field.Value(it) } ?: Field.Missing,
+                            attributes = attrs
+                        )
+                    }
+                    Relation.Document -> DocumentUsage(child = childNode, attributes = attrs)
+                    is Relation.Unmapped -> UnmappedUsage(relation = link.relation, child = childNode, attributes = attrs)
+                }
             }
         } else {
             emptyList()

@@ -1,6 +1,7 @@
 package dev.reportgenerator.loodsman
 
 import dev.reportgenerator.domain.AttributeKey
+import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.ProductId
 import dev.reportgenerator.domain.Relation
@@ -36,8 +37,20 @@ fun main(): Unit = runBlocking {
                 "Наименование предприятия: ${root.attributes[AttributeKey.CompanyName].orElse("—")})")
         root.usages.forEach { usage ->
             val child = usage.child
-            println("  Связь: ${usage.relation}, Kind: ${child.kind}, Позиция: ${usage.position.orElse("—")}, " +
-                    "Количество: ${usage.quantity.orElse("—")}, Единица: ${usage.unit.orElse("—")}, " +
+            val positionStr = when (usage) {
+                is CompositionUsage -> usage.position.orElse("—")
+                else -> "—"
+            }
+            val quantityStr = when (usage) {
+                is CompositionUsage -> usage.quantity.orElse("—")
+                else -> "—"
+            }
+            val unitStr = when (usage) {
+                is CompositionUsage -> usage.unit.orElse("—")
+                else -> "—"
+            }
+            println("  Связь: ${usage.relation}, Kind: ${child.kind}, Позиция: $positionStr, " +
+                    "Количество: $quantityStr, Единица: $unitStr, " +
                     "Обозначение: ${child.designation.orElse("—")}, Наименование: ${child.name.orElse("—")}, " +
                     "version: ${child.version.orElse("—")}, state: ${child.state.orElse("—")}, " +
                     "Примечание: ${usage.attributes[LinkAttributeKey.Note].orElse("—")}, " +

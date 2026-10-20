@@ -2,6 +2,7 @@ package dev.reportgenerator.loodsman
 
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
+import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
@@ -221,7 +222,10 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         root.usages.map { it.child.id } shouldBe listOf(ProductId("2"), ProductId("3"))
         root.usages.all { it.relation == Relation.Composition } shouldBe true
 
-        val (shaftUsage, boltUsage) = root.usages
+        val compositions = root.usages.filterIsInstance<CompositionUsage>()
+        compositions.size shouldBe 2
+
+        val shaftUsage = compositions[0]
         shaftUsage.child.kind shouldBe ProductKind.Part
         shaftUsage.child.designation shouldBe Designation.Value("АБ.002")
         shaftUsage.child.name shouldBe Name.Value("Вал")
@@ -230,6 +234,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         shaftUsage.position shouldBe Field.Missing
         shaftUsage.child.usages shouldBe emptyList()
 
+        val boltUsage = compositions[1]
         boltUsage.child.kind shouldBe ProductKind.Standard
         boltUsage.child.designation shouldBe Designation.Value("ГОСТ 7798-70")
         boltUsage.child.name shouldBe Name.Value("Болт М6")
@@ -241,7 +246,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     should("return quantity as missing when the link has no quantity") {
         val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(2))
 
-        root.usages[0].child.usages.single().quantity shouldBe Quantity.Missing
+        val composition = root.usages[0].child.usages.single() as CompositionUsage
+        composition.quantity shouldBe Quantity.Missing
     }
 
     should("load grandchildren when depth is 2 and request properties once per level") {
@@ -319,7 +325,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = fake.client().loadStructure(query(1))
 
-        root.usages[0].position shouldBe Field.Value(3)
+        val composition = root.usages[0] as CompositionUsage
+        composition.position shouldBe Field.Value(3)
     }
 
     should("load zero link attributes when no position rules and no link attributes requested") {
@@ -439,14 +446,15 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = FakeLoodsman(tree, edges).client(mapping).loadStructure(query(1))
 
-        root.usages[0].position shouldBe Field.Value(1)
-        root.usages[1].position shouldBe Field.Value(2)
+        val compositions = root.usages.filterIsInstance<CompositionUsage>()
+        compositions[0].position shouldBe Field.Value(1)
+        compositions[1].position shouldBe Field.Value(2)
     }
 
     should("return missing position when the link has no position attribute") {
         val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1))
 
-        root.usages.map { it.position } shouldBe listOf(Field.Missing, Field.Missing)
+        root.usages.filterIsInstance<CompositionUsage>().map { it.position } shouldBe listOf(Field.Missing, Field.Missing)
     }
 
     should("reject the built-in position key in the link attributes query") {
@@ -462,8 +470,9 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val root = FakeLoodsman(tree, edges).client()
             .loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
 
-        root.usages.single().position shouldBe Field.Value(3)
-        root.usages.single().attributes shouldBe mapOf(LinkAttributeKey.Note to AttributeValue.Text("n"))
+        val usage = root.usages.single() as CompositionUsage
+        usage.position shouldBe Field.Value(3)
+        usage.attributes shouldBe mapOf(LinkAttributeKey.Note to AttributeValue.Text("n"))
     }
 
     should("request link attributes only for links that have a matching rule") {
