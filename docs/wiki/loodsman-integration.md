@@ -3,7 +3,7 @@
 Интеграция состоит из трёх частей, каждая в своём слое:
 
 - **`loodsman-client`** (`io.github.konstantinkhan.loodsman`) — отдельная библиотека: HTTP-клиент Loodsman PDM API v4.
-  Интерфейс `LoodsmanApi`, DTO, сессия. Ничего не знает о доменной модели.
+  Класс `LoodsmanApi` с группами эндпоинтов, DTO, сессия. Ничего не знает о доменной модели.
 - **`report-loodsman`** (`dev.reportgenerator.loodsman`) — слой DTO → домен: `LoodsmanProductStructureClient`
   реализует `ProductStructureClient` из `report-domain` поверх `LoodsmanApi`, по YAML-конфигу маппинга.
 - **`report-server`** (`dev.reportgenerator.server`) — Ktor REST: `POST /specifications/{versionId}` тянет структуру
@@ -20,25 +20,57 @@
 
 ### Что даёт
 
-- `LoodsmanApi` — 9 методов, по одному на эндпоинт: `databases`, `isAdmin`, `logout`, `typeList`, `linkList`,
-  `propObjects`, `infoAboutVersion`, `linkedObjects`, `linkAttributes`.
-- `KtorLoodsmanApi(config: LoodsmanConfig, httpClient: HttpClient)` — реализация. Сессия скрыта внутри: логин
-  лениво при первом запросе (`SessionHolder`, под mutex), при 401/419 сессия сбрасывается и запрос повторяется один раз.
-  Вызывающий код сессией не управляет, кроме `logout()`.
+- `LoodsmanApi(config: LoodsmanConfig, httpClient: HttpClient)` — точка входа, final-класс без интерфейса.
+  Эндпоинты сгруппированы по контроллерам Loodsman, см. [группы эндпоинтов](#группы-эндпоинтов) ниже. Плюс `logout()`.
+  Сессия скрыта внутри: логин лениво при первом запросе (`SessionHolder`, под mutex), при 401/419 сессия сбрасывается
+  и запрос повторяется один раз. Вызывающий код сессией не управляет, кроме `logout()`.
 - `LoodsmanConfig(baseUrl, dbName, username, password)` — `toString()` скрывает пароль.
 - `LoodsmanApiException(message, cause, status)` — все ошибки HTTP и сети. `status` — код ответа, `null` для сетевых сбоев.
   `isSessionExpired` = 401 или 419.
 - `loodsmanHttpClient()` — готовый `HttpClient` на CIO. `HttpClientConfig<*>.installLoodsman()` — настройка для
   собственного `HttpClient`.
 
+### Группы эндпоинтов
+
+| Свойство `LoodsmanApi` | Класс | Контроллер Loodsman | Эндпоинты |
+|---|---|---|---|
+| `auth` | `AuthApi` | `/api/v4/Auth` | `databases()` (без сессии), `isAdmin()` |
+| `objectInfo` | `ObjectInfoApi` | `/api/v4/ObjectInfo` | `propObjects(versionIds)`, `infoAboutVersion(versionId)`, `linkedObjects(objectIds, linkTypeIds, inverse = false)`, `linkAttributes(linkId)` |
+| `metaData` | `MetaDataApi` | `/api/v4/MetaData` | `typeList()`, `linkList()` |
+
+Итого 8 эндпоинтов и `logout()`. Одна группа — один файл. Конструкторы групп `internal`: создать группу снаружи нельзя.
+Почему группы, а не плоский интерфейс, — в [design-decisions.md](design-decisions.md#группы-эндпоинтов-вместо-плоского-интерфейса).
+До коммита `bd5afc1` был плоский интерфейс `LoodsmanApi` с 9 методами (включая `logout`) и реализация `KtorLoodsmanApi`;
+заменено на группы.
+
+**Правило: сессия и заголовок `web-loodsman-session` ставятся только в `SessionClient`.** Группы ходят через
+`http.get(...)` из `SessionClient` (`SessionHolder.withSession`, повтор при 401/419). Голого `HttpClient` в группах нет;
+исключение — `AuthApi.databases()`, эндпоинт, который отдаётся без сессии. Поэтому эндпоинт с сессией вызвать без неё нельзя.
+Внутренний `Auth` оставлен только с `login`/`logout` для `SessionHolder`.
+
+### Пример
+
 ```kotlin
-val api = KtorLoodsmanApi(LoodsmanConfig(baseUrl, dbName, username, password), loodsmanHttpClient())
+val api = LoodsmanApi(LoodsmanConfig(baseUrl, dbName, username, password), loodsmanHttpClient())
 try {
-    // вызовы LoodsmanApi
+    api.objectInfo.propObjects(listOf(versionId))
+    api.metaData.typeList()
+    api.auth.databases()
 } finally {
     api.logout()
 }
 ```
+
+### Как добавить эндпоинт
+
+1. Найти группу по контроллеру Loodsman. Если контроллера ещё нет: создать `<Name>Api.kt` с конструктором
+   `internal constructor(http: SessionClient, baseUrl: String)`, полем `blockBaseUrl = "$baseUrl/api/v4/<Controller>"`
+   и свойством в `LoodsmanApi`.
+2. Добавить метод в группу. Шаблон:
+   `suspend fun имя(аргументы): Dto = http.get("$blockBaseUrl/<action>") { parameter("<имя>", значение) }`.
+   Не `client.get` напрямую: иначе эндпоинт уйдёт без сессии.
+3. DTO — в `dto/`, по конвенции `dto-conventions`.
+4. Тест — в `LoodsmanApiTest` на `MockEngine`.
 
 ### Подключение из другого проекта
 
@@ -496,7 +528,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 ## Тесты
 
-- `loodsman-client` — тесты на Ktor `MockEngine` (`ktor-client-mock`): проверяется поведение без сети.
+- `loodsman-client` — тесты на Ktor `MockEngine` (`ktor-client-mock`): проверяется поведение без сети. `LoodsmanApiTest`
+  покрывает группы эндпоинтов, сессию и повтор при 401/419.
 - `report-loodsman`:
   - `SpecificationPipelineTest` — регрессионный тест конвейера: структура → спецификация. Фиксирует правила прежней сборки
     (материал и столбец «Наименование», ё, стандартные и прочие изделия, документы). Если правило меняется намеренно,
@@ -505,7 +538,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 ## См. также
 
-- `loodsman-client/src/main/kotlin/io/github/konstantinkhan/loodsman/` — клиент (`LoodsmanApi`, `KtorLoodsmanApi`, `SessionHolder`, DTO)
+- `loodsman-client/src/main/kotlin/io/github/konstantinkhan/loodsman/` — клиент (`LoodsmanApi`, группы `AuthApi` / `ObjectInfoApi` /
+  `MetaDataApi`, `SessionClient`, `SessionHolder`, DTO)
 - `report-loodsman/src/main/kotlin/dev/reportgenerator/loodsman/` — `LoodsmanProductStructureClient.kt`, `LoodsmanKtorPdmClient.kt`,
   `Pdm2Domain.kt`, `mapping/` (`KindMapper`, `RelationMapper`, `Registries`, `MappingConfig`)
 - `reports/specification/src/main/kotlin/dev/reportgenerator/reports/specification/` — `SpecificationQuery.kt`,

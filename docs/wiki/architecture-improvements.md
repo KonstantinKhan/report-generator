@@ -17,7 +17,10 @@
 > **Обновление (ветка `refactor/loodsman-api`).** `LoodsmanPdmClient`, `SpecificationAssembly` и `PdmClient.fetchSpecification()`
 > удалены. Актуальный поток: `loodsman-client` (`LoodsmanApi`, DTO) → `report-loodsman` (`LoodsmanProductStructureClient`,
 > `ProductNode`) → `ProductNode.toSpecificationData()` → `specification()`. Описание: [architecture.md](architecture.md),
-> [loodsman-integration.md](loodsman-integration.md). Пункты ниже про эти классы — история, не актуальное состояние.
+> [loodsman-integration.md](loodsman-integration.md).
+>
+> **Обновление 2 (ветка `refactor/loodsman-api`, коммит `bd5afc1`).** Плоский `LoodsmanApi` (интерфейс) и `KtorLoodsmanApi` заменены
+> на группы эндпоинтов (`auth`, `objectInfo`, `metaData`). Пункты про `LoodsmanApi` ниже читать с этой поправкой. Пункты ниже про эти классы — история, не актуальное состояние.
 
 **Реализовано:**
 - `report-api`: удалён, контракт `PdmClient` переместился в `report-domain`

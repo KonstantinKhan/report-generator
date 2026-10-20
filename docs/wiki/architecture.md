@@ -18,7 +18,7 @@
 Loodsman REST API v4
       │
       ▼
-loodsman-client   — LoodsmanApi: 1 эндпоинт = 1 метод, DTO, сессия (login, повтор при 401/419).
+loodsman-client   — LoodsmanApi: группы эндпоинтов (auth, objectInfo, metaData), DTO, сессия (повтор при 401/419).
       │             Ничего о доменной модели не знает
       ▼  LoodsmanApi (DTO)
 report-loodsman   — DTO → домен: LoodsmanProductStructureClient (ProductStructureClient),

@@ -137,6 +137,10 @@
   [loodsman-integration.md](loodsman-integration.md#зависимости).
 - **Лишняя зависимость `report-loodsman` → `report-pdm`.** В `build.gradle.kts` объявлена `implementation(projects.reportPdm)`,
   но в `src` модуля нет импорта `dev.reportgenerator.pdm`. Убрать зависимость (правка gradle — отдельная задача).
+- **Группы эндпоинтов описаны вручную.** `LoodsmanApi` содержит 3 группы (`auth`, `objectInfo`, `metaData`) и 8 эндпоинтов
+  плюс `logout()`; каждый метод написан по контроллеру Loodsman. При росте до сотен эндпоинтов ручной набор станет
+  узким местом. Открытый вопрос: есть ли схема Loodsman (swagger/OpenAPI) файлом. Если есть, стоит рассмотреть генерацию
+  групп и DTO из неё. Решения нет. Состав групп и правила добавления эндпоинта — [loodsman-integration.md](loodsman-integration.md#группы-эндпоинтов).
 
 ## Закрыто (убрано из списка)
 
