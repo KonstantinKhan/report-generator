@@ -17,9 +17,10 @@ class KtorLoodsmanApi(
     private val baseUrl = config.baseUrl.trimEnd('/')
 
     private val auth = Auth(httpClient, baseUrl)
-    private val objectInfo = ObjectInfo(httpClient, baseUrl)
-    private val metaData = MetaData(httpClient, baseUrl)
     private val sessions = SessionHolder(auth, config)
+    private val http = SessionClient(httpClient, sessions)
+    private val objectInfo = ObjectInfo(http, baseUrl)
+    private val metaData = MetaData(http, baseUrl)
 
     override suspend fun databases(): List<DatabaseOutputDto> = auth.databases()
 
@@ -27,23 +28,23 @@ class KtorLoodsmanApi(
 
     override suspend fun logout() = sessions.close()
 
-    override suspend fun typeList(): List<TypeListOutputDto> = sessions.withSession { metaData.typeList(it) }
+    override suspend fun typeList(): List<TypeListOutputDto> = metaData.typeList()
 
-    override suspend fun linkList(): List<GetLinkListOutputDto> = sessions.withSession { metaData.linkList(it) }
+    override suspend fun linkList(): List<GetLinkListOutputDto> = metaData.linkList()
 
     override suspend fun propObjects(versionIds: List<Int>): List<PropObjectOutputDto> =
-        sessions.withSession { objectInfo.pdmObjects(it, versionIds) }
+        objectInfo.pdmObjects(versionIds)
 
     override suspend fun infoAboutVersion(versionId: Int): List<ObjectAttributeOutputDto> =
-        sessions.withSession { objectInfo.infoAboutVersion(it, versionId) }
+        objectInfo.infoAboutVersion(versionId)
 
     override suspend fun linkedObjects(
         objectIds: List<Int>,
         linkTypeIds: List<Int>,
         inverse: Boolean,
     ): List<GetLinkedObjectsForObjectsOutputDto_V4> =
-        sessions.withSession { objectInfo.linkedObjects(it, objectIds, linkTypeIds, inverse) }
+        objectInfo.linkedObjects(objectIds, linkTypeIds, inverse)
 
     override suspend fun linkAttributes(linkId: Int): List<LinkAttributeOutputDto> =
-        sessions.withSession { objectInfo.linkAttributes(it, linkId) }
+        objectInfo.linkAttributes(linkId)
 }

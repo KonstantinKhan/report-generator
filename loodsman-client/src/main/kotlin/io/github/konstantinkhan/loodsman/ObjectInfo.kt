@@ -4,48 +4,39 @@ import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto
 import io.github.konstantinkhan.loodsman.dto.LinkAttributeOutputDto
 import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
 import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 
 internal class ObjectInfo(
-    private val client: HttpClient,
+    private val http: SessionClient,
     baseUrl: String
 ) {
 
     private val blockBaseUrl = "$baseUrl/api/v4/ObjectInfo"
 
-    internal suspend fun infoAboutVersion(sessionId: String, versionId: Int): List<ObjectAttributeOutputDto> =
-        client.get("$blockBaseUrl/get-info-about-version-mode-3") {
-            header("web-loodsman-session", sessionId)
+    internal suspend fun infoAboutVersion(versionId: Int): List<ObjectAttributeOutputDto> =
+        http.get("$blockBaseUrl/get-info-about-version-mode-3") {
             parameter("idVersion", versionId)
-        }.body()
+        }
 
-    internal suspend fun pdmObjects(sessionId: String, versionIds: List<Int>): List<PropObjectOutputDto> =
-        client.get("$blockBaseUrl/get-prop-objects") {
-            header("web-loodsman-session", sessionId)
+    internal suspend fun pdmObjects(versionIds: List<Int>): List<PropObjectOutputDto> =
+        http.get("$blockBaseUrl/get-prop-objects") {
             parameter("objectList", versionIds.joinToString(","))
             parameter("parameters", 0)
-        }.body()
+        }
 
     internal suspend fun linkedObjects(
-        sessionId: String,
         objectIds: List<Int>,
         linkTypeIds: List<Int>,
         inverse: Boolean
     ): List<GetLinkedObjectsForObjectsOutputDto_V4> =
-        client.get("$blockBaseUrl/get-linked-objects-for-objects") {
-            header("web-loodsman-session", sessionId)
+        http.get("$blockBaseUrl/get-linked-objects-for-objects") {
             parameter("objectsIds", objectIds.joinToString(","))
             parameter("linksTypesIds", linkTypeIds.joinToString(","))
             parameter("inverse", inverse)
-        }.body()
+        }
 
-    internal suspend fun linkAttributes(sessionId: String, linkId: Int): List<LinkAttributeOutputDto> =
-        client.get("$blockBaseUrl/get-link-attributes") {
-            header("web-loodsman-session", sessionId)
+    internal suspend fun linkAttributes(linkId: Int): List<LinkAttributeOutputDto> =
+        http.get("$blockBaseUrl/get-link-attributes") {
             parameter("linkId", linkId)
-        }.body()
+        }
 }
