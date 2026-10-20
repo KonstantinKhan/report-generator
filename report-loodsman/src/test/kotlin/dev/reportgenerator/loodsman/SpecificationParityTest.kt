@@ -1,9 +1,8 @@
 package dev.reportgenerator.loodsman
 
 import dev.reportgenerator.domain.ProductId
-import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.SpecificationData
-import dev.reportgenerator.domain.StructureQuery
+import dev.reportgenerator.reports.specification.specificationQuery
 import dev.reportgenerator.reports.specification.toSpecificationData
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
@@ -143,13 +142,7 @@ private suspend fun oldAndNew(
     val httpClient = ParityLoodsman(objects, edges).httpClient()
     val old = LoodsmanKtorPdmClient(config, httpClient).fetchSpecification("1")
     val new = LoodsmanProductStructureClient(KtorLoodsmanApi(config, httpClient))
-        .loadStructure(
-            StructureQuery(
-                rootId = ProductId("1"),
-                depth = 1,
-                relations = setOf(Relation.Composition, Relation.Document),
-            )
-        )
+        .loadStructure(specificationQuery(ProductId("1")))
         .toSpecificationData()
     return old to new
 }
