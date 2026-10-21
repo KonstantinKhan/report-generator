@@ -1,16 +1,12 @@
 package dev.reportgenerator.loodsman.mapping
 
+import io.github.konstantinkhan.loodsman.PropField
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 
 @Serializable
 enum class OnUnmapped {
     KEEP, SKIP, FAIL
-}
-
-@Serializable
-enum class PropField {
-    PRODUCT, VERSION, STATE, TYPE
 }
 
 @Serializable

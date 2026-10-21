@@ -2,7 +2,7 @@ package dev.reportgenerator.loodsman.mapping
 
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.LinkAttributeKey
-import dev.reportgenerator.domain.ProductKind
+import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Relation
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.collections.shouldContain
@@ -11,14 +11,14 @@ import io.kotest.matchers.string.shouldContain
 class RegistriesTest : ShouldSpec({
     context("itemKinds registry") {
         should("contain known ProductKind variants") {
-            Registries.itemKinds.values.shouldContain(ProductKind.Assembly)
-            Registries.itemKinds.values.shouldContain(ProductKind.Part)
-            Registries.itemKinds.values.shouldContain(ProductKind.Standard)
-            Registries.itemKinds.values.shouldContain(ProductKind.Other)
-            Registries.itemKinds.values.shouldContain(ProductKind.Material)
-            Registries.itemKinds.values.shouldContain(ProductKind.AssemblyDrawing)
-            Registries.itemKinds.values.shouldContain(ProductKind.Complex)
-            Registries.itemKinds.values.shouldContain(ProductKind.Kit)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Assembly)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Part)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Standard)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Other)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Material)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.AssemblyDrawing)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Complex)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Kit)
         }
 
         should("throw error for unknown item kind") {

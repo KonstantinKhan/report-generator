@@ -1,6 +1,6 @@
 package dev.reportgenerator.server
 
-import dev.reportgenerator.domain.ProductStructureClient
+import dev.reportgenerator.domain.PdmNodeStructureClient
 import dev.reportgenerator.layout.DefaultFontRegistry
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanConfig
@@ -29,7 +29,7 @@ fun main() {
         ),
         loodsmanHttpClient(),
     )
-    val structureClient: ProductStructureClient = LoodsmanProductStructureClient(loodsmanApi)
+    val structureClient: PdmNodeStructureClient = LoodsmanProductStructureClient(loodsmanApi)
 
     val outputDir = File(config.outputDir).apply { mkdirs() }
     val fonts = DefaultFontRegistry.load()

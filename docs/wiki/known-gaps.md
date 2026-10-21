@@ -126,7 +126,7 @@
 - **Косметика в `SpecificationPipelineTest`.** Вспомогательные классы с префиксом `Parity*` (например, `ParityLoodsman`) остались
   от parity-теста и переименованы не были.
 - **Модель отчёта в `report-domain`.** `SpecificationData`, `SpecificationItem` и `ItemKind` — модель отчёта, а не домен
-  Loodsman. `ItemKind` почти дублирует `ProductKind`; переход через `toItemKind()` в конвертере. Перенос — отдельная задача.
+  Loodsman. `ItemKind` почти дублирует `PdmNodeKind`; переход через `toItemKind()` в конвертере. Перенос — отдельная задача.
 - **CIO как runtime-зависимость библиотеки.** `loodsman-client` тянет `ktor-client-cio` в `implementation`, а фабрика
   `loodsmanHttpClient()` строит клиент на CIO. Потребитель с другим engine получает лишнюю зависимость. Варианты:
   отдельный артефакт, `runtimeOnly` или оставить как есть. Решения пока нет; описание обхода — в

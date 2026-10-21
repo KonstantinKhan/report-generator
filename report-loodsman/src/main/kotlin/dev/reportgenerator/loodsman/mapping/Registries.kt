@@ -2,21 +2,21 @@ package dev.reportgenerator.loodsman.mapping
 
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.LinkAttributeKey
-import dev.reportgenerator.domain.ProductKind
+import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Relation
 
 object Registries {
     val itemKinds = Registry(
         "itemKind",
         mapOf(
-            "ASSEMBLY" to ProductKind.Assembly,
-            "PART" to ProductKind.Part,
-            "STANDARD" to ProductKind.Standard,
-            "OTHER" to ProductKind.Other,
-            "MATERIAL" to ProductKind.Material,
-            "ASSEMBLY_DRAWING" to ProductKind.AssemblyDrawing,
-            "COMPLEX" to ProductKind.Complex,
-            "KIT" to ProductKind.Kit
+            "ASSEMBLY" to PdmNodeKind.Assembly,
+            "PART" to PdmNodeKind.Part,
+            "STANDARD" to PdmNodeKind.Standard,
+            "OTHER" to PdmNodeKind.Other,
+            "MATERIAL" to PdmNodeKind.Material,
+            "ASSEMBLY_DRAWING" to PdmNodeKind.AssemblyDrawing,
+            "COMPLEX" to PdmNodeKind.Complex,
+            "KIT" to PdmNodeKind.Kit
         )
     )
 

@@ -5,12 +5,12 @@
 - **`loodsman-client`** (`io.github.konstantinkhan.loodsman`) — отдельная библиотека: HTTP-клиент Loodsman PDM API v4.
   Класс `LoodsmanApi` с группами эндпоинтов, DTO, сессия. Ничего не знает о доменной модели.
 - **`report-loodsman`** (`dev.reportgenerator.loodsman`) — слой DTO → домен: `LoodsmanProductStructureClient`
-  реализует `ProductStructureClient` из `report-domain` поверх `LoodsmanApi`, по YAML-конфигу маппинга.
+  реализует `PdmNodeStructureClient` из `report-domain` поверх `LoodsmanApi`, по YAML-конфигу маппинга.
 - **`report-server`** (`dev.reportgenerator.server`) — Ktor REST: `POST /specifications/{versionId}` тянет структуру
   изделия, собирает спецификацию (`reports/specification`) и рендерит PDF.
 
 Старый путь сборки (`PdmClient`, модуль `report-pdm`, `LoodsmanKtorPdmClient`, `Pdm2Domain`, а раньше `LoodsmanPdmClient` и
-`SpecificationAssembly`) удалён в ветке `refactor/loodsman-api`. Единственный путь к структуре изделия — `ProductStructureClient`.
+`SpecificationAssembly`) удалён в ветке `refactor/loodsman-api`. Единственный путь к структуре изделия — `PdmNodeStructureClient`.
 История миграции — [development-status.md](development-status.md).
 
 Этот документ — не общее описание модуля, а список конкретных грабель API, на которые уже наступили. Каждый пункт стоил
@@ -175,10 +175,10 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 ## Виды объектов и связи
 
-Маппинг названия вида Loodsman → `ProductKind` задаёт секция `kinds` в YAML. Сравнение названий — правило (в) ниже.
-Затем `ProductKind` → `ItemKind` отчёта выполняет `toItemKind()` в `ProductNodeSpecification.kt`:
+Маппинг названия вида Loodsman → `PdmNodeKind` задаёт секция `kinds` в YAML. Сравнение названий — правило (в) ниже.
+Затем `PdmNodeKind` → `ItemKind` отчёта выполняет `toItemKind()` в `ProductNodeSpecification.kt`:
 
-| Тип Loodsman | `ProductKind` | `ItemKind` (спецификация) |
+| Тип Loodsman | `PdmNodeKind` | `ItemKind` (спецификация) |
 |---|---|---|
 | Сборочный чертеж | `AssemblyDrawing` (id `ASSEMBLY_DRAWING`) | DOCUMENTATION |
 | Комплекс | `Complex` | COMPLEX |
@@ -240,9 +240,9 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 ## Конфиг маппинга и ProductStructureClient
 
-`LoodsmanProductStructureClient(api, mapping, concurrency)` — адаптер, реализующий интерфейс `ProductStructureClient`
+`LoodsmanProductStructureClient(api, mapping, concurrency)` — адаптер, реализующий интерфейс `PdmNodeStructureClient`
 из `report-domain` (`loadStructure(StructureQuery): ProductNode`). Возвращает дерево состава изделия в доменной модели
-(`ProductNode` + `Usage`), не зависящей от словаря Loodsman. Соответствие названий типов, связей и атрибутов PDM
+(`PdmNode` + `Usage`), не зависящей от словаря Loodsman. Соответствие названий типов, связей и атрибутов PDM
 моделям задаётся конфигом маппинга, а не кодом. `report-server` создаёт адаптер с конфигом по умолчанию
 (`MappingConfigLoader.load()`).
 
@@ -439,7 +439,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 `orElse(default)`, значение по умолчанию вызывающий указывает явно: `node.version.orElse("—")`.
 `Missing` даёт `default`, `NotLoaded` бросает `IllegalStateException`: обращение к незапрошенному значению —
 ошибка вызывающего кода, а не пустая ячейка. Адаптер `NotLoaded` не создаёт (поля заполнены всегда), оно
-остаётся значением по умолчанию у вручную собранных `ProductNode` в тестах.
+остаётся значением по умолчанию у вручную собранных `PdmNode` в тестах.
 
 Значения атрибутов (`ProductNode.attributes`, `Usage.attributes`) читаются так же: `attributes[ключ].orElse("—")`.
 Это функция на `AttributeValue?`: `Text` даёт текст, `Number` — число строкой, `Empty` («запрошено, значения нет»)

@@ -1,11 +1,11 @@
 package dev.reportgenerator.loodsman.mapping
 
-import dev.reportgenerator.domain.ProductKind
+import dev.reportgenerator.domain.PdmNodeKind
 import org.slf4j.Logger
 
 class KindMapper(private val config: MappingConfig, private val log: Logger) {
 
-    fun map(pdmTypeName: String?): ProductKind? {
+    fun map(pdmTypeName: String?): PdmNodeKind? {
         if (pdmTypeName == null) {
             return null
         }
@@ -21,7 +21,7 @@ class KindMapper(private val config: MappingConfig, private val log: Logger) {
             when (config.onUnmapped.kind) {
                 OnUnmapped.KEEP -> {
                     log.warn("Unknown item kind '$normalizedName', keeping as unmapped")
-                    ProductKind.Unmapped(normalizedName)
+                    PdmNodeKind.Unmapped(normalizedName)
                 }
                 OnUnmapped.SKIP -> {
                     null

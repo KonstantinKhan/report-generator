@@ -7,8 +7,8 @@ import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.Name
-import dev.reportgenerator.domain.ProductId
-import dev.reportgenerator.domain.ProductKind
+import dev.reportgenerator.domain.PdmNodeId
+import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.StructureQuery
@@ -191,7 +191,7 @@ private fun query(
     linkAttributes: Set<LinkAttributeKey> = emptySet(),
     includeUnmapped: Boolean = false
 ) = StructureQuery(
-    rootId = ProductId("1"),
+    rootId = PdmNodeId(1),
     depth = depth,
     attributes = attributes.toSet(),
     linkAttributes = linkAttributes,
@@ -204,8 +204,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = fake.client().loadStructure(query(0))
 
-        root.id shouldBe ProductId("1")
-        root.kind shouldBe ProductKind.Assembly
+        root.id shouldBe PdmNodeId(1)
+        root.kind shouldBe PdmNodeKind.Assembly
         root.usages shouldBe emptyList()
         fake.linkCalls shouldBe emptyList()
         fake.propsCalls shouldBe listOf(listOf(1))
@@ -216,14 +216,14 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         root.designation shouldBe Designation.Value("АБ.001")
         root.name shouldBe Name.Value("Корпус")
-        root.usages.map { it.child.id } shouldBe listOf(ProductId("2"), ProductId("3"))
+        root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
         root.usages.all { it.relation == Relation.Composition } shouldBe true
 
         val compositions = root.usages.filterIsInstance<CompositionUsage>()
         compositions.size shouldBe 2
 
         val shaftUsage = compositions[0]
-        shaftUsage.child.kind shouldBe ProductKind.Part
+        shaftUsage.child.kind shouldBe PdmNodeKind.Part
         shaftUsage.child.designation shouldBe Designation.Value("АБ.002")
         shaftUsage.child.name shouldBe Name.Value("Вал")
         shaftUsage.quantity shouldBe Quantity.Exact(2.0)
@@ -232,7 +232,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         shaftUsage.child.usages shouldBe emptyList()
 
         val boltUsage = compositions[1]
-        boltUsage.child.kind shouldBe ProductKind.Standard
+        boltUsage.child.kind shouldBe PdmNodeKind.Standard
         boltUsage.child.designation shouldBe Designation.Value("ГОСТ 7798-70")
         boltUsage.child.name shouldBe Name.Value("Болт М6")
         boltUsage.quantity shouldBe Quantity.Range(4.0, 6.0)
@@ -280,7 +280,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = fake.client().loadStructure(query(2))
 
-        root.usages[0].child.usages.single().child.id shouldBe ProductId("4")
+        root.usages[0].child.usages.single().child.id shouldBe PdmNodeId(4)
         fake.propsCalls.size shouldBe 3
         fake.propsCalls[1].toSet() shouldBe setOf(2, 3)
         fake.propsCalls[2] shouldBe listOf(4)
@@ -320,7 +320,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = fake.client().loadStructure(query(1))
 
-        root.usages.last().child.kind shouldBe ProductKind.Unmapped("Неведомый тип")
+        root.usages.last().child.kind shouldBe PdmNodeKind.Unmapped("Неведомый тип")
     }
 
     should("skip an object of unknown type when the policy is SKIP") {
@@ -331,7 +331,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = fake.client(mapping).loadStructure(query(1))
 
-        root.usages.map { it.child.id } shouldBe listOf(ProductId("2"), ProductId("3"))
+        root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
     }
 
     should("fill version and state from object properties") {

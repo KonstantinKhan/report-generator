@@ -1,6 +1,7 @@
 package dev.reportgenerator.loodsman.mapping
 
 import dev.reportgenerator.domain.Relation
+import io.github.konstantinkhan.loodsman.PropField
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
 import org.slf4j.LoggerFactory

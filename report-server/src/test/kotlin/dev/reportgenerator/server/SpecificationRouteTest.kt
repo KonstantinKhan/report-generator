@@ -4,9 +4,9 @@ import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.Name
-import dev.reportgenerator.domain.ProductId
-import dev.reportgenerator.domain.ProductKind
-import dev.reportgenerator.domain.ProductNode
+import dev.reportgenerator.domain.PdmNodeId
+import dev.reportgenerator.domain.PdmNodeKind
+import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.layout.DefaultFontRegistry
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
@@ -41,7 +41,7 @@ class SpecificationRouteTest {
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("\"path\""))
         assertEquals(1, tempDir.listFiles()!!.count { it.extension == "pdf" })
-        assertEquals("7", structure.queries.single().rootId.value)
+        assertEquals(7, structure.queries.single().rootId.asInt())
         assertEquals(1, structure.queries.single().depth)
     }
 
@@ -59,14 +59,14 @@ class SpecificationRouteTest {
 
     @Test
     fun `invalid product data maps to 502 with the data error message`() = testApplication {
-        val root = ProductNode(
-            id = ProductId("1"),
-            kind = ProductKind.Assembly,
+        val root = PdmNode(
+            id = PdmNodeId(1),
+            kind = PdmNodeKind.Assembly,
             designation = Designation.Value("ИЗД.001"),
             name = Name.Value("Изделие"),
             usages = listOf(
                 CompositionUsage(
-                    child = ProductNode(ProductId("2"), ProductKind.Part, Designation.Value("АБ.002"), Name.Value("Вал")),
+                    child = PdmNode(PdmNodeId(2), PdmNodeKind.Part, Designation.Value("АБ.002"), Name.Value("Вал")),
                     position = Field.Missing,
                     quantity = Quantity.Missing,
                     unit = Field.Missing,

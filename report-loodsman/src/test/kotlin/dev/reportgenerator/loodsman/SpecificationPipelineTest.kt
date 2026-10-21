@@ -1,7 +1,7 @@
 package dev.reportgenerator.loodsman
 
 import dev.reportgenerator.domain.ItemKind
-import dev.reportgenerator.domain.ProductId
+import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.SpecificationData
 import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.reports.specification.specificationQuery
@@ -147,7 +147,7 @@ private suspend fun loadPipeline(
     val config = LoodsmanConfig("http://localhost", "db", "user", "pass")
     val httpClient = ParityLoodsman(objects, edges).httpClient()
     return LoodsmanProductStructureClient(LoodsmanApi(config, httpClient))
-        .loadStructure(specificationQuery(ProductId("1")))
+        .loadStructure(specificationQuery(PdmNodeId(1)))
         .toSpecificationData()
 }
 

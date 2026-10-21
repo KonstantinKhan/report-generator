@@ -294,7 +294,7 @@ chrome, зная `totalPages`. Подробности — [eskd-title-block.md](
 
 ### Три слоя: DTO → домен → модель отчёта
 
-`loodsman-client` (DTO) → `report-loodsman` (`ProductStructureClient` → `ProductNode` / `Usage`) → `reports/specification`
+`loodsman-client` (DTO) → `report-loodsman` (`PdmNodeStructureClient` → `PdmNode` / `Usage`) → `reports/specification`
 (`ProductNode.toSpecificationData()` → `SpecificationData` → `specification()`). Каждый слой меняется по своей причине:
 API Loodsman, маппинг структуры, правила отчёта. `SpecificationData` пока лежит в `report-domain`, хотя это модель отчёта
 (см. [known-gaps.md](known-gaps.md#loodsman-интеграция-ветка-refactorloodsman-api)).
@@ -341,7 +341,7 @@ API Loodsman, маппинг структуры, правила отчёта. `S
 
 Коммит `8ccefb1` удалил порт `PdmClient`, модуль `report-pdm` (`PdmClient.buildTree`), `InMemoryPdmClient`, `LoodsmanKtorPdmClient`,
 `Pdm2Domain` и доменные типы старой модели (`PdmObject`, `PdmDatabase`, связи). Останется один порт доступа к PDM:
-`ProductStructureClient`, один сценарий — `loadStructure(StructureQuery)`.
+`PdmNodeStructureClient`, один сценарий — `loadStructure(StructureQuery)`.
 
 **Почему:** старый путь не выполнялся ни в проде, ни в CLI, ни в сервере. `buildTree` дублировал
 `LoodsmanProductStructureClient.loadStructure`, а количество для одних и тех же данных считалось двумя правилами

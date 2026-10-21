@@ -1,7 +1,7 @@
 package dev.reportgenerator.domain
 
 data class CompositionUsage(
-    override val child: ProductNode,
+    override val child: PdmNode,
     val position: Field<Int>,
     val quantity: Quantity,
     val unit: Field<String>,

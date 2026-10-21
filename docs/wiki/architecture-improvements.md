@@ -16,7 +16,7 @@
 >
 > **Обновление (ветка `refactor/loodsman-api`).** `LoodsmanPdmClient`, `SpecificationAssembly` и `PdmClient.fetchSpecification()`
 > удалены. Актуальный поток: `loodsman-client` (`LoodsmanApi`, DTO) → `report-loodsman` (`LoodsmanProductStructureClient`,
-> `ProductNode`) → `ProductNode.toSpecificationData()` → `specification()`. Описание: [architecture.md](architecture.md),
+> `PdmNode`) → `ProductNode.toSpecificationData()` → `specification()`. Описание: [architecture.md](architecture.md),
 > [loodsman-integration.md](loodsman-integration.md).
 >
 > **Обновление 2 (ветка `refactor/loodsman-api`, коммит `bd5afc1`).** Плоский `LoodsmanApi` (интерфейс) и `KtorLoodsmanApi` заменены
@@ -24,7 +24,7 @@
 >
 > **Обновление 3 (ветка `refactor/loodsman-api`, коммит `8ccefb1`).** Удалён старый путь: `PdmClient` (порт и `buildTree`),
 > модуль `report-pdm`, `InMemoryPdmClient`, `LoodsmanKtorPdmClient`, `Pdm2Domain`. Упоминания `PdmClient` и `LoodsmanKtorPdmClient`
-> в этом документе относятся к истории. Актуальный порт — `ProductStructureClient` в `report-domain`. Решение —
+> в этом документе относятся к истории. Актуальный порт — `PdmNodeStructureClient` в `report-domain`. Решение —
 > [design-decisions.md](design-decisions.md#удаление-старого-пути-pdmclient-и-report-pdm).
 
 **Реализовано:**

@@ -24,6 +24,9 @@ class ObjectInfoApi internal constructor(
             parameter("parameters", 0)
         }
 
+    suspend fun propObject(versionId: Int): PropObjectOutputDto =
+        propObjects(listOf(versionId)).first()
+
     suspend fun linkedObjects(
         objectIds: List<Int>,
         linkTypeIds: List<Int>,

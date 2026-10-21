@@ -5,10 +5,10 @@ import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.Name
-import dev.reportgenerator.domain.ProductId
-import dev.reportgenerator.domain.ProductKind
-import dev.reportgenerator.domain.ProductNode
-import dev.reportgenerator.domain.ProductStructureClient
+import dev.reportgenerator.domain.PdmNodeId
+import dev.reportgenerator.domain.PdmNodeKind
+import dev.reportgenerator.domain.PdmNode
+import dev.reportgenerator.domain.PdmNodeStructureClient
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.StructureQuery
 
@@ -17,38 +17,43 @@ import dev.reportgenerator.domain.StructureQuery
 // If structure is set, it is returned instead of the sample one.
 class FakeProductStructureClient(
     private val failure: Throwable? = null,
-    private val structure: ProductNode? = null,
-) : ProductStructureClient {
+    private val structure: PdmNode? = null,
+) : PdmNodeStructureClient {
     val queries = mutableListOf<StructureQuery>()
 
-    override suspend fun loadStructure(query: StructureQuery): ProductNode {
+    override suspend fun loadStructure(query: StructureQuery): PdmNode {
         queries += query
         failure?.let { throw it }
         return structure ?: sampleStructure()
     }
 
-    private fun sampleStructure() = ProductNode(
-        id = ProductId("1"),
-        kind = ProductKind.Assembly,
+    override suspend fun withProperties(id: PdmNodeId): PdmNode {
+        queries += StructureQuery(id)
+        return structure ?: sampleStructure()
+    }
+
+    private fun sampleStructure() = PdmNode(
+        id = PdmNodeId(1),
+        kind = PdmNodeKind.Assembly,
         designation = Designation.Value("ИЗД.001"),
         name = Name.Value("Изделие"),
         usages = listOf(
             CompositionUsage(
-                child = ProductNode(ProductId("2"), ProductKind.Part, Designation.Value("АБ.002"), Name.Value("Вал")),
+                child = PdmNode(PdmNodeId(2), PdmNodeKind.Part, Designation.Value("АБ.002"), Name.Value("Вал")),
                 position = Field.Missing,
                 quantity = Quantity.Exact(2.0),
                 unit = Field.Value("шт"),
             ),
             CompositionUsage(
-                child = ProductNode(ProductId("3"), ProductKind.Assembly, Designation.Value("АБ.003"), Name.Value("Корпус")),
+                child = PdmNode(PdmNodeId(3), PdmNodeKind.Assembly, Designation.Value("АБ.003"), Name.Value("Корпус")),
                 position = Field.Missing,
                 quantity = Quantity.Exact(1.0),
                 unit = Field.Value("шт"),
             ),
             DocumentUsage(
-                child = ProductNode(
-                    ProductId("4"),
-                    ProductKind.AssemblyDrawing,
+                child = PdmNode(
+                    PdmNodeId(4),
+                    PdmNodeKind.AssemblyDrawing,
                     Designation.Value("ИЗД.001 СБ"),
                     Name.Value("Изделие. Сборочный чертёж"),
                 ),

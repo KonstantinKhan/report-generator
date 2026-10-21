@@ -64,7 +64,7 @@
 ## Ветка `refactor/loodsman-api`
 
 Интеграция с Loodsman переведена на слои: `loodsman-client` (библиотека: `LoodsmanApi`, DTO, сессия) →
-`report-loodsman` (`ProductStructureClient`, DTO → домен) → `reports/specification` (`ProductNode.toSpecificationData()`) →
+`report-loodsman` (`PdmNodeStructureClient`, DTO → домен) → `reports/specification` (`ProductNode.toSpecificationData()`) →
 `report-server`. Легаси-путь (`PdmClient.fetchSpecification`, `LoodsmanPdmClient`, `SpecificationAssembly`) удалён. Следующий слой легаси —
 порт `PdmClient`, модуль `report-pdm` и `LoodsmanKtorPdmClient` — удалён в коммите `8ccefb1` (подробно —
 [design-decisions.md](design-decisions.md#удаление-старого-пути-pdmclient-и-report-pdm)).
@@ -75,8 +75,8 @@
 
 | Этап | Что | Коммиты |
 |---|---|---|
-| Фасад и клиенты | `LoodsmanApi` поверх ktor-клиентов; `ProductStructureClient` на `LoodsmanApi` (`LoodsmanKtorPdmClient` позже удалён, см. ниже) | `03f71f7`, `bd2c4ba`, `2ced4be` |
-| Правила данных | отказ от полузаполненного диапазона количества; `ProductNode` → `SpecificationData`; материал в столбец «Наименование»; сведение ё к е в `KindMapper` | `bbe2af5`, `5a7f8be`, `2724c00`, `2f14321` |
+| Фасад и клиенты | `LoodsmanApi` поверх ktor-клиентов; `PdmNodeStructureClient` на `LoodsmanApi` (`LoodsmanKtorPdmClient` позже удалён, см. ниже) | `03f71f7`, `bd2c4ba`, `2ced4be` |
+| Правила данных | отказ от полузаполненного диапазона количества; `PdmNode` → `SpecificationData`; материал в столбец «Наименование»; сведение ё к е в `KindMapper` | `bbe2af5`, `5a7f8be`, `2724c00`, `2f14321` |
 | Регрессия | parity-тест добавлен, затем превращён в регрессионный тест конвейера `SpecificationPipelineTest` | `2117681`, `460fa32` |
 | Сервер | `specificationQuery`; спецификация из структуры; `SpecificationDataException` и 502; не глотать отмену при остановке | `e0d215a`, `560ea9b`, `7b753d1`, `9e209da`, `5a02a32` |
 | Легаси | удалён старый путь `fetchSpecification` | `306aebf` |

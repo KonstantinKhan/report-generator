@@ -1,7 +1,7 @@
 package dev.reportgenerator.server
 
-import dev.reportgenerator.domain.ProductId
-import dev.reportgenerator.domain.ProductStructureClient
+import dev.reportgenerator.domain.PdmNodeId
+import dev.reportgenerator.domain.PdmNodeStructureClient
 import dev.reportgenerator.layout.DefaultFontRegistry
 import dev.reportgenerator.layout.PdfBoxTextMeasurer
 import dev.reportgenerator.layout.layOut
@@ -17,7 +17,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.ContentDisposition
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
-import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.application.log
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
@@ -43,7 +42,7 @@ data class SpecificationResponse(val id: String, val path: String)
 data class ErrorResponse(val error: String)
 
 fun Application.reportServerModule(
-    structureClient: ProductStructureClient,
+    structureClient: PdmNodeStructureClient,
     outputDir: File,
     fonts: DefaultFontRegistry,
 ) {
@@ -118,7 +117,7 @@ fun Application.reportServerModule(
             val customerRepresentative = call.parameters["customerRepresentative"]?.toBooleanStrictOrNull() ?: true
 
             val id = UUID.randomUUID().toString()
-            val structure = structureClient.loadStructure(specificationQuery(ProductId(versionId.toString())))
+            val structure = structureClient.loadStructure(specificationQuery(PdmNodeId(versionId)))
             val file = withContext(Dispatchers.IO) {
                 val data = structure.toSpecificationData()
 

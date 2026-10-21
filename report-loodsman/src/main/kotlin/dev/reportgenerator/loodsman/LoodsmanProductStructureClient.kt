@@ -8,15 +8,14 @@ import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.Name
-import dev.reportgenerator.domain.ProductId
-import dev.reportgenerator.domain.ProductKind
-import dev.reportgenerator.domain.ProductNode
-import dev.reportgenerator.domain.ProductStructureClient
+import dev.reportgenerator.domain.PdmNodeId
+import dev.reportgenerator.domain.PdmNodeKind
+import dev.reportgenerator.domain.PdmNode
+import dev.reportgenerator.domain.PdmNodeStructureClient
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.domain.UnmappedUsage
-import dev.reportgenerator.domain.Usage
 import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
 import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
 import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
@@ -26,9 +25,9 @@ import dev.reportgenerator.loodsman.mapping.KindMapper
 import dev.reportgenerator.loodsman.mapping.LinkField
 import dev.reportgenerator.loodsman.mapping.MappingConfig
 import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
-import dev.reportgenerator.loodsman.mapping.PropField
 import dev.reportgenerator.loodsman.mapping.Registries
 import dev.reportgenerator.loodsman.mapping.RelationMapper
+import dev.reportgenerator.loodsman.mapping.identitySourcesOf
 import dev.reportgenerator.loodsman.mapping.nameFor
 import dev.reportgenerator.loodsman.mapping.select
 import kotlinx.coroutines.async
@@ -39,6 +38,9 @@ import kotlinx.coroutines.sync.withPermit
 import org.slf4j.LoggerFactory
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
+import io.github.konstantinkhan.loodsman.PropField
+import khan366kos.mapping.needsAttributes
+import khan366kos.mapping.toDomain
 
 private const val PROPS_BATCH_SIZE = 100
 
@@ -46,17 +48,20 @@ class LoodsmanProductStructureClient(
     private val api: LoodsmanApi,
     private val mapping: MappingConfig = MappingConfigLoader.load(),
     private val concurrency: Int = 8
-) : ProductStructureClient {
+) : PdmNodeStructureClient {
 
     private val log = LoggerFactory.getLogger(this::class.java)
 
     private val linkMetadata = SuspendLazy { api.metaData.linkList() }
     private val kindMapper = KindMapper(mapping, log)
     private val relationMapper = RelationMapper(mapping, log)
+    private val sourceOf = mapping::identitySourcesOf
+    private val kindOf: (String) -> PdmNodeKind = { name ->
+        kindMapper.map(name) ?: error("Unmapped type '$name' and SKIP policy is not supported by toDomain")
+    }
 
-    override suspend fun loadStructure(query: StructureQuery): ProductNode {
-        val rootId = query.rootId.value.toIntOrNull()
-            ?: throw LoodsmanApiException("rootId must be numeric, got '${query.rootId.value}'")
+    override suspend fun loadStructure(query: StructureQuery): PdmNode {
+        val rootId = query.rootId.asInt()
         val relationByLinkTypeId = resolveLinkTypes(query.relations)
         val attributeRules = resolveAttributeRules(query)
         validateLinkAttributes(query)
@@ -84,6 +89,16 @@ class LoodsmanProductStructureClient(
 
         val linkAttributes = loadLinkAttributes(query, nodes, links)
         return buildNode(rootId, query.depth, query, attributeRules, nodes, links, linkAttributes, emptyList())
+    }
+
+    override suspend fun withProperties(id: PdmNodeId): PdmNode {
+        val props = api.objectInfo.propObject(id.asInt())
+        val kind = kindMapper.map(props.type)
+        val attributes =
+            if (kind != null && sourceOf(kind).needsAttributes())
+                api.objectInfo.infoAboutVersion(id.asInt())
+            else emptyList()
+        return toDomain(props, attributes, sourceOf, kindOf)
     }
 
     private suspend fun resolveLinkTypes(relations: Set<Relation>): Map<Int, Relation> {
@@ -167,15 +182,15 @@ class LoodsmanProductStructureClient(
         }
 
     private fun needsAttributes(
-        kind: ProductKind,
+        kind: PdmNodeKind,
         query: StructureQuery,
         attributeRules: Map<AttributeKey, AttributeRule>
     ): Boolean {
         val identity = identityOf(kind)
         return identity.designation is FieldSource.Attribute ||
-            identity.name is FieldSource.Attribute ||
-            attributeRules.values.any { it.nameFor(kind) != null } ||
-            query.includeUnmappedAttributes
+                identity.name is FieldSource.Attribute ||
+                attributeRules.values.any { it.nameFor(kind) != null } ||
+                query.includeUnmappedAttributes
     }
 
     private suspend fun loadLinkAttributes(
@@ -212,7 +227,7 @@ class LoodsmanProductStructureClient(
             val childKind = nodes[link.dto.idChild]!!.kind!!
             val needsAttributeRequest =
                 mapping.link.positionRules.select(link.relation, parentKind, childKind) != null ||
-                    requestedRules.any { it.select(link.relation, parentKind, childKind) != null }
+                        requestedRules.any { it.select(link.relation, parentKind, childKind) != null }
 
             if (!needsAttributeRequest) {
                 return@withPermits mapOf<String, String>()
@@ -230,7 +245,7 @@ class LoodsmanProductStructureClient(
         return result
     }
 
-    private fun identityOf(kind: ProductKind): Identity {
+    private fun identityOf(kind: PdmNodeKind): Identity {
         val override = Registries.itemKinds.idOf(kind)?.let { mapping.identity.byKind[it] }
         return Identity(
             designation = override?.designation ?: mapping.identity.designation,
@@ -247,7 +262,7 @@ class LoodsmanProductStructureClient(
         links: Map<Int, List<Link>>,
         linkAttributes: Map<Int, LinkAttributesData>,
         path: List<Int>
-    ): ProductNode {
+    ): PdmNode {
         if (id in path) {
             throw LoodsmanApiException("Cycle detected in structure: ${(path + id).joinToString(" -> ")}")
         }
@@ -280,16 +295,21 @@ class LoodsmanProductStructureClient(
                             attributes = attrs
                         )
                     }
+
                     Relation.Document -> DocumentUsage(child = childNode, attributes = attrs)
-                    is Relation.Unmapped -> UnmappedUsage(relation = link.relation, child = childNode, attributes = attrs)
+                    is Relation.Unmapped -> UnmappedUsage(
+                        relation = link.relation,
+                        child = childNode,
+                        attributes = attrs
+                    )
                 }
             }
         } else {
             emptyList()
         }
 
-        return ProductNode(
-            id = ProductId(id.toString()),
+        return PdmNode(
+            id = PdmNodeId(id),
             kind = kind,
             designation = node.read(identity.designation)?.let { Designation.Value(it) } ?: Designation.Missing,
             name = node.read(identity.name)?.let { Name.Value(it) } ?: Name.Missing,
@@ -302,7 +322,7 @@ class LoodsmanProductStructureClient(
 
     private fun attributesOf(
         node: LoadedNode,
-        kind: ProductKind,
+        kind: PdmNodeKind,
         query: StructureQuery,
         rules: Map<AttributeKey, AttributeRule>
     ): Map<AttributeKey, AttributeValue> {
@@ -356,8 +376,8 @@ class LoodsmanProductStructureClient(
 
     private fun linkAttributesOf(
         relation: Relation,
-        parentKind: ProductKind,
-        childKind: ProductKind,
+        parentKind: PdmNodeKind,
+        childKind: PdmNodeKind,
         query: StructureQuery,
         linkAttrs: Map<String, String>
     ): Map<LinkAttributeKey, AttributeValue> {
@@ -380,6 +400,7 @@ class LoodsmanProductStructureClient(
             min == null || max == null -> throw LoodsmanApiException(
                 "Link ${dto.idLink}: quantity range is half-filled (min=$min, max=$max)"
             )
+
             min == max -> Quantity.Exact(min)
             else -> Quantity.Range(min, max)
         }
@@ -403,6 +424,7 @@ class LoodsmanProductStructureClient(
             PropField.STATE -> prop.state
             PropField.TYPE -> prop.type
         }
+
         is FieldSource.Attribute -> attributes.firstOrNull { it.name?.trim() == source.name }?.value
     }?.trim()?.takeIf { it.isNotEmpty() }
 
@@ -411,7 +433,7 @@ class LoodsmanProductStructureClient(
 
     private class LoadedNode(
         val prop: PropObjectOutputDto,
-        val kind: ProductKind?,
+        val kind: PdmNodeKind?,
         val attributes: List<ObjectAttributeOutputDto>
     )
 

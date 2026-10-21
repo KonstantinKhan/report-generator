@@ -1,5 +1,6 @@
 package dev.reportgenerator.loodsman.mapping
 
+import io.github.konstantinkhan.loodsman.PropField
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe

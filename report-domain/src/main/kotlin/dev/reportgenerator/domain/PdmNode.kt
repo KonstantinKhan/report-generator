@@ -1,8 +1,8 @@
 package dev.reportgenerator.domain
 
-data class ProductNode(
-    val id: ProductId,
-    val kind: ProductKind,
+data class PdmNode(
+    val id: PdmNodeId,
+    val kind: PdmNodeKind,
     val designation: Designation,
     val name: Name,
     val version: Field<String> = Field.NotLoaded,
