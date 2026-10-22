@@ -249,6 +249,10 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 **Корень документа.** Без обозначения — `SpecificationDataException`. Без наименования вместо него выводится
 обозначение.
 
+**Источник значений.** Спецификация читает обозначение и наименование из `PdmNode.attributes` (запрос
+`specificationQuery` просит оба ключа): `Text` → значение, `Empty` → отсутствует, ключа нет → «не загружено»
+(`SpecificationDataException`). Поля `PdmNode.designation`/`name` спецификация не читает.
+
 ## Конфиг маппинга и ProductStructureClient
 
 `LoodsmanProductStructureClient(api, mapping, concurrency = 8, metadata)` — адаптер, реализующий интерфейс `PdmNodeStructureClient`
