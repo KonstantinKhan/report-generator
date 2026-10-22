@@ -115,21 +115,13 @@ class LoodsmanProductStructureClient(
         return toDomain(props, objectAttributes, sourceOf, kindOf, request)
     }
 
-    private fun resolveLinkTypes(snapshot: MetadataSnapshot, relations: Set<Relation>): Map<Int, Relation> {
-        for (requiredId in mapping.requiredRelations) {
-            val pdmNames = mapping.relations.filterValues { it == requiredId }.keys
-            if (pdmNames.none { snapshot.linkTypeId(it) != null }) {
-                throw LoodsmanApiException("Link type '${pdmNames.joinToString()}' not found in Loodsman metadata")
-            }
-        }
-
-        return relations.associateBy { relation ->
+    private fun resolveLinkTypes(snapshot: MetadataSnapshot, relations: Set<Relation>): Map<Int, Relation> =
+        relations.associateBy { relation ->
             val pdmName = relationMapper.pdmNameOf(relation)
                 ?: throw LoodsmanApiException("Relation $relation is not configured in mapping")
             snapshot.linkTypeId(pdmName)
                 ?: throw LoodsmanApiException("Link type '$pdmName' not found in Loodsman metadata")
         }
-    }
 
     private fun validateLinkAttributes(query: StructureQuery) {
         for (key in query.linkAttributes) {
