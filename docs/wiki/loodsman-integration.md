@@ -385,6 +385,31 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 Разбор YAML использует полиморфизм по свойству `type` (Kaml `PolymorphismStyle.Property`).
 
+Проверка конфига идёт в две фазы:
+
+1. **Структурная** — при загрузке (`MappingConfigLoader.parse` → `MappingConfig.validate()`): реестры, `link.fields`,
+   дубликаты правил связей. Не требует связи с Loodsman.
+2. **Семантическая** — против снимка метаданных: `MappingConfigValidator.validate(config, snapshot): List<String>`.
+   Собирает все ошибки сразу, не бросает исключений. Формат сообщения: `<путь в конфиге>: <что не так>`, например
+   `kinds: type 'X' not found in Loodsman`. Проверяется:
+   - ключи `kinds` — среди типов объектов снимка;
+   - ключи `relations` — среди связей снимка;
+   - каждый элемент `requiredRelations` — хотя бы одно имя связи из `relations` найдено в снимке;
+   - атрибуты: `identity` (default и `byKind`), `attributes.*.name` и `attributes.*.byKind`, `link.attributes.*[].name`.
+
+   Не проверяются: доменные реестры, `PropField`, `LinkField`, `onUnmapped`, `properties`.
+
+   Фаза 2 подключена в `report-server` через `MetadataCache(api) { MappingConfigValidator.validate(mapping, it) }`:
+   `initialize()` падает на старте, `refresh()` возвращает `Failed` и оставляет старый снимок.
+
+### Правила сравнения имён
+
+- **Типы объектов и связи — мягко.** Одна функция `normalizeForComparison` (`report-loodsman`, internal): регистр,
+  `ё` → `е`, `\s+` → один пробел, `trim`. Её используют `KindMapper`, `RelationMapper`, `MetadataSnapshot.linkTypeId`
+  и валидатор.
+- **Атрибуты — строго.** Регистр, `ё` и пробелы внутри имени важны. Со стороны Loodsman имена при загрузке снимка
+  обрезаются по краям (`trim`); пустые и `null` отбрасываются. Рантайм-поиск атрибутов в клиенте не нормализует имена.
+
 ### Алгоритм загрузки структуры
 
 `LoodsmanProductStructureClient.loadStructure(query: StructureQuery)`:
@@ -489,9 +514,10 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 ## Метаданные: снимок, MetadataCache, обновление
 
-- **Снимок.** `MetadataLoader.load(api)` строит `MetadataSnapshot(linkTypes, objectTypes, version)`. Сначала читается версия
-  кэша метаданных `GET /api/v4/MetaData/cache/version` (ответ — голое число int64), затем параллельно `get-type-list` и
-  `get-link-list`. В снимок попадают только связи `type == 0` (подтверждено на сервере 2026-10-22: `type=0` у 82 из 88 связей,
+- **Снимок.** `MetadataLoader.load(api)` строит `MetadataSnapshot(linkTypes, objectTypes, attributeNames, version)`. Сначала читается версия
+  кэша метаданных `GET /api/v4/MetaData/cache/version` (ответ — голое число int64), затем параллельно `get-type-list`,
+  `get-link-list` и `GET /api/v4/MetaData/get-attribute-list-2?mode=0` (`attributeList(mode)`). Ошибка любого запроса
+  отменяет остальные. `attributeNames` — имена атрибутов после `trim`, без пустых и `null`. В снимок попадают только связи `type == 0` (подтверждено на сервере 2026-10-22: `type=0` у 82 из 88 связей,
   включая «Состоит из ...» и «Документы»; `type=1` — прочие виды). Версия читается **до** данных: если метаданные изменятся
   во время загрузки, сохранённая версия окажется старой, и следующая проверка повторно обновит снимок.
 - **`MetadataCache`** (`report-loodsman`) — `MetadataSource` с `AtomicReference<MetadataSnapshot?>`:
