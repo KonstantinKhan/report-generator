@@ -6,6 +6,8 @@ package dev.reportgenerator.loodsman
 data class MetadataSnapshot(
     val linkTypes: List<LinkTypeInfo>,
     val objectTypes: List<ObjectTypeInfo>,
+    /** Имена атрибутов Loodsman без пробелов по краям; пустые и отсутствующие имена отброшены. */
+    val attributeNames: Set<String>,
     val version: Long,
 ) {
 

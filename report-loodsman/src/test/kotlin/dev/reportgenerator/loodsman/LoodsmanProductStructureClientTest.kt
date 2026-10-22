@@ -74,6 +74,7 @@ private class FakeLoodsman(
     fun snapshot(version: Long = 1): MetadataSnapshot = MetadataSnapshot(
         linkTypes = linkNames.mapIndexed { index, name -> LinkTypeInfo(id = index + 1, name = name) },
         objectTypes = emptyList(),
+        attributeNames = emptySet(),
         version = version,
     )
 
@@ -112,6 +113,7 @@ private class FakeLoodsman(
                         })
                     }
                 }
+                "/api/v4/MetaData/get-attribute-list-2" -> buildJsonArray {}
                 "/api/v4/MetaData/get-type-list" -> buildJsonArray {
                     objects.map { it.type }.distinct().forEachIndexed { index, type ->
                         add(buildJsonObject {

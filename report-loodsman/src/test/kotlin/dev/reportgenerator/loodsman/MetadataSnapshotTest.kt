@@ -11,6 +11,7 @@ class MetadataSnapshotTest : ShouldSpec({
             LinkTypeInfo(id = 2, name = "Документы"),
         ),
         objectTypes = emptyList(),
+        attributeNames = emptySet(),
         version = 1,
     )
 
@@ -23,6 +24,7 @@ class MetadataSnapshotTest : ShouldSpec({
         val withYo = MetadataSnapshot(
             linkTypes = listOf(LinkTypeInfo(id = 3, name = "Ёмкость связи")),
             objectTypes = emptyList(),
+            attributeNames = emptySet(),
             version = 1,
         )
         withYo.linkTypeId("емкость связи") shouldBe 3

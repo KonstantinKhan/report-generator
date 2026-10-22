@@ -31,6 +31,7 @@ private class RemoteMetadata {
             MetadataSnapshot(
                 linkTypes = listOf(LinkTypeInfo(id = 1, name = "Документы")),
                 objectTypes = listOf(ObjectTypeInfo(id = 1, typeName = "Деталь")),
+                attributeNames = setOf("Наименование"),
                 version = version,
             )
         },

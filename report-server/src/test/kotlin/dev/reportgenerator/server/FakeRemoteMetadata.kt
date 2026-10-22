@@ -19,7 +19,7 @@ class FakeRemoteMetadata {
         loadSnapshot = {
             loads.incrementAndGet()
             loadError?.let { throw it }
-            MetadataSnapshot(linkTypes = emptyList(), objectTypes = emptyList(), version = version)
+            MetadataSnapshot(linkTypes = emptyList(), objectTypes = emptyList(), attributeNames = emptySet(), version = version)
         },
         validate = { emptyList() },
     )

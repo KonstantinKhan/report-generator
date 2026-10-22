@@ -7,7 +7,7 @@ import kotlinx.coroutines.coroutineScope
 object MetadataLoader {
 
     /**
-     * Сначала читает версию кэша метаданных, затем параллельно загружает типы объектов и связи.
+     * Сначала читает версию кэша метаданных, затем параллельно загружает типы объектов, связи и атрибуты.
      * Ошибка любого запроса отменяет остальные и пробрасывается.
      * Версия читается до данных, чтобы изменение метаданных во время загрузки привело к повторному обновлению при следующей проверке.
      */
@@ -16,6 +16,7 @@ object MetadataLoader {
         return coroutineScope {
             val types = async { api.metaData.typeList() }
             val links = async { api.metaData.linkList() }
+            val attributes = async { api.metaData.attributeList(mode = 0) }
             MetadataSnapshot(
                 linkTypes = links.await()
                     // Поле `type` в swagger описано противоречиво (описания `type` и `inverseName` перепутаны).
@@ -24,6 +25,10 @@ object MetadataLoader {
                     .filter { it.type == 0 }
                     .map { LinkTypeInfo(id = it.id, name = it.name) },
                 objectTypes = types.await().map { ObjectTypeInfo(id = it.id, typeName = it.typeName) },
+                // Атрибуты сравниваются строго: регистр и «ё» сохраняются, со стороны Loodsman убираем только пробелы по краям.
+                attributeNames = attributes.await()
+                    .mapNotNull { it.name?.trim()?.takeIf(String::isNotEmpty) }
+                    .toSet(),
                 version = version,
             )
         }
