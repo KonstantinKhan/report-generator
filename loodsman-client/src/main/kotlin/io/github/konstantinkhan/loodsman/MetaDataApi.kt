@@ -6,7 +6,8 @@ import io.github.konstantinkhan.loodsman.dto.V3_GetAttributeList2OutputDto
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.parameter
 
-private const val TYPE_LIST_REQUEST_TIMEOUT_MS = 60_000L
+// Справочник типов на живом сервере отвечает до ~60 с, поэтому таймаут с запасом.
+private const val TYPE_LIST_REQUEST_TIMEOUT_MS = 180_000L
 private const val ATTRIBUTE_LIST_REQUEST_TIMEOUT_MS = 60_000L
 
 class MetaDataApi internal constructor(
