@@ -5,6 +5,11 @@ import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import dev.reportgenerator.loodsman.mapping.MappingConfig
+import dev.reportgenerator.loodsman.mapping.MappingConfigValidator
+import dev.reportgenerator.loodsman.mapping.FieldSource
+import dev.reportgenerator.loodsman.mapping.IdentityMapping
+import io.github.konstantinkhan.loodsman.PropField
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.async
@@ -16,6 +21,7 @@ private class RemoteMetadata {
     var version = 1L
     var versionError: Throwable? = null
     var loadError: Throwable? = null
+    var linkTypeNames = listOf("Документы")
     var beforeLoad: (suspend () -> Unit)? = null
     val loads = AtomicInteger()
 
@@ -29,7 +35,7 @@ private class RemoteMetadata {
             beforeLoad?.invoke()
             loadError?.let { throw it }
             MetadataSnapshot(
-                linkTypes = listOf(LinkTypeInfo(id = 1, name = "Документы")),
+                linkTypes = linkTypeNames.mapIndexed { index, name -> LinkTypeInfo(id = index + 1, name = name) },
                 objectTypes = listOf(ObjectTypeInfo(id = 1, typeName = "Деталь")),
                 attributeNames = setOf("Наименование"),
                 version = version,
@@ -70,6 +76,29 @@ class MetadataCacheTest : ShouldSpec({
         val error = shouldThrow<IllegalStateException> { cache.initialize() }
 
         error.message!! shouldContain "no link type Документы"
+    }
+
+    should("reject a mapping that does not match Loodsman and keep the old snapshot on refresh") {
+        val mapping = MappingConfig(
+            kinds = mapOf("Деталь" to "PART"),
+            relations = mapOf("Документы" to "DOCUMENT"),
+            requiredRelations = setOf("DOCUMENT"),
+            identity = IdentityMapping(
+                designation = FieldSource.Prop(PropField.PRODUCT),
+                name = FieldSource.Attribute("Наименование"),
+            ),
+        )
+        val remote = RemoteMetadata()
+        val cache = remote.cache { MappingConfigValidator.validate(mapping, it) }
+        cache.initialize()
+        remote.version = 5
+        remote.linkTypeNames = listOf("Другая связь")
+
+        val result = cache.refresh()
+
+        result.failureMessage() shouldContain "relations: link type 'Документы' not found in Loodsman"
+        result.failureMessage() shouldContain "tried: Документы"
+        cache.snapshot().version shouldBe 1
     }
 
     should("throw on snapshot before initialize") {
