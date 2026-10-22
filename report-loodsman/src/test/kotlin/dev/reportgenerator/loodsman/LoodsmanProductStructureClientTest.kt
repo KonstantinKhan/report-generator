@@ -88,6 +88,15 @@ private class FakeLoodsman(
                         })
                     }
                 }
+                "/api/v4/MetaData/get-type-list" -> buildJsonArray {
+                    objects.map { it.type }.distinct().forEachIndexed { index, type ->
+                        add(buildJsonObject {
+                            put("id", index + 1)
+                            put("typeName", type)
+                            put("document", 0)
+                        })
+                    }
+                }
                 "/api/v4/ObjectInfo/get-prop-objects" -> {
                     val ids = params["objectList"]!!.split(",").map { it.toInt() }
                     propsCalls.add(ids)

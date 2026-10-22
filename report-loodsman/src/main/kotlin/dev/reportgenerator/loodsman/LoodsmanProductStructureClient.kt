@@ -48,12 +48,12 @@ private const val PROPS_BATCH_SIZE = 100
 class LoodsmanProductStructureClient(
     private val api: LoodsmanApi,
     private val mapping: MappingConfig = MappingConfigLoader.load(),
-    private val concurrency: Int = 8
+    private val concurrency: Int = 8,
+    private val metadata: MetadataSource = lazyMetadataSource(api)
 ) : PdmNodeStructureClient {
 
     private val log = LoggerFactory.getLogger(this::class.java)
 
-    private val linkMetadata = SuspendLazy { api.metaData.linkList() }
     private val kindMapper = KindMapper(mapping, log)
     private val relationMapper = RelationMapper(mapping, log)
     private val sourceOf = mapping::identitySourcesOf
@@ -63,7 +63,8 @@ class LoodsmanProductStructureClient(
 
     override suspend fun loadStructure(query: StructureQuery): PdmNode {
         val rootId = query.rootId.asInt()
-        val relationByLinkTypeId = resolveLinkTypes(query.relations)
+        val snapshot = metadata.snapshot()
+        val relationByLinkTypeId = resolveLinkTypes(snapshot, query.relations)
         val attributeRules = resolveAttributeRules(query)
         validateLinkAttributes(query)
 
@@ -114,15 +115,10 @@ class LoodsmanProductStructureClient(
         return toDomain(props, objectAttributes, sourceOf, kindOf, request)
     }
 
-    private suspend fun resolveLinkTypes(relations: Set<Relation>): Map<Int, Relation> {
-        val linkList = linkMetadata.get().filter { it.type == 0 }
-
-        fun linkTypeId(pdmName: String): Int? =
-            linkList.firstOrNull { it.name.normalized() == pdmName.normalized() }?.id
-
+    private fun resolveLinkTypes(snapshot: MetadataSnapshot, relations: Set<Relation>): Map<Int, Relation> {
         for (requiredId in mapping.requiredRelations) {
             val pdmNames = mapping.relations.filterValues { it == requiredId }.keys
-            if (pdmNames.none { linkTypeId(it) != null }) {
+            if (pdmNames.none { snapshot.linkTypeId(it) != null }) {
                 throw LoodsmanApiException("Link type '${pdmNames.joinToString()}' not found in Loodsman metadata")
             }
         }
@@ -130,7 +126,7 @@ class LoodsmanProductStructureClient(
         return relations.associateBy { relation ->
             val pdmName = relationMapper.pdmNameOf(relation)
                 ?: throw LoodsmanApiException("Relation $relation is not configured in mapping")
-            linkTypeId(pdmName)
+            snapshot.linkTypeId(pdmName)
                 ?: throw LoodsmanApiException("Link type '$pdmName' not found in Loodsman metadata")
         }
     }
@@ -450,9 +446,6 @@ class LoodsmanProductStructureClient(
 
         is FieldSource.Attribute -> attributes.firstOrNull { it.name?.trim() == source.name }?.value
     }?.trim()?.takeIf { it.isNotEmpty() }
-
-    private fun String?.normalized(): String =
-        this.orEmpty().lowercase().replace("\\s+".toRegex(), " ").trim()
 
     private class LoadedNode(
         val prop: PropObjectOutputDto,
