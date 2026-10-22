@@ -5,7 +5,8 @@ package dev.reportgenerator.loodsman
  */
 data class MetadataSnapshot(
     val linkTypes: List<LinkTypeInfo>,
-    val objectTypes: List<ObjectTypeInfo>
+    val objectTypes: List<ObjectTypeInfo>,
+    val version: Long,
 ) {
 
     fun linkTypeId(pdmName: String): Int? {

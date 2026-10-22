@@ -11,6 +11,7 @@ class MetadataSnapshotTest : ShouldSpec({
             LinkTypeInfo(id = 2, name = "Документы"),
         ),
         objectTypes = emptyList(),
+        version = 1,
     )
 
     should("find link type id ignoring case and extra whitespace") {

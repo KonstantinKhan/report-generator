@@ -16,6 +16,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -61,6 +62,7 @@ private class ParityLoodsman(
                     put("userId", 1)
                     put("isEditable", true)
                 }
+                "/api/v4/MetaData/cache/version" -> JsonPrimitive(1)
                 "/api/v4/MetaData/get-link-list" -> buildJsonArray {
                     listOf(COMPOSITION_LINK_ID to COMPOSITION_LINK, DOCUMENT_LINK_ID to DOCUMENT_LINK).forEach { (id, name) ->
                         add(buildJsonObject {
