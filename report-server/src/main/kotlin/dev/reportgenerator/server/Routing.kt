@@ -5,6 +5,8 @@ import dev.reportgenerator.domain.PdmNodeStructureClient
 import dev.reportgenerator.layout.DefaultFontRegistry
 import dev.reportgenerator.layout.PdfBoxTextMeasurer
 import dev.reportgenerator.layout.layOut
+import dev.reportgenerator.loodsman.MetadataCache
+import dev.reportgenerator.loodsman.RefreshResult
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import dev.reportgenerator.renderpdf.renderToPdf
 import dev.reportgenerator.reports.specification.specification
@@ -41,10 +43,18 @@ data class SpecificationResponse(val id: String, val path: String)
 @Serializable
 data class ErrorResponse(val error: String)
 
+@Serializable
+data class MetadataRefreshResponse(val status: String, val version: Long)
+
+/** Обновление метаданных не удалось; старый снимок сохранён. Маппится в 502 через StatusPages. */
+class MetadataRefreshException(cause: Throwable) :
+    RuntimeException(cause.message ?: "metadata refresh failed", cause)
+
 fun Application.reportServerModule(
     structureClient: PdmNodeStructureClient,
     outputDir: File,
     fonts: DefaultFontRegistry,
+    metadata: MetadataCache,
 ) {
     install(ContentNegotiation) {
         json()
@@ -64,6 +74,9 @@ fun Application.reportServerModule(
             call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "invalid product data"))
         }
         // Fallback for network-level failures not wrapped in LoodsmanApiException.
+        exception<MetadataRefreshException> { call, cause ->
+            call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "metadata refresh failed"))
+        }
         exception<IOException> { call, cause ->
             call.application.log.error("Upstream I/O error", cause)
             call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "upstream error"))
@@ -130,6 +143,26 @@ fun Application.reportServerModule(
             }
 
             call.respond(HttpStatusCode.OK, SpecificationResponse(id = id, path = file.absolutePath))
+        }
+
+        // Admin endpoint without authentication by decision of the user. Returns 502 with the reason on failure;
+        // the previous metadata snapshot stays in place.
+        post("/admin/metadata/refresh") {
+            val force = call.parameters["force"]?.toBooleanStrictOrNull() ?: false
+            when (val result = metadata.refresh(force = force)) {
+                is RefreshResult.Updated -> {
+                    call.application.log.info("Metadata refresh force=$force: updated ${result.oldVersion} -> ${result.newVersion}")
+                    call.respond(HttpStatusCode.OK, MetadataRefreshResponse(status = "updated", version = result.newVersion))
+                }
+                is RefreshResult.Unchanged -> {
+                    call.application.log.info("Metadata refresh force=$force: unchanged, version ${result.version}")
+                    call.respond(HttpStatusCode.OK, MetadataRefreshResponse(status = "unchanged", version = result.version))
+                }
+                is RefreshResult.Failed -> {
+                    call.application.log.info("Metadata refresh force=$force: failed: ${result.cause.message}")
+                    throw MetadataRefreshException(result.cause)
+                }
+            }
         }
     }
 }

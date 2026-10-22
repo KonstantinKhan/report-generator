@@ -25,7 +25,7 @@ class HealthCheckTest {
     @Test
     fun `health endpoint returns OK`() = testApplication {
         application {
-            reportServerModule(FakeProductStructureClient(), tempDir, DefaultFontRegistry.load())
+            reportServerModule(FakeProductStructureClient(), tempDir, DefaultFontRegistry.load(), FakeRemoteMetadata().cache())
         }
 
         val response = client.get("/health")
@@ -37,7 +37,7 @@ class HealthCheckTest {
     @Test
     fun `report download returns generated pdf`() = testApplication {
         application {
-            reportServerModule(FakeProductStructureClient(), tempDir, DefaultFontRegistry.load())
+            reportServerModule(FakeProductStructureClient(), tempDir, DefaultFontRegistry.load(), FakeRemoteMetadata().cache())
         }
         val id = "123e4567-e89b-12d3-a456-426614174000"
         File(tempDir, "$id.pdf").writeBytes("%PDF-test".toByteArray())
@@ -52,7 +52,7 @@ class HealthCheckTest {
     @Test
     fun `report download rejects non-uuid id and unknown id`() = testApplication {
         application {
-            reportServerModule(FakeProductStructureClient(), tempDir, DefaultFontRegistry.load())
+            reportServerModule(FakeProductStructureClient(), tempDir, DefaultFontRegistry.load(), FakeRemoteMetadata().cache())
         }
 
         assertEquals(HttpStatusCode.BadRequest, client.get("/reports/not-a-uuid").status)

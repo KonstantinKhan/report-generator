@@ -33,7 +33,7 @@ class SpecificationRouteTest {
     fun `specification request builds the pdf from the loaded structure`() = testApplication {
         val structure = FakeProductStructureClient()
         application {
-            reportServerModule(structure, tempDir, DefaultFontRegistry.load())
+            reportServerModule(structure, tempDir, DefaultFontRegistry.load(), FakeRemoteMetadata().cache())
         }
 
         val response = client.post("/specifications/7")
@@ -48,7 +48,7 @@ class SpecificationRouteTest {
     @Test
     fun `upstream loodsman error maps to 502`() = testApplication {
         application {
-            reportServerModule(FakeProductStructureClient(LoodsmanApiException("upstream down")), tempDir, DefaultFontRegistry.load())
+            reportServerModule(FakeProductStructureClient(LoodsmanApiException("upstream down")), tempDir, DefaultFontRegistry.load(), FakeRemoteMetadata().cache())
         }
 
         val response = client.post("/specifications/7")
@@ -74,7 +74,7 @@ class SpecificationRouteTest {
             ),
         )
         application {
-            reportServerModule(FakeProductStructureClient(structure = root), tempDir, DefaultFontRegistry.load())
+            reportServerModule(FakeProductStructureClient(structure = root), tempDir, DefaultFontRegistry.load(), FakeRemoteMetadata().cache())
         }
 
         val response = client.post("/specifications/7")
@@ -88,7 +88,7 @@ class SpecificationRouteTest {
     fun `non-integer version id is rejected before loading the structure`() = testApplication {
         val structure = FakeProductStructureClient()
         application {
-            reportServerModule(structure, tempDir, DefaultFontRegistry.load())
+            reportServerModule(structure, tempDir, DefaultFontRegistry.load(), FakeRemoteMetadata().cache())
         }
 
         val response = client.post("/specifications/abc")
@@ -100,7 +100,7 @@ class SpecificationRouteTest {
     @Test
     fun `other exception maps to 500`() = testApplication {
         application {
-            reportServerModule(FakeProductStructureClient(IllegalStateException("boom")), tempDir, DefaultFontRegistry.load())
+            reportServerModule(FakeProductStructureClient(IllegalStateException("boom")), tempDir, DefaultFontRegistry.load(), FakeRemoteMetadata().cache())
         }
 
         assertEquals(HttpStatusCode.InternalServerError, client.post("/specifications/7").status)

@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicReference
  * Кэш снимка метаданных Loodsman. Снимок подменяется целиком и только после успешной загрузки и проверки.
  * Ошибка обновления оставляет предыдущий снимок.
  */
-class MetadataCache internal constructor(
+class MetadataCache(
     private val versionOf: suspend () -> Long,
     private val loadSnapshot: suspend () -> MetadataSnapshot,
     private val validate: (MetadataSnapshot) -> List<String>,

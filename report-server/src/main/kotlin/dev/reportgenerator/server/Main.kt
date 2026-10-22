@@ -42,7 +42,7 @@ fun main() {
         factory = Netty,
         port = config.serverPort,
         module = {
-            reportServerModule(structureClient, outputDir, fonts)
+            reportServerModule(structureClient, outputDir, fonts, metadataCache)
             // Closes the Loodsman session on shutdown. A failed logout must not break the stop.
             monitor.subscribe(ApplicationStopped) {
                 runBlocking {
