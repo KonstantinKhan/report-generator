@@ -129,31 +129,37 @@ Loodsman хранит данные об объекте в **двух не свя
 
 ### Правило ключевого атрибута (то, из-за чего был баг с "Attribute 'Наименование' is missing")
 
-> **Устарела: см. раздел о ключевом атрибуте типа** («Метаданные: снимок, MetadataCache, обновление»). Таблица ниже
-> описывает прежнее предположение «ключ = Обозначение / Наименование по виду»; сверка с сервером (2026-10-22) показала,
-> что ключ задаётся на уровне типа через `attrName` из `get-type-list`. Таблица будет переписана на этапе 6b.
+Поле `product` в свойствах — слот «ключевой атрибут», и что он означает, **зависит от типа объекта**. Ключ типа задаётся
+`attrName` из `get-type-list` (см. «Метаданные: снимок»). Значение ключа лежит в `product`, а не в списке атрибутов
+объекта. Подтверждено на сервере (2026-10-22):
 
-Поле `product` в свойствах — это generic-слот "ключевой атрибут", и что он означает,
-**зависит от типа объекта**:
-
-| Тип объекта | `product` содержит | Отдельный атрибут `Наименование` есть? |
+| Тип объекта | `product` содержит | «Наименование» в списке атрибутов |
 |---|---|---|
 | Сборочный чертеж | Обозначение | Да |
 | Комплекс | Обозначение | Да |
-| Сборочная единица | Обозначение | Да, опционально (если нет — fallback на `product`) |
-| Деталь | Обозначение | Да, опционально (если нет — fallback на `product`) |
+| Сборочная единица | Обозначение | Да |
+| Деталь | Обозначение | Да |
 | Комплект | Обозначение | Да |
-| Стандартное изделие | **Наименование** | Нет; Обозначение = отдельный атрибут «Обозначение изделия» |
-| Прочее изделие | **Наименование** | Нет; Обозначение = отдельный атрибут «Обозначение изделия» |
-| Материал по КД | **Наименование** | Нет; Обозначение не заполняется |
+| Стандартное изделие | полное обозначение (напр. «Подшипник 411 ГОСТ 520-2011») | Нет |
+| Прочее изделие | полное обозначение | Нет |
+| Материал по КД | полное обозначение | Нет |
 
-Бизнес-правило колонок: у типов с `product` = Обозначение это `designation`, Наименование берётся из атрибута (fallback на
-`product`). У Стандартного/Прочего изделия `designation` = атрибут «Обозначение изделия» (нет атрибута — пусто),
-`name` = `product`. Программные изделия и базы данных (`SOFTWARE`) не замаплены, строк не будет.
+Единое правило чтения атрибута `X` у объекта типа `T` (`readAttribute` в модуле `mapping`): если `X` (после trim)
+равно ключевому атрибуту `T`, значение берётся из `product`; иначе — из списка атрибутов
+(`get-info-about-version-mode-3`). Пустое значение (после trim) — отсутствует. Блока `identity` в YAML нет:
+`designation` и `name` — обычные правила `attributes` (имена `Обозначение` и `Наименование`).
 
-Реализовано конфигом, а не кодом: блок `identity` (+ `byKind`) в `loodsman-mapping.yaml` задаёт источник обозначения и
-наименования для каждого вида. Корень документа и дочерние объекты загружаются одним и тем же кодом, поэтому правило
-одинаково для всех. Старый баг был в том, что правило реализовали для детей, а для корня забыли.
+Следствия для восьми видов: `designation` берётся из `product` (через ключ), `name` — «Наименование» из списка.
+У стандартных и прочих изделий и материалов «Наименование» нет, поэтому `name` = `Name.Missing`, а обозначение
+остаётся в `designation`; спецификация переносит его в столбец «Наименование» (см. «Правила преобразования в спецификацию»).
+
+Пустой `product` при наличии ключа → `NodeKey.Missing` и `Designation.Missing`. Тип без ключевого атрибута → `NodeKey.Missing`.
+Ключ узла (`PdmNode.key`) — `NodeKey.Value(attribute, text)`: `attribute` — доменный ключ правила, чьё имя совпало с
+ключевым атрибутом вида; если такого правила нет — `AttributeKey.Unmapped(имя ключевого атрибута)`.
+
+Реализовано кодом и конфигом: ключевой атрибут задаёт тип объекта (`attrName`), `designation` и `name` — обычные правила
+`attributes` в `loodsman-mapping.yaml`. Корень документа и дочерние объекты читаются одним кодом (`toDomain` и
+`readAttribute`), поэтому правило одинаково для всех. Старый баг был в том, что правило реализовали для детей, а для корня забыли.
 
 ## `idType` в связях — это тип СВЯЗИ, не тип ОБЪЕКТА
 
@@ -197,8 +203,9 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 документация (сборочный чертеж) — по `DOCUMENT` (имя связи не проверено на живом стенде; нет связи — группа пуста).
 Количество у документации не нужно.
 
-Атрибут «Обозначение изделия» (имя подтверждено; нет атрибута в ответе = не заполнен, сервер пустые не отдаёт)
-запрашивается через `get-info-about-version-mode-3` только там, где `byKind` его указывает (Стандартное и Прочее изделие).
+Обозначение стандартных и прочих изделий — ключевой атрибут типа (значение в `product`), отдельный атрибут для него
+не используется. Список атрибутов объекта (`get-info-about-version-mode-3`) сейчас читается для каждого узла: это
+временно, пока `designation`/`name` дублируются в устаревших полях `PdmNode` (TODO(6d) в коде).
 
 ## Прочее
 
@@ -227,7 +234,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 **(б) Материал.** У `ProductKind.Material` в домене `designation` берётся из `product` (свойство `PRODUCT`), `name` —
 из атрибута «Наименование» (`byKind` для материала нет). В спецификации обозначение **выводится в столбец «Наименование»**,
-столбец обозначения пуст. Правило отчёта живёт в конвертере `ProductNode.toItem()`, а не в маппинге: маппинг отдаёт
+столбец обозначения пуст. Правило отчёта живёт в конвертере `PdmNode.toItem()`, а не в маппинге: маппинг отдаёт
 доменную модель как есть. Без обозначения у материала — `SpecificationDataException`. Единица измерения только у
 материалов — [specification-table-format.md](specification-table-format.md).
 
@@ -245,7 +252,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 ## Конфиг маппинга и ProductStructureClient
 
 `LoodsmanProductStructureClient(api, mapping, concurrency = 8, metadata)` — адаптер, реализующий интерфейс `PdmNodeStructureClient`
-из `report-domain` (`loadStructure(StructureQuery): ProductNode`). Возвращает дерево состава изделия в доменной модели
+из `report-domain` (`loadStructure(StructureQuery): PdmNode`). Возвращает дерево состава изделия в доменной модели
 (`PdmNode` + `Usage`), не зависящей от словаря Loodsman. Соответствие названий типов, связей и атрибутов PDM
 моделям задаётся конфигом маппинга, а не кодом. Конструктор `internal`, без значения по умолчанию для `mapping`:
 создать клиент с непроверенным маппингом снаружи модуля нельзя. Собирает его только `LoodsmanContext.bootstrap`.
@@ -288,30 +295,11 @@ requiredRelations:          # должны существовать в мета�
   - COMPOSITION
   - DOCUMENT
 
-identity:
-  designation:
-    type: prop
-    field: PRODUCT
-  name:
-    type: attribute
-    name: Наименование
-  byKind:                   # переопределение для отдельных видов (STANDARD, OTHER)
-    STANDARD:
-      designation:
-        type: attribute
-        name: Обозначение изделия
-      name:
-        type: prop
-        field: PRODUCT
-    OTHER:
-      designation:
-        type: attribute
-        name: Обозначение изделия
-      name:
-        type: prop
-        field: PRODUCT
-
 attributes:                 # атрибуты узла: id ключа модели -> имя атрибута в PDM
+  designation:              # обозначение: для типа с ключом «Обозначение» читается из product
+    name: Обозначение
+  name:
+    name: Наименование
   mass:
     name: Масса
   companyName:              # атрибут есть только у сборочных единиц и деталей: общего name нет
@@ -341,9 +329,8 @@ onUnmapped:
   relation: SKIP
 ```
 
-**`identity`** — источники обозначения и наименования объекта (`prop` или `attribute`), с переопределением
-по типу (`byKind`). У стандартных и прочих изделий обозначение в атрибуте «Обозначение изделия»,
-наименование в свойстве `product`.
+**`designation`, `name`** — обычные правила `attributes` (ключи `Registries.attributeKeys`). Чтение — через
+`readAttribute` с учётом ключевого атрибута вида (см. «Правило ключевого атрибута»). Блока `identity` нет.
 
 **`attributes`** — узловые атрибуты модели. Каждый ключ (`mass`, `companyName`) обязан быть в `Registries.attributeKeys`.
 Правило содержит:
@@ -411,10 +398,11 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 2. **Семантическая** — против снимка метаданных: `MappingConfigValidator.validate(config, snapshot): List<String>`.
    Собирает все ошибки сразу, не бросает исключений. Формат сообщения: `<путь в конфиге>: <что не так>`, например
    `kinds: type 'X' not found in Loodsman`. Проверяется:
-   - ключи `kinds` — среди типов объектов снимка;
+   - ключи `kinds` — среди типов объектов снимка; у каждого типа есть ключевой атрибут, и он среди атрибутов Loodsman
+     (`kinds: type 'X' has no key attribute in Loodsman`, `kinds: key attribute 'K' of type 'X' not found among Loodsman attributes`);
    - ключи `relations` — среди связей снимка;
    - каждый элемент `requiredRelations` — хотя бы одно имя связи из `relations` найдено в снимке;
-   - атрибуты: `identity` (default и `byKind`), `attributes.*.name` и `attributes.*.byKind`, `link.attributes.*[].name`.
+   - атрибуты: `attributes.*.name` и `attributes.*.byKind`, `link.attributes.*[].name`.
 
    Не проверяются: доменные реестры, `PropField`, `LinkField`, `onUnmapped`, `properties`.
 
@@ -458,7 +446,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 5. **Сборка дерева** идёт из кэша рекурсией с остаточной глубиной, используя загруженные атрибуты связей. Цикл
    определяется по текущему пути → `LoodsmanApiException` с путём. Дети, чей тип пропущен политикой `SKIP`, в
-   `usages` не попадают. `ProductNode.version` и `ProductNode.state` всегда заполняются из `prop.version`/`prop.state`.
+   `usages` не попадают. `PdmNode.version` и `PdmNode.state` всегда заполняются из `prop.version`/`prop.state`.
 
 **Стоимость по API:**
 - Свойства: батч `get-prop-objects` (один на уровень);
@@ -466,10 +454,10 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - Связи: один `get-linked-objects-for-objects` на узел;
 - Атрибуты связей: один `get-link-attributes` на связь (если нужны или есть правила позиции).
 
-### Что попадает в ProductNode и Usage
+### Что попадает в PdmNode и Usage
 
-- **Обозначение и наименование** — из источников `identity` (с переопределением `byKind`). Пустое значение →
-  `Designation.Missing` / `Name.Missing`.
+- **Обозначение и наименование** — правила `designation` и `name` из `attributes` (чтение `readAttribute`: ключевой
+  атрибут вида берётся из `product`). Пустое значение → `Designation.Missing` / `Name.Missing`.
 - **Version и State** — ВСЕГДА из свойств объекта, источник задаёт блок `properties` (по умолчанию `VERSION` и
   `STATE`). Значение — трим; непустое → `Field.Value(строка)`, пустое или отсутствующее → `Field.Missing`
   (версия у объекта бывает не задана, состояние ожидается всегда, но отсутствие не считается ошибкой загрузки).
@@ -483,7 +471,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 ошибка вызывающего кода, а не пустая ячейка. Адаптер `NotLoaded` не создаёт (поля заполнены всегда), оно
 остаётся значением по умолчанию у вручную собранных `PdmNode` в тестах.
 
-Значения атрибутов (`ProductNode.attributes`, `Usage.attributes`) читаются так же: `attributes[ключ].orElse("—")`.
+Значения атрибутов (`PdmNode.attributes`, `Usage.attributes`) читаются так же: `attributes[ключ].orElse("—")`.
 Это функция на `AttributeValue?`: `Text` даёт текст, `Number` — число строкой, `Empty` («запрошено, значения нет»)
 и отсутствие ключа («не запрашивалось») дают `default`.
 
@@ -501,21 +489,21 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - **Количество** (`Usage.quantity`) — поля связи из `link.fields.quantityMin` и `quantityMax`, по правилу (а) выше.
   **Единица** (`Usage.unit`) — поле из `link.fields.unit` (по умолчанию `unit`).
   Валидация конфига: `quantityMin`/`quantityMax` должны быть числовыми полями, `unit` — текстовым.
-- **Атрибуты узла** (`ProductNode.attributes`) — только те ключи, что перечислены в `query.attributes`. Каждый ключ
+- **Атрибуты узла** (`PdmNode.attributes`) — только те ключи, что перечислены в `query.attributes`. Каждый ключ
   обязан быть в `mapping.attributes`, источник выбирается из `rule.nameFor(kind)` (с учётом переопределения `byKind`).
   Непустое значение → `AttributeValue.Text`, иначе `Empty`. Не запрошенные ключи отсутствуют.
 - `query.includeUnmappedAttributes = true` — остальные непустые атрибуты объекта добавляются как
-  `AttributeKey.Unmapped(name)`. Исключаются все известные имена: из `mapping.attributes.*.name` и
-  `mapping.attributes.*.byKind.*`, из `mapping.identity.*.{name}` и их `byKind` переопределений.
+  `AttributeKey.Unmapped(name)`. Исключаются имена правил вида (`mapping.attributes.*.nameFor(kind)`, с учётом
+  `byKind`) и ключевой атрибут вида; сравнение по trim.
 
 ### Откуда что берётся
 
 | Данные | Источник в API | Настройка в конфиге | Куда пишется |
 |---|---|---|---|
-| Вид объекта | свойство `type` (`get-prop-objects`) | `kinds` | `ProductNode.kind` |
-| Версия, состояние | свойства `version`, `state` | `properties` | `ProductNode.version`, `state` |
-| Обозначение, наименование | свойство или атрибут объекта | `identity` (+ `byKind`) | `ProductNode.designation`, `name` |
-| Атрибуты узла | атрибуты объекта (`get-info-about-version-mode-3`) | `attributes` (+ `byKind`) | `ProductNode.attributes` |
+| Вид объекта | свойство `type` (`get-prop-objects`) | `kinds` | `PdmNode.kind` |
+| Версия, состояние | свойства `version`, `state` | `properties` | `PdmNode.version`, `state` |
+| Обозначение, наименование | ключевой атрибут типа (`product`) или атрибут объекта | `attributes.designation`, `attributes.name` | `PdmNode.designation`, `name`, `key` |
+| Атрибуты узла | атрибуты объекта (`get-info-about-version-mode-3`) | `attributes` (+ `byKind`) | `PdmNode.attributes` |
 | Количество | поля связи `minQuantity`, `maxQuantity` | `link.fields.quantityMin`, `quantityMax` | `Usage.quantity` |
 | Единица | поле связи `unit` | `link.fields.unit` | `Usage.unit` |
 | Позиция | атрибут связи (`get-link-attributes`) | `link.attributes.position` | `Usage.position` |
@@ -605,6 +593,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - `loodsman-client` — тесты на Ktor `MockEngine` (`ktor-client-mock`): проверяется поведение без сети. `LoodsmanApiTest`
   покрывает группы эндпоинтов, сессию и повтор при 401/419.
 - `report-loodsman`:
+  - `LoodsmanWithPropertiesTest` — восемь видов на синтетических объектах с реальным YAML, пустой `product`;
+  - `LoodsmanProductStructureClientTest` — `loadStructure` и `withProperties` дают одинаковые `key`, `designation`, `name`;
   - `SpecificationPipelineTest` — регрессионный тест конвейера: структура → спецификация. Фиксирует правила прежней сборки
     (материал и столбец «Наименование», ё, стандартные и прочие изделия, документы). Если правило меняется намеренно,
     тест обновляется вместе с правилом.
