@@ -50,6 +50,7 @@ private fun ktorApi(
 
 private const val TYPE_LIST_JSON = """[{"id":1,"typeName":"Деталь","attrName":"Обозначение изделия","document":0}]"""
 private const val LINK_LIST_JSON = """[{"id":2,"name":"Состоит из ...","type":0,"inverseName":"Входит в ...","order":1}]"""
+private const val ATTRIBUTE_LIST_JSON = """[{"id":7,"name":"Масса","attrType":2,"default":null,"list":null,"system":0,"onlyListItems":0,"accessLevel":1}]"""
 private const val PROP_OBJECTS_JSON = """[{"idVersion":100,"type":"Деталь","document":0,"product":"DET-001",
     "version":"1","state":"Released","locked":0,"accessLevel":1,"label":0,"hasLink":1,"mainId":100}]"""
 private const val OBJECT_INFO_JSON = """[{"name":"Наименование","value":"Test"}]"""
@@ -130,6 +131,26 @@ class LoodsmanApiTest : ShouldSpec({
 
         val request = requests.last { it.url.encodedPath == "/api/v4/MetaData/cache/version" }
         request.method shouldBe HttpMethod.Get
+        request.session() shouldBe "s1"
+    }
+
+    should("fetch attribute list with mode query and session") {
+        val requests = mutableListOf<HttpRequestData>()
+        val logins = AtomicInteger()
+        val api = ktorApi(requests, logins) { reply(ATTRIBUTE_LIST_JSON) }
+
+        val attributes = api.metaData.attributeList(mode = 1)
+
+        attributes.single().also {
+            it.id shouldBe 7
+            it.name shouldBe "Масса"
+            it.attrType shouldBe 2
+            it.system shouldBe 0
+            it.onlyListItems shouldBe 0
+        }
+        val request = requests.last { it.url.encodedPath == "/api/v4/MetaData/get-attribute-list-2" }
+        request.method shouldBe HttpMethod.Get
+        request.url.parameters["mode"] shouldBe "1"
         request.session() shouldBe "s1"
     }
 
