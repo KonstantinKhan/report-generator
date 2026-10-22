@@ -3,9 +3,7 @@ package dev.reportgenerator.server
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
-import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.Field
-import dev.reportgenerator.domain.Name
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.PdmNode
@@ -64,8 +62,6 @@ class SpecificationRouteTest {
         val root = PdmNode(
             id = PdmNodeId(1),
             kind = PdmNodeKind.Assembly,
-            designation = Designation.Value("ИЗД.001"),
-            name = Name.Value("Изделие"),
             attributes = mapOf(
                 AttributeKey.Designation to AttributeValue.Text("ИЗД.001"),
                 AttributeKey.Name to AttributeValue.Text("Изделие"),
@@ -75,8 +71,6 @@ class SpecificationRouteTest {
                     child = PdmNode(
                         PdmNodeId(2),
                         PdmNodeKind.Part,
-                        Designation.Value("АБ.002"),
-                        Name.Value("Вал"),
                         attributes = mapOf(
                             AttributeKey.Designation to AttributeValue.Text("АБ.002"),
                             AttributeKey.Name to AttributeValue.Text("Вал"),

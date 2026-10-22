@@ -9,20 +9,14 @@ class StructureOpsTest : ShouldSpec({
             val part1 = PdmNode(
                 id = PdmNodeId(1),
                 kind = PdmNodeKind.Part,
-                designation = Designation.Value("P1"),
-                name = Name.Value("Part 1")
             )
             val part2 = PdmNode(
                 id = PdmNodeId(2),
                 kind = PdmNodeKind.Part,
-                designation = Designation.Value("P2"),
-                name = Name.Value("Part 2")
             )
             val assembly = PdmNode(
                 id = PdmNodeId(3),
                 kind = PdmNodeKind.Assembly,
-                designation = Designation.Value("A1"),
-                name = Name.Value("Assembly"),
                 usages = listOf(
                     CompositionUsage(part1, Field.Value(1), Quantity.Exact(1.0), Field.Value("шт")),
                     DocumentUsage(part2)
@@ -42,8 +36,6 @@ class StructureOpsTest : ShouldSpec({
             val assembly = PdmNode(
                 id = PdmNodeId(1),
                 kind = PdmNodeKind.Assembly,
-                designation = Designation.Value("A1"),
-                name = Name.Value("Assembly"),
                 usages = emptyList()
             )
 
@@ -54,15 +46,15 @@ class StructureOpsTest : ShouldSpec({
 
     context("walk") {
         should("traverse tree depth-first") {
-            val leaf1 = PdmNode(PdmNodeId(4), PdmNodeKind.Part, Designation.Value("L1"), Name.Value("Leaf1"))
-            val leaf2 = PdmNode(PdmNodeId(5), PdmNodeKind.Part, Designation.Value("L2"), Name.Value("Leaf2"))
-            val parent = PdmNode(PdmNodeId(2), PdmNodeKind.Assembly, Designation.Value("P"), Name.Value("Parent"),
+            val leaf1 = PdmNode(PdmNodeId(4), PdmNodeKind.Part)
+            val leaf2 = PdmNode(PdmNodeId(5), PdmNodeKind.Part)
+            val parent = PdmNode(PdmNodeId(2), PdmNodeKind.Assembly,
                 usages = listOf(
                     CompositionUsage(leaf1, Field.Missing, Quantity.Missing, Field.Missing),
                     CompositionUsage(leaf2, Field.Missing, Quantity.Missing, Field.Missing)
                 )
             )
-            val root = PdmNode(PdmNodeId(1), PdmNodeKind.Assembly, Designation.Value("R"), Name.Value("Root"),
+            val root = PdmNode(PdmNodeId(1), PdmNodeKind.Assembly,
                 usages = listOf(
                     CompositionUsage(parent, Field.Missing, Quantity.Missing, Field.Missing)
                 )
@@ -73,9 +65,9 @@ class StructureOpsTest : ShouldSpec({
         }
 
         should("respect relation filter") {
-            val part1 = PdmNode(PdmNodeId(2), PdmNodeKind.Part, Designation.Value("P1"), Name.Value("Part1"))
-            val doc = PdmNode(PdmNodeId(3), PdmNodeKind.AssemblyDrawing, Designation.Value("D"), Name.Value("Doc"))
-            val assembly = PdmNode(PdmNodeId(1), PdmNodeKind.Assembly, Designation.Value("A"), Name.Value("Asm"),
+            val part1 = PdmNode(PdmNodeId(2), PdmNodeKind.Part)
+            val doc = PdmNode(PdmNodeId(3), PdmNodeKind.AssemblyDrawing)
+            val assembly = PdmNode(PdmNodeId(1), PdmNodeKind.Assembly,
                 usages = listOf(
                     CompositionUsage(part1, Field.Missing, Quantity.Missing, Field.Missing),
                     DocumentUsage(doc)
@@ -94,11 +86,11 @@ class StructureOpsTest : ShouldSpec({
 
     context("groupedByKind") {
         should("group usages by product kind") {
-            val part = PdmNode(PdmNodeId(2), PdmNodeKind.Part, Designation.Value("P"), Name.Value("Part"))
-            val std = PdmNode(PdmNodeId(3), PdmNodeKind.Standard, Designation.Value("S"), Name.Value("Std"))
-            val mat = PdmNode(PdmNodeId(4), PdmNodeKind.Material, Designation.Value("M"), Name.Value("Mat"))
+            val part = PdmNode(PdmNodeId(2), PdmNodeKind.Part)
+            val std = PdmNode(PdmNodeId(3), PdmNodeKind.Standard)
+            val mat = PdmNode(PdmNodeId(4), PdmNodeKind.Material)
 
-            val assembly = PdmNode(PdmNodeId(1), PdmNodeKind.Assembly, Designation.Value("A"), Name.Value("Asm"),
+            val assembly = PdmNode(PdmNodeId(1), PdmNodeKind.Assembly,
                 usages = listOf(
                     CompositionUsage(part, Field.Missing, Quantity.Missing, Field.Missing),
                     CompositionUsage(std, Field.Missing, Quantity.Missing, Field.Missing),
@@ -114,10 +106,10 @@ class StructureOpsTest : ShouldSpec({
         }
 
         should("respect relation filter in grouping") {
-            val part = PdmNode(PdmNodeId(2), PdmNodeKind.Part, Designation.Value("P"), Name.Value("Part"))
-            val doc = PdmNode(PdmNodeId(3), PdmNodeKind.AssemblyDrawing, Designation.Value("D"), Name.Value("Doc"))
+            val part = PdmNode(PdmNodeId(2), PdmNodeKind.Part)
+            val doc = PdmNode(PdmNodeId(3), PdmNodeKind.AssemblyDrawing)
 
-            val assembly = PdmNode(PdmNodeId(1), PdmNodeKind.Assembly, Designation.Value("A"), Name.Value("Asm"),
+            val assembly = PdmNode(PdmNodeId(1), PdmNodeKind.Assembly,
                 usages = listOf(
                     CompositionUsage(part, Field.Missing, Quantity.Missing, Field.Missing),
                     DocumentUsage(doc)

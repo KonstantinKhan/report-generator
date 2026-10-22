@@ -150,8 +150,6 @@ class LoodsmanProductStructureClient internal constructor(
         return AttributeRequest(
             keyAttribute = keyAttribute,
             keyKey = keyKey,
-            designation = ruleOrNull(AttributeKey.Designation)?.nameFor(kind),
-            name = ruleOrNull(AttributeKey.Name)?.nameFor(kind),
             names = attributeKeys.associateWith { key -> ruleOf(key).nameFor(kind) },
             mappedNames = mapping.attributes.values.mapNotNullTo(HashSet()) { it.nameFor(kind)?.trim() },
             includeUnmapped = includeUnmapped,

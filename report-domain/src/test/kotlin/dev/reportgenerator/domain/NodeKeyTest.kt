@@ -32,7 +32,7 @@ class NodeKeyTest : ShouldSpec({
 
     context("PdmNode.key") {
         should("default to NotLoaded") {
-            val node = PdmNode(PdmNodeId(1), PdmNodeKind.Part, Designation.Value("АБ.001"), Name.Value("Вал"))
+            val node = PdmNode(PdmNodeId(1), PdmNodeKind.Part)
             node.key shouldBe NodeKey.NotLoaded
         }
     }

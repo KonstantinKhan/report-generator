@@ -3,11 +3,9 @@ package dev.reportgenerator.reports.specification
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
-import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.ItemKind
-import dev.reportgenerator.domain.Name
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.PdmNode
@@ -23,7 +21,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 
 // Designation and name are read from attributes; null means the key was not requested (NotLoaded).
-// Legacy designation/name fields are neutral here: the specification must not read them.
 private fun node(
     id: Int,
     kind: PdmNodeKind = PdmNodeKind.Part,
@@ -33,8 +30,6 @@ private fun node(
 ) = PdmNode(
     id = PdmNodeId(id),
     kind = kind,
-    designation = Designation.Missing,
-    name = Name.Missing,
     attributes = attributesOf(designation, name),
     usages = usages,
 )

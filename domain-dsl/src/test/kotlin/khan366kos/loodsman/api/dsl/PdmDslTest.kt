@@ -1,9 +1,8 @@
 package khan366kos.loodsman.api.dsl
 
 import dev.reportgenerator.domain.AttributeKey
-import dev.reportgenerator.domain.Designation
+import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.LinkAttributeKey
-import dev.reportgenerator.domain.Name
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
@@ -32,7 +31,14 @@ private class RecordingClient : PdmNodeStructureClient {
         return node
     }
 
-    private val node = PdmNode(PdmNodeId(1), PdmNodeKind.Assembly, Designation.Value("ИЗД.001"), Name.Value("Изделие"))
+    private val node = PdmNode(
+        PdmNodeId(1),
+        PdmNodeKind.Assembly,
+        attributes = mapOf(
+            AttributeKey.Designation to AttributeValue.Text("ИЗД.001"),
+            AttributeKey.Name to AttributeValue.Text("Изделие"),
+        ),
+    )
 }
 
 class PdmDslTest : ShouldSpec({
@@ -83,7 +89,7 @@ class PdmDslTest : ShouldSpec({
         }
 
         node.id shouldBe PdmNodeId(1)
-        node.name shouldBe Name.Value("Изделие")
+        node.attributes[AttributeKey.Name] shouldBe AttributeValue.Text("Изделие")
     }
 
     should("pdmNode call withProperties with id, attribute keys and includeUnmapped") {
