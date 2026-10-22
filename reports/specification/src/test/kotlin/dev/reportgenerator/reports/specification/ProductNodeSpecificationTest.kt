@@ -122,6 +122,50 @@ class ProductNodeSpecificationTest : ShouldSpec({
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
+    listOf(
+        PdmNodeKind.Standard to ItemKind.STANDARD,
+        PdmNodeKind.Other to ItemKind.OTHER,
+    ).forEach { (productKind, itemKind) ->
+        should("keep the designation column and take the name from the name for a $productKind when both are set") {
+            val child = node(2, kind = productKind, designation = Designation.Value("ГОСТ 7798-70"), name = Name.Value("Болт"))
+            val data = root(composition(child, Quantity.Exact(2.0), Field.Value("шт"))).toSpecificationData()
+
+            data.single() shouldBe SpecificationItem("ГОСТ 7798-70", "Болт", itemKind, 2.0, "шт")
+        }
+
+        should("use the designation as name for a $productKind when the name is missing") {
+            val child = node(2, kind = productKind, designation = Designation.Value("ГОСТ 7798-70"), name = Name.Missing)
+            val data = root(composition(child)).toSpecificationData()
+
+            data.single() shouldBe SpecificationItem(null, "ГОСТ 7798-70", itemKind, 1.0, null)
+        }
+
+        should("use the name for a $productKind when the designation is missing") {
+            val child = node(2, kind = productKind, designation = Designation.Missing, name = Name.Value("Болт"))
+            val data = root(composition(child)).toSpecificationData()
+
+            data.single() shouldBe SpecificationItem(null, "Болт", itemKind, 1.0, null)
+        }
+
+        should("fail on a $productKind when the name and designation are both missing") {
+            val child = node(2, kind = productKind, designation = Designation.Missing, name = Name.Missing)
+
+            shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+        }
+
+        should("fail on a $productKind with a not loaded designation") {
+            val child = node(2, kind = productKind, designation = Designation.NotLoaded, name = Name.Value("Болт"))
+
+            shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+        }
+
+        should("fail on a $productKind with a not loaded name") {
+            val child = node(2, kind = productKind, name = Name.NotLoaded)
+
+            shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+        }
+    }
+
     should("map missing usage unit to null") {
         val data = root(composition(node(2), Quantity.Exact(1.0), Field.Missing)).toSpecificationData()
 

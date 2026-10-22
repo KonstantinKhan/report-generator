@@ -81,6 +81,33 @@ private fun PdmNode.toItem(quantity: Double, unit: String?): SpecificationItem {
             unit = unit
         )
     }
+    if (kind == PdmNodeKind.Standard || kind == PdmNodeKind.Other) {
+        val designationText = when (val value = designation) {
+            is Designation.Value -> value.text
+            is Designation.Missing -> null
+            is Designation.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: designation is not loaded")
+        }
+        return when (val value = name) {
+            // Old data form: the name is set, the designation column is kept as is.
+            is Name.Value -> SpecificationItem(
+                designation = designationText,
+                name = value.text,
+                kind = itemKind,
+                quantity = quantity,
+                unit = unit
+            )
+            // New data form: the key value is in the designation, so it moves to the name column.
+            is Name.Missing -> SpecificationItem(
+                designation = null,
+                name = designationText
+                    ?: throw SpecificationDataException("Node ${id.asInt()}: name and designation are both missing"),
+                kind = itemKind,
+                quantity = quantity,
+                unit = unit
+            )
+            is Name.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: name is not loaded")
+        }
+    }
     val designationText = when (val value = designation) {
         is Designation.Value -> value.text
         is Designation.Missing -> null
