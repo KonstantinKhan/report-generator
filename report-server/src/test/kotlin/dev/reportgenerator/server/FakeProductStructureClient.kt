@@ -1,5 +1,6 @@
 package dev.reportgenerator.server
 
+import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.DocumentUsage
@@ -27,8 +28,12 @@ class FakeProductStructureClient(
         return structure ?: sampleStructure()
     }
 
-    override suspend fun withProperties(id: PdmNodeId): PdmNode {
-        queries += StructureQuery(id)
+    override suspend fun withProperties(
+        id: PdmNodeId,
+        attributeKeys: Set<AttributeKey>,
+        includeUnmapped: Boolean,
+    ): PdmNode {
+        queries += StructureQuery(id, attributes = attributeKeys, includeUnmappedAttributes = includeUnmapped)
         return structure ?: sampleStructure()
     }
 
