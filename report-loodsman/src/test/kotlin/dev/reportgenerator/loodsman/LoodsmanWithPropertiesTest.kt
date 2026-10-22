@@ -105,7 +105,7 @@ private val propNameMapping: MappingConfig = MappingConfigLoader.load(emptyMap()
 class LoodsmanWithPropertiesTest : ShouldSpec({
     should("map the loodsman type to the node kind and read identity from props and attributes") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api())
+        val client = LoodsmanProductStructureClient(fake.api(), metadata = unusedMetadata)
 
         val node = client.withProperties(PdmNodeId(2), emptySet())
 
@@ -117,7 +117,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
 
     should("not call the attribute endpoint when no attributes are asked and identity needs none") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api(), propNameMapping)
+        val client = LoodsmanProductStructureClient(fake.api(), propNameMapping, metadata = unusedMetadata)
 
         val node = client.withProperties(PdmNodeId(2), emptySet(), includeUnmapped = false)
 
@@ -127,7 +127,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
 
     should("call the attribute endpoint when a mapped attribute key is asked") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api(), propNameMapping)
+        val client = LoodsmanProductStructureClient(fake.api(), propNameMapping, metadata = unusedMetadata)
 
         val node = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Mass))
 
@@ -137,7 +137,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
 
     should("call the attribute endpoint when unmapped attributes are asked") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api(), propNameMapping)
+        val client = LoodsmanProductStructureClient(fake.api(), propNameMapping, metadata = unusedMetadata)
 
         client.withProperties(PdmNodeId(2), emptySet(), includeUnmapped = true)
 
@@ -146,7 +146,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
 
     should("call the attribute endpoint when identity is read from an attribute") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api())
+        val client = LoodsmanProductStructureClient(fake.api(), metadata = unusedMetadata)
 
         client.withProperties(PdmNodeId(2), emptySet())
 
@@ -158,6 +158,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val client = LoodsmanProductStructureClient(
             fake.api(),
             MappingConfigLoader.load(emptyMap()).copy(attributes = emptyMap()),
+            metadata = unusedMetadata,
         )
 
         shouldThrow<LoodsmanApiException> {
@@ -167,7 +168,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
 
     should("keep an unknown loodsman type as unmapped kind with the default KEEP policy") {
         val fake = SingleObjectFake("Неизвестный тип")
-        val client = LoodsmanProductStructureClient(fake.api())
+        val client = LoodsmanProductStructureClient(fake.api(), metadata = unusedMetadata)
 
         val node = client.withProperties(PdmNodeId(2), emptySet())
 
@@ -179,6 +180,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val client = LoodsmanProductStructureClient(
             fake.api(),
             MappingConfigLoader.load(emptyMap()).copy(onUnmapped = UnmappedPolicy(kind = OnUnmapped.SKIP)),
+            metadata = unusedMetadata,
         )
 
         shouldThrow<IllegalStateException> {
@@ -191,6 +193,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val client = LoodsmanProductStructureClient(
             fake.api(),
             MappingConfigLoader.load(emptyMap()).copy(onUnmapped = UnmappedPolicy(kind = OnUnmapped.FAIL)),
+            metadata = unusedMetadata,
         )
 
         shouldThrow<IllegalArgumentException> {

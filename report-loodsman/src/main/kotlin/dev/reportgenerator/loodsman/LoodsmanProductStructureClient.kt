@@ -49,7 +49,7 @@ class LoodsmanProductStructureClient(
     private val api: LoodsmanApi,
     private val mapping: MappingConfig = MappingConfigLoader.load(),
     private val concurrency: Int = 8,
-    private val metadata: MetadataSource = lazyMetadataSource(api)
+    private val metadata: MetadataSource
 ) : PdmNodeStructureClient {
 
     private val log = LoggerFactory.getLogger(this::class.java)

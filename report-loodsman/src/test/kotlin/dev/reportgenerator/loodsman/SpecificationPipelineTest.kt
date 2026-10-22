@@ -157,7 +157,9 @@ private suspend fun loadPipeline(
 ): SpecificationData {
     val config = LoodsmanConfig("http://localhost", "db", "user", "pass")
     val httpClient = ParityLoodsman(objects, edges).httpClient()
-    return LoodsmanProductStructureClient(LoodsmanApi(config, httpClient))
+    val api = LoodsmanApi(config, httpClient)
+    val metadata = MetadataCache(api).also { it.initialize() }
+    return LoodsmanProductStructureClient(api, metadata = metadata)
         .loadStructure(specificationQuery(PdmNodeId(1)))
         .toSpecificationData()
 }

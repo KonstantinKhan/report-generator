@@ -68,11 +68,26 @@ private class FakeLoodsman(
     val linkCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val linkAttributeCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val linkListFailures = AtomicInteger(0)
+    private val linkIdToEdge = mutableMapOf<Int, Edge>()
 
-    fun client(
-        mapping: MappingConfig = MappingConfigLoader.load(emptyMap())
+    /** Снимок метаданных, который отдаёт тот же фейк (типы связей по [linkNames], виды по [objects]). */
+    fun snapshot(version: Long = 1): MetadataSnapshot = MetadataSnapshot(
+        linkTypes = linkNames.mapIndexed { index, name -> LinkTypeInfo(id = index + 1, name = name) },
+        objectTypes = emptyList(),
+        version = version,
+    )
+
+    /** Клиент с кэшем метаданных из фейка (загружается при создании) или с заданным [metadata]. */
+    suspend fun client(
+        mapping: MappingConfig = MappingConfigLoader.load(emptyMap()),
+        metadata: MetadataSource? = null,
     ): LoodsmanProductStructureClient {
-        val linkIdToEdge = mutableMapOf<Int, Edge>()
+        val api = api()
+        val source = metadata ?: MetadataCache(api).also { it.initialize() }
+        return LoodsmanProductStructureClient(api, mapping, metadata = source)
+    }
+
+    private fun api(): LoodsmanApi {
         val engine = MockEngine { request ->
             if (request.url.encodedPath == "/api/v4/MetaData/get-link-list" &&
                 linkListFailures.getAndUpdate { if (it > 0) it - 1 else 0 } > 0
@@ -156,8 +171,7 @@ private class FakeLoodsman(
             )
         }
         val config = LoodsmanConfig("http://localhost", "db", "user", "pass")
-        val api = LoodsmanApi(config, HttpClient(engine) { installLoodsman() })
-        return LoodsmanProductStructureClient(api, mapping)
+        return LoodsmanApi(config, HttpClient(engine) { installLoodsman() })
     }
 
     private fun propOf(obj: Obj) = buildJsonObject {
@@ -217,15 +231,25 @@ private fun query(
 )
 
 class LoodsmanProductStructureClientTest : ShouldSpec({
-    should("retry metadata loading after a failed attempt instead of caching the error") {
+    should("fail on start when metadata cannot be loaded") {
         val fake = FakeLoodsman(tree, treeEdges)
         fake.linkListFailures.set(1)
-        val client = fake.client()
 
-        shouldThrow<LoodsmanApiException> { client.loadStructure(query(1)) }
-        val root = client.loadStructure(query(1))
+        shouldThrow<LoodsmanApiException> { fake.client() }
+    }
+
+    should("read metadata snapshot once per load even when the source changes during traversal") {
+        val fake = FakeLoodsman(tree, treeEdges)
+        val reads = AtomicInteger(0)
+        // Первое чтение отдаёт рабочий снимок, последующие — пустой: обход не должен перечитывать метаданные.
+        val metadata = MetadataSource {
+            if (reads.incrementAndGet() == 1) fake.snapshot() else fake.snapshot(version = 2).copy(linkTypes = emptyList())
+        }
+
+        val root = fake.client(metadata = metadata).loadStructure(query(1))
 
         root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
+        reads.get() shouldBe 1
     }
 
     should("load only the root and skip link requests when depth is 0") {
