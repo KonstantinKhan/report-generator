@@ -42,8 +42,6 @@ identity:
 attributes:
   mass:
     name: Масса
-  material:
-    name: Материал
   companyName:
     byKind:
       ASSEMBLY: Наименование предприятия

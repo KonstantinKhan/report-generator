@@ -32,7 +32,6 @@ object Registries {
         "attributeKey",
         mapOf(
             "mass" to AttributeKey.Mass,
-            "material" to AttributeKey.Material,
             "companyName" to AttributeKey.CompanyName
         )
     )

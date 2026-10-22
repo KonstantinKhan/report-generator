@@ -51,7 +51,6 @@ class RegistriesTest : ShouldSpec({
     context("attributeKeys registry") {
         should("contain known AttributeKey variants") {
             Registries.attributeKeys.values.shouldContain(AttributeKey.Mass)
-            Registries.attributeKeys.values.shouldContain(AttributeKey.Material)
         }
 
         should("throw error for unknown attribute key") {

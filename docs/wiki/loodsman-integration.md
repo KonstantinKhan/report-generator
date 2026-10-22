@@ -295,8 +295,6 @@ identity:
 attributes:                 # атрибуты узла: id ключа модели -> имя атрибута в PDM
   mass:
     name: Масса
-  material:
-    name: Материал
   companyName:              # атрибут есть только у сборочных единиц и деталей: общего name нет
     byKind:
       ASSEMBLY: Наименование предприятия
@@ -328,7 +326,7 @@ onUnmapped:
 по типу (`byKind`). У стандартных и прочих изделий обозначение в атрибуте «Обозначение изделия»,
 наименование в свойстве `product`.
 
-**`attributes`** — узловые атрибуты модели. Каждый ключ (`mass`, `material`, `companyName`) обязан быть в `Registries.attributeKeys`.
+**`attributes`** — узловые атрибуты модели. Каждый ключ (`mass`, `companyName`) обязан быть в `Registries.attributeKeys`.
 Правило содержит:
 - `name` — имя атрибута в PDM по умолчанию;
 - `byKind` — переопределение имени для отдельных видов (id вида -> имя).
@@ -354,7 +352,7 @@ onUnmapped:
 ```kotlin
 Registries.itemKinds          // ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, ASSEMBLY_DRAWING, COMPLEX, KIT
 Registries.relations          // COMPOSITION, DOCUMENT
-Registries.attributeKeys      // mass, material, companyName
+Registries.attributeKeys      // mass, companyName
 Registries.linkAttributeKeys  // position, note
 ```
 
