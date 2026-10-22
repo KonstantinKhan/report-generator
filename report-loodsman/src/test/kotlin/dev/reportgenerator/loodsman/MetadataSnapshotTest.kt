@@ -33,4 +33,37 @@ class MetadataSnapshotTest : ShouldSpec({
     should("return null for an unknown link type") {
         snapshot.linkTypeId("Неизвестная связь") shouldBe null
     }
+
+    context("keyAttributeOf") {
+        val withTypes = MetadataSnapshot(
+            linkTypes = emptyList(),
+            objectTypes = listOf(
+                ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "Обозначение"),
+                ObjectTypeInfo(id = 2, typeName = "Ёлка", keyAttribute = "Обозначение"),
+                ObjectTypeInfo(id = 3, typeName = "Комплект", keyAttribute = "GID"),
+                ObjectTypeInfo(id = 4, typeName = "Материал по КД", keyAttribute = null),
+                ObjectTypeInfo(id = 5, typeName = null, keyAttribute = "Наименование"),
+            ),
+            attributeNames = emptySet(),
+            version = 1,
+        )
+
+        should("return key attribute ignoring case, ё and extra whitespace of the type name") {
+            withTypes.keyAttributeOf("  ДЕТАЛЬ ") shouldBe "Обозначение"
+            withTypes.keyAttributeOf("елка") shouldBe "Обозначение"
+            withTypes.keyAttributeOf("комплект") shouldBe "GID"
+        }
+
+        should("return null for an unknown type") {
+            withTypes.keyAttributeOf("Неизвестный тип") shouldBe null
+        }
+
+        should("return null when the key attribute is not set for the type") {
+            withTypes.keyAttributeOf("Материал по КД") shouldBe null
+        }
+
+        should("not match a type with a null name") {
+            withTypes.keyAttributeOf("") shouldBe null
+        }
+    }
 })

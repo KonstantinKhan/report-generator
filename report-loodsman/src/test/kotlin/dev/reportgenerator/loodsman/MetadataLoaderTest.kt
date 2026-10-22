@@ -29,7 +29,8 @@ private const val LINK_LIST_PATH = "/api/v4/MetaData/get-link-list"
 private const val ATTRIBUTE_LIST_PATH = "/api/v4/MetaData/get-attribute-list-2"
 private const val LOGIN_JSON = """{"sessionId":"s1","userId":1,"isEditable":true}"""
 private const val VERSION_JSON = "7"
-private const val TYPE_LIST_JSON = """[{"id":1,"typeName":"Деталь","document":0},{"id":2,"typeName":"Сборочная единица","document":0}]"""
+private const val TYPE_LIST_JSON = """[{"id":1,"typeName":"Деталь","attrName":"Обозначение","document":0},""" +
+    """{"id":2,"typeName":"Сборочная единица","attrName":"Обозначение","document":0}]"""
 private const val LINK_LIST_JSON = """[{"id":10,"name":"Состоит из ...","type":0,"order":1},{"id":11,"name":"Документы","type":1,"order":2}]"""
 private const val ATTRIBUTE_LIST_JSON = """[{"id":1,"name":" Масса ","attrType":2,"system":0,"onlyListItems":0},""" +
     """{"id":2,"name":"Наименование","attrType":1,"system":0,"onlyListItems":0},""" +
@@ -66,11 +67,33 @@ class MetadataLoaderTest : ShouldSpec({
         snapshot shouldBe MetadataSnapshot(
             linkTypes = listOf(LinkTypeInfo(id = 10, name = "Состоит из ...")),
             objectTypes = listOf(
-                ObjectTypeInfo(id = 1, typeName = "Деталь"),
-                ObjectTypeInfo(id = 2, typeName = "Сборочная единица"),
+                ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "Обозначение"),
+                ObjectTypeInfo(id = 2, typeName = "Сборочная единица", keyAttribute = "Обозначение"),
             ),
             attributeNames = setOf("Масса", "Наименование"),
             version = 7,
+        )
+    }
+
+    should("map key attribute of object types trimmed and blank key attribute to null") {
+        val typeList = """[{"id":1,"typeName":"Деталь","attrName":"  Обозначение ","document":0},""" +
+            """{"id":2,"typeName":"Комплект","attrName":"   ","document":0},""" +
+            """{"id":3,"typeName":"Материал по КД","attrName":null,"document":0}]"""
+        val api = loodsmanApi { request ->
+            when (request.url.encodedPath) {
+                VERSION_PATH -> respond(VERSION_JSON, HttpStatusCode.OK, JSON_HEADERS)
+                TYPE_LIST_PATH -> respond(typeList, HttpStatusCode.OK, JSON_HEADERS)
+                ATTRIBUTE_LIST_PATH -> respond(ATTRIBUTE_LIST_JSON, HttpStatusCode.OK, JSON_HEADERS)
+                else -> respond(LINK_LIST_JSON, HttpStatusCode.OK, JSON_HEADERS)
+            }
+        }
+
+        val snapshot = MetadataLoader.load(api)
+
+        snapshot.objectTypes shouldBe listOf(
+            ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "Обозначение"),
+            ObjectTypeInfo(id = 2, typeName = "Комплект", keyAttribute = null),
+            ObjectTypeInfo(id = 3, typeName = "Материал по КД", keyAttribute = null),
         )
     }
 

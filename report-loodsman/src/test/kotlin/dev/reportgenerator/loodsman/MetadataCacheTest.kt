@@ -36,7 +36,7 @@ private class RemoteMetadata {
             loadError?.let { throw it }
             MetadataSnapshot(
                 linkTypes = linkTypeNames.mapIndexed { index, name -> LinkTypeInfo(id = index + 1, name = name) },
-                objectTypes = listOf(ObjectTypeInfo(id = 1, typeName = "Деталь")),
+                objectTypes = listOf(ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "Обозначение")),
                 attributeNames = setOf("Наименование"),
                 version = version,
             )

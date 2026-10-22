@@ -15,8 +15,18 @@ data class MetadataSnapshot(
         val target = normalizeForComparison(pdmName)
         return linkTypes.firstOrNull { normalizeForComparison(it.name.orEmpty()) == target }?.id
     }
+
+    /**
+     * Ключевой атрибут типа объекта (`attrName` из get-type-list) или null, если тип неизвестен или ключ не задан.
+     * Значение ключа физически лежит в свойстве `product`, а не в списке атрибутов объекта.
+     */
+    fun keyAttributeOf(typeName: String): String? {
+        val target = normalizeForComparison(typeName)
+        return objectTypes.firstOrNull { info -> info.typeName?.let(::normalizeForComparison) == target }?.keyAttribute
+    }
 }
 
 data class LinkTypeInfo(val id: Int, val name: String?)
 
-data class ObjectTypeInfo(val id: Int, val typeName: String?)
+/** [keyAttribute] — ключевой атрибут типа, обрезан по краям; null, если не задан. */
+data class ObjectTypeInfo(val id: Int, val typeName: String?, val keyAttribute: String?)

@@ -16,8 +16,8 @@ private val snapshot = MetadataSnapshot(
         LinkTypeInfo(id = 1, name = "Документы"),
     ),
     objectTypes = listOf(
-        ObjectTypeInfo(id = 1, typeName = "Деталь"),
-        ObjectTypeInfo(id = 2, typeName = "Ёлка"),
+        ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "Обозначение"),
+        ObjectTypeInfo(id = 2, typeName = "Ёлка", keyAttribute = "Обозначение"),
     ),
     attributeNames = setOf("Наименование", "Обозначение изделия", "Масса", "Позиция"),
     version = 1,
@@ -195,7 +195,7 @@ class MappingConfigValidatorTest : ShouldSpec({
             objectTypes = listOf(
                 "Деталь", "Сборочная единица", "Сборочный чертеж", "Комплекс",
                 "Стандартное изделие", "Прочее изделие", "Материал по КД", "Комплект",
-            ).mapIndexed { index, name -> ObjectTypeInfo(id = index + 1, typeName = name) },
+            ).mapIndexed { index, name -> ObjectTypeInfo(id = index + 1, typeName = name, keyAttribute = "Обозначение") },
             attributeNames = setOf(
                 "Наименование", "Обозначение изделия", "Масса", "Наименование предприятия", "Позиция", "Примечание",
             ),

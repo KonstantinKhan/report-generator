@@ -28,7 +28,13 @@ object MetadataLoader {
                     // type=1 — прочие виды связей.
                     .filter { it.type == 0 }
                     .map { LinkTypeInfo(id = it.id, name = it.name) },
-                objectTypes = types.await().map { ObjectTypeInfo(id = it.id, typeName = it.typeName) },
+                objectTypes = types.await().map {
+                    ObjectTypeInfo(
+                        id = it.id,
+                        typeName = it.typeName,
+                        keyAttribute = it.attrName?.trim()?.takeIf(String::isNotEmpty),
+                    )
+                },
                 // Атрибуты сравниваются строго: регистр и «ё» сохраняются, со стороны Loodsman убираем только пробелы по краям.
                 attributeNames = attributes.await()
                     .mapNotNull { it.name?.trim()?.takeIf(String::isNotEmpty) }
