@@ -2,8 +2,6 @@ package dev.reportgenerator.loodsman
 
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
-import dev.reportgenerator.domain.Designation
-import dev.reportgenerator.domain.Name
 import dev.reportgenerator.domain.NodeKey
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
@@ -120,12 +118,12 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val fake = SingleObjectFake("Деталь")
         val client = clientFor(fake)
 
-        val node = client.withProperties(PdmNodeId(2), emptySet())
+        val node = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Designation, AttributeKey.Name))
 
         node.id shouldBe PdmNodeId(2)
         node.kind shouldBe PdmNodeKind.Part
-        node.designation shouldBe Designation.Value("АБ.002")
-        node.name shouldBe Name.Value("Вал")
+        node.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.002")
+        node.attributes[AttributeKey.Name] shouldBe AttributeValue.Text("Вал")
         node.key shouldBe NodeKey.Value(AttributeKey.Designation, "АБ.002")
     }
 
@@ -215,14 +213,14 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         }
     }
 
-    should("return NodeKey.Missing and Designation.Missing when the product is empty") {
+    should("return NodeKey.Missing and empty designation when the product is empty") {
         val fake = SingleObjectFake("Деталь", product = "   ")
         val client = clientFor(fake)
 
-        val node = client.withProperties(PdmNodeId(2), emptySet())
+        val node = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Designation))
 
         node.key shouldBe NodeKey.Missing
-        node.designation shouldBe Designation.Missing
+        node.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
     }
 
     // Синтетические объекты по структуре, подтверждённой на сервере (значения выдуманы).
@@ -243,11 +241,11 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
             val (designation, name) = expected
             val fake = SingleObjectFake(type, product = designation, attrs = attrs)
 
-            val node = clientFor(fake).withProperties(PdmNodeId(2), emptySet())
+            val node = clientFor(fake).withProperties(PdmNodeId(2), setOf(AttributeKey.Designation, AttributeKey.Name))
 
             node.key shouldBe NodeKey.Value(AttributeKey.Designation, designation)
-            node.designation shouldBe Designation.Value(designation)
-            node.name shouldBe (name?.let { Name.Value(it) } ?: Name.Missing)
+            node.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text(designation)
+            node.attributes[AttributeKey.Name] shouldBe (name?.let { AttributeValue.Text(it) } ?: AttributeValue.Empty)
         }
     }
 })

@@ -3,10 +3,8 @@ package dev.reportgenerator.loodsman
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
-import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
-import dev.reportgenerator.domain.Name
 import dev.reportgenerator.domain.NodeKey
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
@@ -277,10 +275,10 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     }
 
     should("map designation, name, quantity, unit and position of direct children when depth is 1") {
-        val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1))
+        val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1, AttributeKey.Designation, AttributeKey.Name))
 
-        root.designation shouldBe Designation.Value("АБ.001")
-        root.name shouldBe Name.Value("Корпус")
+        root.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.001")
+        root.attributes[AttributeKey.Name] shouldBe AttributeValue.Text("Корпус")
         root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
         root.usages.all { it.relation == Relation.Composition } shouldBe true
 
@@ -289,8 +287,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val shaftUsage = compositions[0]
         shaftUsage.child.kind shouldBe PdmNodeKind.Part
-        shaftUsage.child.designation shouldBe Designation.Value("АБ.002")
-        shaftUsage.child.name shouldBe Name.Value("Вал")
+        shaftUsage.child.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.002")
+        shaftUsage.child.attributes[AttributeKey.Name] shouldBe AttributeValue.Text("Вал")
         shaftUsage.quantity shouldBe Quantity.Exact(2.0)
         shaftUsage.unit shouldBe Field.Value("шт")
         shaftUsage.position shouldBe Field.Missing
@@ -298,8 +296,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val boltUsage = compositions[1]
         boltUsage.child.kind shouldBe PdmNodeKind.Standard
-        boltUsage.child.designation shouldBe Designation.Value("ГОСТ 7798-70")
-        boltUsage.child.name shouldBe Name.Missing
+        boltUsage.child.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("ГОСТ 7798-70")
+        boltUsage.child.attributes[AttributeKey.Name] shouldBe AttributeValue.Empty
         boltUsage.quantity shouldBe Quantity.Range(4.0, 6.0)
         boltUsage.unit shouldBe Field.Missing
         boltUsage.position shouldBe Field.Missing
@@ -586,31 +584,29 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val fake = FakeLoodsman(tree, treeEdges)
         val client = fake.client()
 
-        val structure = client.loadStructure(query(1, AttributeKey.Mass, includeUnmapped = true))
+        val requested = setOf(AttributeKey.Mass, AttributeKey.Designation, AttributeKey.Name)
+        val structure = client.loadStructure(query(1, *requested.toTypedArray(), includeUnmapped = true))
         val shaftFromStructure = structure.usages[0].child
         val boltFromStructure = structure.usages[1].child
-        val shaftFromProperties = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Mass), includeUnmapped = true)
-        val boltFromProperties = client.withProperties(PdmNodeId(3), setOf(AttributeKey.Mass), includeUnmapped = true)
+        val shaftFromProperties = client.withProperties(PdmNodeId(2), requested, includeUnmapped = true)
+        val boltFromProperties = client.withProperties(PdmNodeId(3), requested, includeUnmapped = true)
 
         shaftFromProperties.key shouldBe shaftFromStructure.key
-        shaftFromProperties.designation shouldBe shaftFromStructure.designation
-        shaftFromProperties.name shouldBe shaftFromStructure.name
+        shaftFromProperties.attributes shouldBe shaftFromStructure.attributes
         boltFromProperties.key shouldBe boltFromStructure.key
-        boltFromProperties.designation shouldBe boltFromStructure.designation
-        boltFromProperties.name shouldBe boltFromStructure.name
         boltFromProperties.attributes shouldBe boltFromStructure.attributes
     }
 
-    should("return NodeKey.Missing and Designation.Missing for an object with empty product") {
+    should("return NodeKey.Missing and empty designation for an object with empty product") {
         val empty = Obj(6, "Деталь", "   ", mapOf("Наименование" to "Пустая"))
         val fake = FakeLoodsman(listOf(assembly, empty), listOf(Edge(1, 6)))
 
-        val structure = fake.client().loadStructure(query(1))
-        val withProperties = fake.client().withProperties(PdmNodeId(6), emptySet())
+        val structure = fake.client().loadStructure(query(1, AttributeKey.Designation))
+        val withProperties = fake.client().withProperties(PdmNodeId(6), setOf(AttributeKey.Designation))
 
         structure.usages.single().child.key shouldBe NodeKey.Missing
-        structure.usages.single().child.designation shouldBe Designation.Missing
+        structure.usages.single().child.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
         withProperties.key shouldBe NodeKey.Missing
-        withProperties.designation shouldBe Designation.Missing
+        withProperties.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
     }
 })
