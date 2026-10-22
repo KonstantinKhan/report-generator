@@ -92,12 +92,12 @@ class PdmDslTest : ShouldSpec({
         pdmNode {
             pdmClient = client
             id = 5
-            attributeKeys = setOf(AttributeKey.Material, AttributeKey.CompanyName)
+            attributeKeys = setOf(AttributeKey.Mass, AttributeKey.CompanyName)
             includeUnmapped = true
         }
 
         client.propertyCalls shouldBe listOf(
-            Triple(PdmNodeId(5), setOf(AttributeKey.Material, AttributeKey.CompanyName), true)
+            Triple(PdmNodeId(5), setOf(AttributeKey.Mass, AttributeKey.CompanyName), true)
         )
         client.queries shouldBe emptyList()
     }
