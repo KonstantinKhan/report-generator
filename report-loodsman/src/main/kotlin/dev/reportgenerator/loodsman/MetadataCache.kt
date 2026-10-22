@@ -19,7 +19,7 @@ class MetadataCache(
 
     constructor(
         api: LoodsmanApi,
-        validate: (MetadataSnapshot) -> List<String> = { emptyList() },
+        validate: (MetadataSnapshot) -> List<String>,
     ) : this(
         versionOf = { api.metaData.cacheVersion() },
         loadSnapshot = { MetadataLoader.load(api) },

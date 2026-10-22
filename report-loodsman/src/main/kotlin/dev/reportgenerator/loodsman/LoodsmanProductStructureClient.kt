@@ -24,7 +24,6 @@ import dev.reportgenerator.loodsman.mapping.FieldSource
 import dev.reportgenerator.loodsman.mapping.KindMapper
 import dev.reportgenerator.loodsman.mapping.LinkField
 import dev.reportgenerator.loodsman.mapping.MappingConfig
-import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
 import dev.reportgenerator.loodsman.mapping.Registries
 import dev.reportgenerator.loodsman.mapping.RelationMapper
 import dev.reportgenerator.loodsman.mapping.identitySourcesOf
@@ -45,9 +44,9 @@ import khan366kos.mapping.toDomain
 
 private const val PROPS_BATCH_SIZE = 100
 
-class LoodsmanProductStructureClient(
+class LoodsmanProductStructureClient internal constructor(
     private val api: LoodsmanApi,
-    private val mapping: MappingConfig = MappingConfigLoader.load(),
+    private val mapping: MappingConfig,
     private val concurrency: Int = 8,
     private val metadata: MetadataSource
 ) : PdmNodeStructureClient {

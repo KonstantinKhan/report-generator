@@ -84,7 +84,7 @@ private class FakeLoodsman(
         metadata: MetadataSource? = null,
     ): LoodsmanProductStructureClient {
         val api = api()
-        val source = metadata ?: MetadataCache(api).also { it.initialize() }
+        val source = metadata ?: MetadataCache(api, validate = { emptyList() }).also { it.initialize() }
         return LoodsmanProductStructureClient(api, mapping, metadata = source)
     }
 

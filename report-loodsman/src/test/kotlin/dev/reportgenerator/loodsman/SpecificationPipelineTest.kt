@@ -4,6 +4,7 @@ import dev.reportgenerator.domain.ItemKind
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.SpecificationData
 import dev.reportgenerator.domain.SpecificationItem
+import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
 import dev.reportgenerator.reports.specification.specificationQuery
 import dev.reportgenerator.reports.specification.toSpecificationData
 import io.kotest.core.spec.style.ShouldSpec
@@ -159,8 +160,8 @@ private suspend fun loadPipeline(
     val config = LoodsmanConfig("http://localhost", "db", "user", "pass")
     val httpClient = ParityLoodsman(objects, edges).httpClient()
     val api = LoodsmanApi(config, httpClient)
-    val metadata = MetadataCache(api).also { it.initialize() }
-    return LoodsmanProductStructureClient(api, metadata = metadata)
+    val metadata = MetadataCache(api, validate = { emptyList() }).also { it.initialize() }
+    return LoodsmanProductStructureClient(api, MappingConfigLoader.load(emptyMap()), metadata = metadata)
         .loadStructure(specificationQuery(PdmNodeId(1)))
         .toSpecificationData()
 }

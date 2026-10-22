@@ -93,7 +93,9 @@ private class SingleObjectFake(
 }
 
 // Default mapping, but the name comes from the PDM prop, so no attribute is needed for identity.
-private val propNameMapping: MappingConfig = MappingConfigLoader.load(emptyMap()).let { default ->
+private val defaultMapping: MappingConfig = MappingConfigLoader.load(emptyMap())
+
+private val propNameMapping: MappingConfig = defaultMapping.let { default ->
     default.copy(
         identity = IdentityMapping(
             designation = FieldSource.Prop(PropField.PRODUCT),
@@ -105,7 +107,7 @@ private val propNameMapping: MappingConfig = MappingConfigLoader.load(emptyMap()
 class LoodsmanWithPropertiesTest : ShouldSpec({
     should("map the loodsman type to the node kind and read identity from props and attributes") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api(), metadata = unusedMetadata)
+        val client = LoodsmanProductStructureClient(fake.api(), defaultMapping, metadata = unusedMetadata)
 
         val node = client.withProperties(PdmNodeId(2), emptySet())
 
@@ -146,7 +148,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
 
     should("call the attribute endpoint when identity is read from an attribute") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api(), metadata = unusedMetadata)
+        val client = LoodsmanProductStructureClient(fake.api(), defaultMapping, metadata = unusedMetadata)
 
         client.withProperties(PdmNodeId(2), emptySet())
 
@@ -168,7 +170,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
 
     should("keep an unknown loodsman type as unmapped kind with the default KEEP policy") {
         val fake = SingleObjectFake("Неизвестный тип")
-        val client = LoodsmanProductStructureClient(fake.api(), metadata = unusedMetadata)
+        val client = LoodsmanProductStructureClient(fake.api(), defaultMapping, metadata = unusedMetadata)
 
         val node = client.withProperties(PdmNodeId(2), emptySet())
 
