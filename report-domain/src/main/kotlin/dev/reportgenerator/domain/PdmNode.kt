@@ -8,5 +8,6 @@ data class PdmNode(
     val version: Field<String> = Field.NotLoaded,
     val state: Field<String> = Field.NotLoaded,
     val attributes: Map<AttributeKey, AttributeValue> = emptyMap(),
-    val usages: List<Usage> = emptyList()
+    val usages: List<Usage> = emptyList(),
+    val key: NodeKey = NodeKey.NotLoaded,
 )
