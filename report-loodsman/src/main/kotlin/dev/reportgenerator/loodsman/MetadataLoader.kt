@@ -19,7 +19,8 @@ object MetadataLoader {
             MetadataSnapshot(
                 linkTypes = links.await()
                     // Поле `type` в swagger описано противоречиво (описания `type` и `inverseName` перепутаны).
-                    // Значение 0 подтверждено только фикстурой и текущей работой кода; проверка на живом сервере не выполнена.
+                    // Подтверждено на сервере (2026-10-22): type=0 у 82 из 88 связей, включая «Состоит из ...» и «Документы»;
+                    // type=1 — прочие виды связей.
                     .filter { it.type == 0 }
                     .map { LinkTypeInfo(id = it.id, name = it.name) },
                 objectTypes = types.await().map { ObjectTypeInfo(id = it.id, typeName = it.typeName) },

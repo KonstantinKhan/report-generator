@@ -240,7 +240,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 ## Конфиг маппинга и ProductStructureClient
 
-`LoodsmanProductStructureClient(api, mapping, concurrency)` — адаптер, реализующий интерфейс `PdmNodeStructureClient`
+`LoodsmanProductStructureClient(api, mapping, concurrency, metadata)` — адаптер, реализующий интерфейс `PdmNodeStructureClient`
 из `report-domain` (`loadStructure(StructureQuery): ProductNode`). Возвращает дерево состава изделия в доменной модели
 (`PdmNode` + `Usage`), не зависящей от словаря Loodsman. Соответствие названий типов, связей и атрибутов PDM
 моделям задаётся конфигом маппинга, а не кодом. `report-server` создаёт адаптер с конфигом по умолчанию
@@ -409,8 +409,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
    Результаты собираются в карту `linkId → атрибуты`.
 
 4. **Кэш.** Свойства, узловые атрибуты и связи хранятся по `idVersion`/`idLink`. Узел разворачивается один раз на
-   минимальной глубине, повторные вхождения в дерево используют те же данные. Метаданные связей (`get-link-list`)
-   загружаются лениво (`SuspendLazy`) один раз на экземпляр адаптера.
+   минимальной глубине, повторные вхождения в дерево используют те же данные. Метаданные (типы связей и объектов)
+   берутся из `MetadataSource` один раз на `loadStructure` (см. раздел «Метаданные: снимок, MetadataCache, обновление»).
 
 5. **Сборка дерева** идёт из кэша рекурсией с остаточной глубиной, используя загруженные атрибуты связей. Цикл
    определяется по текущему пути → `LoodsmanApiException` с путём. Дети, чей тип пропущен политикой `SKIP`, в
@@ -486,6 +486,30 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 **`LOODSMAN_MAPPING_FILE`** (опциональная): путь к файлу конфига маппинга. Если не задана, используется
 `classpath:/loodsman-mapping.yaml`. Читается `MappingConfigLoader`, его же использует `report-server`.
+
+## Метаданные: снимок, MetadataCache, обновление
+
+- **Снимок.** `MetadataLoader.load(api)` строит `MetadataSnapshot(linkTypes, objectTypes, version)`. Сначала читается версия
+  кэша метаданных `GET /api/v4/MetaData/cache/version` (ответ — голое число int64), затем параллельно `get-type-list` и
+  `get-link-list`. В снимок попадают только связи `type == 0` (подтверждено на сервере 2026-10-22: `type=0` у 82 из 88 связей,
+  включая «Состоит из ...» и «Документы»; `type=1` — прочие виды). Версия читается **до** данных: если метаданные изменятся
+  во время загрузки, сохранённая версия окажется старой, и следующая проверка повторно обновит снимок.
+- **`MetadataCache`** (`report-loodsman`) — `MetadataSource` с `AtomicReference<MetadataSnapshot?>`:
+  - `initialize()` — первая загрузка на старте `report-server`. Ошибка загрузки или непрошедшая `validate` проверка
+    пробрасывается, сервер не стартует (fail-fast).
+  - `snapshot()` — без обращения к Loodsman. Кидает `IllegalStateException`, если кэш не инициализирован.
+  - `refresh(force = false): RefreshResult` — вызовы сериализованы `Mutex`. Сначала читается версия: если она совпала с текущей
+    и `force = false`, результат `Unchanged(version)` без загрузки. Иначе загружается снимок и проверяется `validate`;
+    пустой список ошибок — снимок подменяется целиком (`Updated(oldVersion, newVersion)`). Ошибка любого шага
+    (включая запрос версии и `validate`) — результат `Failed(cause)`: старый снимок остаётся, ошибка пишется в лог.
+    `CancellationException` не перехватывается.
+- **Эндпоинт** `POST /admin/metadata/refresh?force=true|false` (по умолчанию `false`) в `report-server`:
+  - `200 {"status":"updated"|"unchanged","version":N}`;
+  - при `Failed` — `502 {"error":"<причина>"}`, старый снимок остаётся;
+  - каждый вызов логируется на INFO с результатом, без учётных данных.
+  - Аутентификации нет: решение владельца. Эндпоинт доступен всем, кто достучится до `report-server`.
+- **Клиент** `LoodsmanProductStructureClient` получает `MetadataSource` параметром без значения по умолчанию. Снимок
+  берётся один раз на `loadStructure`: смена снимка в кэше во время обхода на уже начатый обход не влияет.
 
 ## Конфигурация и запуск
 
