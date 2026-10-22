@@ -20,6 +20,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.time.Duration.Companion.seconds
 import java.util.concurrent.atomic.AtomicInteger
 
 private const val VERSION_PATH = "/api/v4/MetaData/cache/version"
@@ -103,7 +104,7 @@ class MetadataLoaderTest : ShouldSpec({
             }
         }
 
-        val snapshot = withTimeout(5_000) { MetadataLoader.load(api) }
+        val snapshot = withTimeout(5.seconds) { MetadataLoader.load(api) }
 
         snapshot.linkTypes.map { it.id } shouldBe listOf(10)
         started.get() shouldBe 2
@@ -119,7 +120,7 @@ class MetadataLoaderTest : ShouldSpec({
             }
         }
 
-        val error = shouldThrow<LoodsmanApiException> { withTimeout(5_000) { MetadataLoader.load(api) } }
+        val error = shouldThrow<LoodsmanApiException> { withTimeout(5.seconds) { MetadataLoader.load(api) } }
 
         error.status shouldBe 500
         requested.toList() shouldBe listOf(VERSION_PATH)
@@ -140,9 +141,9 @@ class MetadataLoaderTest : ShouldSpec({
             }
         }
 
-        val error = shouldThrow<LoodsmanApiException> { withTimeout(5_000) { MetadataLoader.load(api) } }
+        val error = shouldThrow<LoodsmanApiException> { withTimeout(5.seconds) { MetadataLoader.load(api) } }
 
         error.status shouldBe 500
-        withTimeout(5_000) { linkListCancelled.await() }
+        withTimeout(5.seconds) { linkListCancelled.await() }
     }
 })
