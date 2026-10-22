@@ -73,10 +73,10 @@ fun Application.reportServerModule(
             call.application.log.warn("Invalid product data for specification: ${cause.message}")
             call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "invalid product data"))
         }
-        // Fallback for network-level failures not wrapped in LoodsmanApiException.
         exception<MetadataRefreshException> { call, cause ->
             call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "metadata refresh failed"))
         }
+        // Fallback for network-level failures not wrapped in LoodsmanApiException.
         exception<IOException> { call, cause ->
             call.application.log.error("Upstream I/O error", cause)
             call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "upstream error"))
