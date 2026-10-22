@@ -240,11 +240,26 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 ## Конфиг маппинга и ProductStructureClient
 
-`LoodsmanProductStructureClient(api, mapping, concurrency, metadata)` — адаптер, реализующий интерфейс `PdmNodeStructureClient`
+`LoodsmanProductStructureClient(api, mapping, concurrency = 8, metadata)` — адаптер, реализующий интерфейс `PdmNodeStructureClient`
 из `report-domain` (`loadStructure(StructureQuery): ProductNode`). Возвращает дерево состава изделия в доменной модели
 (`PdmNode` + `Usage`), не зависящей от словаря Loodsman. Соответствие названий типов, связей и атрибутов PDM
-моделям задаётся конфигом маппинга, а не кодом. `report-server` создаёт адаптер с конфигом по умолчанию
-(`MappingConfigLoader.load()`).
+моделям задаётся конфигом маппинга, а не кодом. Конструктор `internal`, без значения по умолчанию для `mapping`:
+создать клиент с непроверенным маппингом снаружи модуля нельзя. Собирает его только `LoodsmanContext.bootstrap`.
+
+## LoodsmanContext: сборка и fail-fast
+
+`LoodsmanContext` (`report-loodsman`) — единственная точка сборки Loodsman-компонентов для приложения: свойства
+`client: PdmNodeStructureClient` и `metadata: MetadataCache`. Конструктор закрытый, экземпляр создаётся только через
+`LoodsmanContext.bootstrap(api, mapping)`:
+
+1. создаёт `MetadataCache(api) { MappingConfigValidator.validate(mapping, it) }`;
+2. вызывает `initialize()`: загрузка снимка и семантическая проверка маппинга;
+3. собирает `LoodsmanProductStructureClient(api, mapping, metadata = cache)`.
+
+Гарантии: если метаданные не загрузились или маппинг не совпал с Loodsman, `bootstrap` падает с сообщением, где перечислены
+все ошибки проверки (`Metadata validation failed: ...`). Контекст с непроверенным маппингом получить нельзя.
+`mapping` передаётся явно: `bootstrap` не читает YAML сам. Загрузка — в вызывающем коде (`report-server` в `Main.kt`:
+`MappingConfigLoader.load()`, структурная проверка, затем `bootstrap`).
 
 ### Структура YAML конфига маппинга
 
@@ -399,7 +414,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
    Не проверяются: доменные реестры, `PropField`, `LinkField`, `onUnmapped`, `properties`.
 
-   Фаза 2 подключена в `report-server` через `MetadataCache(api) { MappingConfigValidator.validate(mapping, it) }`:
+   Фаза 2 подключена в `LoodsmanContext.bootstrap` (см. [выше](#loodsmancontext-сборка-и-fail-fast)):
    `initialize()` падает на старте, `refresh()` возвращает `Failed` и оставляет старый снимок.
 
 ### Правила сравнения имён
@@ -520,7 +535,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
   отменяет остальные. `attributeNames` — имена атрибутов после `trim`, без пустых и `null`. В снимок попадают только связи `type == 0` (подтверждено на сервере 2026-10-22: `type=0` у 82 из 88 связей,
   включая «Состоит из ...» и «Документы»; `type=1` — прочие виды). Версия читается **до** данных: если метаданные изменятся
   во время загрузки, сохранённая версия окажется старой, и следующая проверка повторно обновит снимок.
-- **`MetadataCache`** (`report-loodsman`) — `MetadataSource` с `AtomicReference<MetadataSnapshot?>`:
+- **`MetadataCache`** (`report-loodsman`) — `MetadataSource` с `AtomicReference<MetadataSnapshot?>`. Вторичный конструктор
+  `MetadataCache(api, validate)` требует `validate` явно, значения по умолчанию нет:
   - `initialize()` — первая загрузка на старте `report-server`. Ошибка загрузки или непрошедшая `validate` проверка
     пробрасывается, сервер не стартует (fail-fast).
   - `snapshot()` — без обращения к Loodsman. Кидает `IllegalStateException`, если кэш не инициализирован.
