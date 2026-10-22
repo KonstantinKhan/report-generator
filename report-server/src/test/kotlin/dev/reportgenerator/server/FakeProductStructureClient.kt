@@ -1,6 +1,7 @@
 package dev.reportgenerator.server
 
 import dev.reportgenerator.domain.AttributeKey
+import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.DocumentUsage
@@ -42,15 +43,28 @@ class FakeProductStructureClient(
         kind = PdmNodeKind.Assembly,
         designation = Designation.Value("ИЗД.001"),
         name = Name.Value("Изделие"),
+        attributes = attributesOf("ИЗД.001", "Изделие"),
         usages = listOf(
             CompositionUsage(
-                child = PdmNode(PdmNodeId(2), PdmNodeKind.Part, Designation.Value("АБ.002"), Name.Value("Вал")),
+                child = PdmNode(
+                    PdmNodeId(2),
+                    PdmNodeKind.Part,
+                    Designation.Value("АБ.002"),
+                    Name.Value("Вал"),
+                    attributes = attributesOf("АБ.002", "Вал"),
+                ),
                 position = Field.Missing,
                 quantity = Quantity.Exact(2.0),
                 unit = Field.Value("шт"),
             ),
             CompositionUsage(
-                child = PdmNode(PdmNodeId(3), PdmNodeKind.Assembly, Designation.Value("АБ.003"), Name.Value("Корпус")),
+                child = PdmNode(
+                    PdmNodeId(3),
+                    PdmNodeKind.Assembly,
+                    Designation.Value("АБ.003"),
+                    Name.Value("Корпус"),
+                    attributes = attributesOf("АБ.003", "Корпус"),
+                ),
                 position = Field.Missing,
                 quantity = Quantity.Exact(1.0),
                 unit = Field.Value("шт"),
@@ -61,8 +75,15 @@ class FakeProductStructureClient(
                     PdmNodeKind.AssemblyDrawing,
                     Designation.Value("ИЗД.001 СБ"),
                     Name.Value("Изделие. Сборочный чертёж"),
+                    attributes = attributesOf("ИЗД.001 СБ", "Изделие. Сборочный чертёж"),
                 ),
             ),
         ),
+    )
+
+    // Mirrors the legacy designation/name fields as attributes, which is what the specification reads.
+    private fun attributesOf(designation: String, name: String): Map<AttributeKey, AttributeValue> = mapOf(
+        AttributeKey.Designation to AttributeValue.Text(designation),
+        AttributeKey.Name to AttributeValue.Text(name),
     )
 }

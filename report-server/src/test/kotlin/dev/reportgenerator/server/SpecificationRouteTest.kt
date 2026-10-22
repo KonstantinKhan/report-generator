@@ -1,5 +1,7 @@
 package dev.reportgenerator.server
 
+import dev.reportgenerator.domain.AttributeKey
+import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.Field
@@ -64,9 +66,22 @@ class SpecificationRouteTest {
             kind = PdmNodeKind.Assembly,
             designation = Designation.Value("ИЗД.001"),
             name = Name.Value("Изделие"),
+            attributes = mapOf(
+                AttributeKey.Designation to AttributeValue.Text("ИЗД.001"),
+                AttributeKey.Name to AttributeValue.Text("Изделие"),
+            ),
             usages = listOf(
                 CompositionUsage(
-                    child = PdmNode(PdmNodeId(2), PdmNodeKind.Part, Designation.Value("АБ.002"), Name.Value("Вал")),
+                    child = PdmNode(
+                        PdmNodeId(2),
+                        PdmNodeKind.Part,
+                        Designation.Value("АБ.002"),
+                        Name.Value("Вал"),
+                        attributes = mapOf(
+                            AttributeKey.Designation to AttributeValue.Text("АБ.002"),
+                            AttributeKey.Name to AttributeValue.Text("Вал"),
+                        ),
+                    ),
                     position = Field.Missing,
                     quantity = Quantity.Missing,
                     unit = Field.Missing,

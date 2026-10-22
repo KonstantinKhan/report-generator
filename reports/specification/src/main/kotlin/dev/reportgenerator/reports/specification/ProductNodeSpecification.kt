@@ -1,5 +1,7 @@
 package dev.reportgenerator.reports.specification
 
+import dev.reportgenerator.domain.AttributeKey
+import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.DocumentUsage
@@ -18,12 +20,12 @@ import dev.reportgenerator.domain.UnmappedUsage
 // Composition items go first (in usage order), then documents (usages with the AssemblyDrawing child).
 // Usages of unknown kind are skipped.
 fun PdmNode.toSpecificationData(): SpecificationData {
-    val documentDesignation = when (val value = designation) {
+    val documentDesignation = when (val value = designationFromAttributes()) {
         is Designation.Value -> value.text
         is Designation.Missing -> throw SpecificationDataException("Root node ${id.asInt()}: designation is missing")
         is Designation.NotLoaded -> throw SpecificationDataException("Root node ${id.asInt()}: designation is not loaded")
     }
-    val documentName = when (val value = name) {
+    val documentName = when (val value = nameFromAttributes()) {
         is Name.Value -> value.text
         is Name.Missing -> documentDesignation
         is Name.NotLoaded -> throw SpecificationDataException("Root node ${id.asInt()}: name is not loaded")
@@ -66,9 +68,11 @@ private fun CompositionUsage.unitOf(): String? = when (val value = unit) {
 
 private fun PdmNode.toItem(quantity: Double, unit: String?): SpecificationItem {
     val itemKind = kind.toItemKind() ?: error("Node ${id.asInt()}: product kind $kind has no specification kind")
+    val designationState = designationFromAttributes()
+    val nameState = nameFromAttributes()
     if (kind == PdmNodeKind.Material) {
         // In the specification the material designation is shown in the name column, the designation column stays empty.
-        val materialName = when (val value = designation) {
+        val materialName = when (val value = designationState) {
             is Designation.Value -> value.text
             is Designation.Missing -> throw SpecificationDataException("Node ${id.asInt()}: designation is missing for a material")
             is Designation.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: designation is not loaded")
@@ -82,12 +86,12 @@ private fun PdmNode.toItem(quantity: Double, unit: String?): SpecificationItem {
         )
     }
     if (kind == PdmNodeKind.Standard || kind == PdmNodeKind.Other) {
-        val designationText = when (val value = designation) {
+        val designationText = when (val value = designationState) {
             is Designation.Value -> value.text
             is Designation.Missing -> null
             is Designation.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: designation is not loaded")
         }
-        return when (val value = name) {
+        return when (val value = nameState) {
             // Old data form: the name is set, the designation column is kept as is.
             is Name.Value -> SpecificationItem(
                 designation = designationText,
@@ -108,12 +112,12 @@ private fun PdmNode.toItem(quantity: Double, unit: String?): SpecificationItem {
             is Name.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: name is not loaded")
         }
     }
-    val designationText = when (val value = designation) {
+    val designationText = when (val value = designationState) {
         is Designation.Value -> value.text
         is Designation.Missing -> null
         is Designation.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: designation is not loaded")
     }
-    val nameText = when (val value = name) {
+    val nameText = when (val value = nameState) {
         is Name.Value -> value.text
         is Name.Missing -> designationText
             ?: throw SpecificationDataException("Node ${id.asInt()}: name and designation are both missing")
@@ -126,6 +130,21 @@ private fun PdmNode.toItem(quantity: Double, unit: String?): SpecificationItem {
         quantity = quantity,
         unit = unit
     )
+}
+
+// Attribute reading: Text -> Value, Empty -> Missing, key not in the map (not requested) -> NotLoaded.
+private fun PdmNode.designationFromAttributes(): Designation = when (val value = attributes[AttributeKey.Designation]) {
+    null -> Designation.NotLoaded
+    is AttributeValue.Text -> Designation.Value(value.value)
+    is AttributeValue.Number -> Designation.Value(value.value.toString())
+    AttributeValue.Empty -> Designation.Missing
+}
+
+private fun PdmNode.nameFromAttributes(): Name = when (val value = attributes[AttributeKey.Name]) {
+    null -> Name.NotLoaded
+    is AttributeValue.Text -> Name.Value(value.value)
+    is AttributeValue.Number -> Name.Value(value.value.toString())
+    AttributeValue.Empty -> Name.Missing
 }
 
 private fun PdmNodeKind.toItemKind(): ItemKind? = when (this) {

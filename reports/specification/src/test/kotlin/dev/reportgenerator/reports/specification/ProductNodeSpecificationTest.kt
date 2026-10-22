@@ -1,5 +1,7 @@
 package dev.reportgenerator.reports.specification
 
+import dev.reportgenerator.domain.AttributeKey
+import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.DocumentUsage
@@ -20,21 +22,42 @@ import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 
+// Designation and name are read from attributes; null means the key was not requested (NotLoaded).
+// Legacy designation/name fields are neutral here: the specification must not read them.
 private fun node(
     id: Int,
     kind: PdmNodeKind = PdmNodeKind.Part,
-    designation: Designation = Designation.Value("АБ.$id"),
-    name: Name = Name.Value("Имя $id"),
+    designation: AttributeValue? = AttributeValue.Text("АБ.$id"),
+    name: AttributeValue? = AttributeValue.Text("Имя $id"),
     usages: List<Usage> = emptyList(),
-) = PdmNode(PdmNodeId(id), kind, designation, name, usages = usages)
+) = PdmNode(
+    id = PdmNodeId(id),
+    kind = kind,
+    designation = Designation.Missing,
+    name = Name.Missing,
+    attributes = attributesOf(designation, name),
+    usages = usages,
+)
 
-private fun root(vararg usages: Usage) = node(
+private fun attributesOf(designation: AttributeValue?, name: AttributeValue?): Map<AttributeKey, AttributeValue> =
+    buildMap {
+        designation?.let { put(AttributeKey.Designation, it) }
+        name?.let { put(AttributeKey.Name, it) }
+    }
+
+private fun rootNode(
+    designation: AttributeValue? = AttributeValue.Text("ИЗД.001"),
+    name: AttributeValue? = AttributeValue.Text("Изделие"),
+    usages: List<Usage> = emptyList(),
+) = node(
     id = 1,
     kind = PdmNodeKind.Assembly,
-    designation = Designation.Value("ИЗД.001"),
-    name = Name.Value("Изделие"),
-    usages = usages.toList(),
+    designation = designation,
+    name = name,
+    usages = usages,
 )
+
+private fun root(vararg usages: Usage) = rootNode(usages = usages.toList())
 
 private fun composition(
     child: PdmNode,
@@ -59,21 +82,21 @@ class ProductNodeSpecificationTest : ShouldSpec({
     }
 
     should("use the root designation as document name when the name is missing") {
-        val data = root().copy(name = Name.Missing).toSpecificationData()
+        val data = rootNode(name = AttributeValue.Empty).toSpecificationData()
 
         data.documentName shouldBe "ИЗД.001"
     }
 
     should("fail when the root designation is missing or not loaded") {
-        val missing = root().copy(designation = Designation.Missing)
-        val notLoaded = root().copy(designation = Designation.NotLoaded)
+        val missing = rootNode(designation = AttributeValue.Empty)
+        val notLoaded = rootNode(designation = null)
 
         shouldThrow<SpecificationDataException> { missing.toSpecificationData() }.message shouldContain "1"
         shouldThrow<SpecificationDataException> { notLoaded.toSpecificationData() }.message shouldContain "1"
     }
 
     should("fail when the root name is not loaded") {
-        val node = root().copy(name = Name.NotLoaded)
+        val node = rootNode(name = null)
 
         shouldThrow<SpecificationDataException> { node.toSpecificationData() }.message shouldContain "1"
     }
@@ -104,20 +127,25 @@ class ProductNodeSpecificationTest : ShouldSpec({
     }
 
     should("show a material designation in the name column and leave the designation empty") {
-        val child = node(2, kind = PdmNodeKind.Material, designation = Designation.Value("Сталь 09Г2С"), name = Name.Value("Лист"))
+        val child = node(
+            2,
+            kind = PdmNodeKind.Material,
+            designation = AttributeValue.Text("Сталь 09Г2С"),
+            name = AttributeValue.Text("Лист"),
+        )
         val data = root(composition(child, Quantity.Exact(2.5), Field.Value("кг"))).toSpecificationData()
 
         data.single() shouldBe SpecificationItem(null, "Сталь 09Г2С", ItemKind.MATERIAL, 2.5, "кг")
     }
 
     should("fail on a material with a missing designation") {
-        val child = node(2, kind = PdmNodeKind.Material, designation = Designation.Missing)
+        val child = node(2, kind = PdmNodeKind.Material, designation = AttributeValue.Empty)
 
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
     should("fail on a material with a not loaded designation") {
-        val child = node(2, kind = PdmNodeKind.Material, designation = Designation.NotLoaded)
+        val child = node(2, kind = PdmNodeKind.Material, designation = null)
 
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
@@ -127,40 +155,55 @@ class ProductNodeSpecificationTest : ShouldSpec({
         PdmNodeKind.Other to ItemKind.OTHER,
     ).forEach { (productKind, itemKind) ->
         should("keep the designation column and take the name from the name for a $productKind when both are set") {
-            val child = node(2, kind = productKind, designation = Designation.Value("ГОСТ 7798-70"), name = Name.Value("Болт"))
+            val child = node(
+                2,
+                kind = productKind,
+                designation = AttributeValue.Text("ГОСТ 7798-70"),
+                name = AttributeValue.Text("Болт"),
+            )
             val data = root(composition(child, Quantity.Exact(2.0), Field.Value("шт"))).toSpecificationData()
 
             data.single() shouldBe SpecificationItem("ГОСТ 7798-70", "Болт", itemKind, 2.0, "шт")
         }
 
         should("use the designation as name for a $productKind when the name is missing") {
-            val child = node(2, kind = productKind, designation = Designation.Value("ГОСТ 7798-70"), name = Name.Missing)
+            val child = node(
+                2,
+                kind = productKind,
+                designation = AttributeValue.Text("ГОСТ 7798-70"),
+                name = AttributeValue.Empty,
+            )
             val data = root(composition(child)).toSpecificationData()
 
             data.single() shouldBe SpecificationItem(null, "ГОСТ 7798-70", itemKind, 1.0, null)
         }
 
         should("use the name for a $productKind when the designation is missing") {
-            val child = node(2, kind = productKind, designation = Designation.Missing, name = Name.Value("Болт"))
+            val child = node(
+                2,
+                kind = productKind,
+                designation = AttributeValue.Empty,
+                name = AttributeValue.Text("Болт"),
+            )
             val data = root(composition(child)).toSpecificationData()
 
             data.single() shouldBe SpecificationItem(null, "Болт", itemKind, 1.0, null)
         }
 
         should("fail on a $productKind when the name and designation are both missing") {
-            val child = node(2, kind = productKind, designation = Designation.Missing, name = Name.Missing)
+            val child = node(2, kind = productKind, designation = AttributeValue.Empty, name = AttributeValue.Empty)
 
             shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
         }
 
         should("fail on a $productKind with a not loaded designation") {
-            val child = node(2, kind = productKind, designation = Designation.NotLoaded, name = Name.Value("Болт"))
+            val child = node(2, kind = productKind, designation = null, name = AttributeValue.Text("Болт"))
 
             shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
         }
 
         should("fail on a $productKind with a not loaded name") {
-            val child = node(2, kind = productKind, name = Name.NotLoaded)
+            val child = node(2, kind = productKind, name = null)
 
             shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
         }
@@ -238,35 +281,56 @@ class ProductNodeSpecificationTest : ShouldSpec({
     }
 
     should("map a missing designation to null") {
-        val child = node(2, designation = Designation.Missing)
+        val child = node(2, designation = AttributeValue.Empty)
         val data = root(composition(child)).toSpecificationData()
 
         data.single().designation shouldBe null
     }
 
     should("fail on a not loaded designation") {
-        val child = node(2, designation = Designation.NotLoaded)
+        val child = node(2, designation = null)
 
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
     should("use the designation as item name when the name is missing") {
-        val child = node(2, designation = Designation.Value("ГОСТ 7798-70"), name = Name.Missing)
+        val child = node(2, designation = AttributeValue.Text("ГОСТ 7798-70"), name = AttributeValue.Empty)
         val data = root(composition(child)).toSpecificationData()
 
         data.single().name shouldBe "ГОСТ 7798-70"
     }
 
     should("fail when the name and designation of an item are both missing") {
-        val child = node(2, designation = Designation.Missing, name = Name.Missing)
+        val child = node(2, designation = AttributeValue.Empty, name = AttributeValue.Empty)
 
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
     should("fail on a not loaded item name") {
-        val child = node(2, name = Name.NotLoaded)
+        val child = node(2, name = null)
 
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+    }
+
+    should("read a text attribute as a value") {
+        val child = node(2, designation = AttributeValue.Text("АБ.7"), name = AttributeValue.Text("Вал"))
+        val data = root(composition(child)).toSpecificationData()
+
+        data.single() shouldBe SpecificationItem("АБ.7", "Вал", ItemKind.PART, 1.0, null)
+    }
+
+    should("read an empty attribute as missing") {
+        val child = node(2, designation = AttributeValue.Empty, name = AttributeValue.Text("Вал"))
+        val data = root(composition(child)).toSpecificationData()
+
+        data.single() shouldBe SpecificationItem(null, "Вал", ItemKind.PART, 1.0, null)
+    }
+
+    should("fail as not loaded when the attribute key was not requested") {
+        val child = node(2, designation = null, name = AttributeValue.Text("Вал"))
+
+        shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }
+            .message shouldContain "designation is not loaded"
     }
 
     should("not treat a data error as an IllegalStateException so the generic handler does not catch it") {

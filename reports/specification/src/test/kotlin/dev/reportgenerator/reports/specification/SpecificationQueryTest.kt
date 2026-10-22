@@ -1,5 +1,6 @@
 package dev.reportgenerator.reports.specification
 
+import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.Relation
 import io.kotest.core.spec.style.ShouldSpec
@@ -12,6 +13,10 @@ class SpecificationQueryTest : ShouldSpec({
 
     should("request composition and document relations only") {
         specificationQuery(PdmNodeId(1)).relations shouldBe setOf(Relation.Composition, Relation.Document)
+    }
+
+    should("request designation and name attributes") {
+        specificationQuery(PdmNodeId(1)).attributes shouldBe setOf(AttributeKey.Designation, AttributeKey.Name)
     }
 
     should("keep the given root id") {
