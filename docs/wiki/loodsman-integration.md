@@ -150,10 +150,10 @@ Loodsman хранит данные об объекте в **двух не свя
 `designation` и `name` — обычные правила `attributes` (имена `Обозначение` и `Наименование`).
 
 Следствия для восьми видов: `designation` берётся из `product` (через ключ), `name` — «Наименование» из списка.
-У стандартных и прочих изделий и материалов «Наименование» нет, поэтому `name` = `Name.Missing`, а обозначение
-остаётся в `designation`; спецификация переносит его в столбец «Наименование» (см. «Правила преобразования в спецификацию»).
+У стандартных и прочих изделий и материалов «Наименование» нет, поэтому `attributes[Name]` = `AttributeValue.Empty`, а обозначение
+остаётся в ключевом атрибуте (`attributes[Designation]`); спецификация переносит его в столбец «Наименование» (см. «Правила преобразования в спецификацию»).
 
-Пустой `product` при наличии ключа → `NodeKey.Missing` и `Designation.Missing`. Тип без ключевого атрибута → `NodeKey.Missing`.
+Пустой `product` при наличии ключа → `NodeKey.Missing` и `attributes[Designation]` = `AttributeValue.Empty`. Тип без ключевого атрибута → `NodeKey.Missing`.
 Ключ узла (`PdmNode.key`) — `NodeKey.Value(attribute, text)`: `attribute` — доменный ключ правила, чьё имя совпало с
 ключевым атрибутом вида; если такого правила нет — `AttributeKey.Unmapped(имя ключевого атрибута)`.
 
@@ -204,8 +204,8 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 Количество у документации не нужно.
 
 Обозначение стандартных и прочих изделий — ключевой атрибут типа (значение в `product`), отдельный атрибут для него
-не используется. Список атрибутов объекта (`get-info-about-version-mode-3`) сейчас читается для каждого узла: это
-временно, пока `designation`/`name` дублируются в устаревших полях `PdmNode` (TODO(6d) в коде).
+не используется. Список атрибутов объекта (`get-info-about-version-mode-3`) читается только по необходимости
+(см. «Что попадает в PdmNode и Usage»).
 
 ## Прочее
 
@@ -232,8 +232,8 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 В спецификации `Exact` даёт число, `Range` и `Missing` — `SpecificationDataException` (диапазон в спецификации не
 выводится). У документации количество не читается: в спецификации 0.0 и пустая ячейка.
 
-**(б) Материал.** У `ProductKind.Material` в домене `designation` берётся из `product` (свойство `PRODUCT`), `name` —
-из атрибута «Наименование» (`byKind` для материала нет). В спецификации обозначение **выводится в столбец «Наименование»**,
+**(б) Материал.** У материала обозначение (`AttributeKey.Designation`, ключевой атрибут) берётся из `product` (свойство `PRODUCT`),
+наименование (`AttributeKey.Name`) — из атрибута «Наименование» (`byKind` для материала нет). В спецификации обозначение **выводится в столбец «Наименование»**,
 столбец обозначения пуст. Правило отчёта живёт в конвертере `PdmNode.toItem()`, а не в маппинге: маппинг отдаёт
 доменную модель как есть. Без обозначения у материала — `SpecificationDataException`. Единица измерения только у
 материалов — [specification-table-format.md](specification-table-format.md).
@@ -251,7 +251,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 **Источник значений.** Спецификация читает обозначение и наименование из `PdmNode.attributes` (запрос
 `specificationQuery` просит оба ключа): `Text` → значение, `Empty` → отсутствует, ключа нет → «не загружено»
-(`SpecificationDataException`). Поля `PdmNode.designation`/`name` спецификация не читает.
+(`SpecificationDataException`). У `PdmNode` нет полей `designation`/`name`: читается только `attributes`.
 
 ## Конфиг маппинга и ProductStructureClient
 
@@ -460,20 +460,25 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 ### Что попадает в PdmNode и Usage
 
-- **Обозначение и наименование** — правила `designation` и `name` из `attributes` (чтение `readAttribute`: ключевой
-  атрибут вида берётся из `product`). Пустое значение → `Designation.Missing` / `Name.Missing`.
+- **Обозначение и наименование** — обычные атрибуты `AttributeKey.Designation` и `AttributeKey.Name` в `PdmNode.attributes`,
+  запрашиваются через `query.attributes` (чтение `readAttribute`: ключевой атрибут вида берётся из `product`).
+  Пустое значение → `AttributeValue.Empty`, не запрошено → ключа нет.
+- **Ключ узла** (`PdmNode.key`) — заполняется всегда, если у вида есть ключевой атрибут.
+- **Список атрибутов объекта** (`get-info-about-version-mode-3`) запрашивается только если `includeUnmapped` или среди
+  запрошенных есть неключевой атрибут вида (`AttributeRequest.needsObjectAttributes()`). Запрос только обозначения
+  у вида с ключом «Обозначение» — 0 вызовов; запрос наименования — 1 вызов на объект.
 - **Version и State** — ВСЕГДА из свойств объекта, источник задаёт блок `properties` (по умолчанию `VERSION` и
   `STATE`). Значение — трим; непустое → `Field.Value(строка)`, пустое или отсутствующее → `Field.Missing`
   (версия у объекта бывает не задана, состояние ожидается всегда, но отсутствие не считается ошибкой загрузки).
 
 ### Состояния значений и доступ к ним
 
-`Designation`, `Name` и `Field<T>` (позиция, единица, версия, состояние) — sealed-типы с тремя состояниями:
+`Field<T>` (позиция, единица, версия, состояние) — sealed-типы с тремя состояниями:
 `Value` (значение есть), `Missing` (в PDM пусто), `NotLoaded` (не запрашивалось). `null` в API нет. Доступ —
 `orElse(default)`, значение по умолчанию вызывающий указывает явно: `node.version.orElse("—")`.
 `Missing` даёт `default`, `NotLoaded` бросает `IllegalStateException`: обращение к незапрошенному значению —
-ошибка вызывающего кода, а не пустая ячейка. Адаптер `NotLoaded` не создаёт (поля заполнены всегда), оно
-остаётся значением по умолчанию у вручную собранных `PdmNode` в тестах.
+ошибка вызывающего кода, а не пустая ячейка. Адаптер `Field.NotLoaded` не создаёт (версия и состояние заполняются
+всегда), оно остаётся значением по умолчанию у вручную собранных `PdmNode` в тестах.
 
 Значения атрибутов (`PdmNode.attributes`, `Usage.attributes`) читаются так же: `attributes[ключ].orElse("—")`.
 Это функция на `AttributeValue?`: `Text` даёт текст, `Number` — число строкой, `Empty` («запрошено, значения нет»)
@@ -506,7 +511,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 |---|---|---|---|
 | Вид объекта | свойство `type` (`get-prop-objects`) | `kinds` | `PdmNode.kind` |
 | Версия, состояние | свойства `version`, `state` | `properties` | `PdmNode.version`, `state` |
-| Обозначение, наименование | ключевой атрибут типа (`product`) или атрибут объекта | `attributes.designation`, `attributes.name` | `PdmNode.designation`, `name`, `key` |
+| Обозначение, наименование | ключевой атрибут типа (`product`) или атрибут объекта | `attributes.designation`, `attributes.name` (только если запрошены) | `PdmNode.attributes`; ключ узла — `PdmNode.key` |
 | Атрибуты узла | атрибуты объекта (`get-info-about-version-mode-3`) | `attributes` (+ `byKind`) | `PdmNode.attributes` |
 | Количество | поля связи `minQuantity`, `maxQuantity` | `link.fields.quantityMin`, `quantityMax` | `Usage.quantity` |
 | Единица | поле связи `unit` | `link.fields.unit` | `Usage.unit` |
