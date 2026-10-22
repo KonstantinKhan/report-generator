@@ -1,6 +1,7 @@
 package dev.reportgenerator.loodsman.mapping
 
 import dev.reportgenerator.domain.PdmNodeKind
+import dev.reportgenerator.loodsman.normalizeForComparison
 import org.slf4j.Logger
 
 class KindMapper(private val config: MappingConfig, private val log: Logger) {
@@ -33,9 +34,5 @@ class KindMapper(private val config: MappingConfig, private val log: Logger) {
                 }
             }
         }
-    }
-
-    private fun normalizeForComparison(name: String): String {
-        return name.lowercase().replace('ё', 'е').replace("\\s+".toRegex(), " ").trim()
     }
 }

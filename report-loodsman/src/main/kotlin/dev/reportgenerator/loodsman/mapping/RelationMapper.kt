@@ -1,6 +1,7 @@
 package dev.reportgenerator.loodsman.mapping
 
 import dev.reportgenerator.domain.Relation
+import dev.reportgenerator.loodsman.normalizeForComparison
 import org.slf4j.Logger
 
 class RelationMapper(private val config: MappingConfig, private val log: Logger) {
@@ -42,9 +43,5 @@ class RelationMapper(private val config: MappingConfig, private val log: Logger)
                 Registries.relations.resolve(value) == relation
             }?.key
         }
-    }
-
-    private fun normalizeForComparison(name: String): String {
-        return name.lowercase().replace("\\s+".toRegex(), " ").trim()
     }
 }

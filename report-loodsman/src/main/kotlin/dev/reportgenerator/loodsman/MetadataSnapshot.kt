@@ -10,14 +10,11 @@ data class MetadataSnapshot(
 ) {
 
     fun linkTypeId(pdmName: String): Int? {
-        val target = pdmName.normalized()
-        return linkTypes.firstOrNull { it.name.normalized() == target }?.id
+        val target = normalizeForComparison(pdmName)
+        return linkTypes.firstOrNull { normalizeForComparison(it.name.orEmpty()) == target }?.id
     }
 }
 
 data class LinkTypeInfo(val id: Int, val name: String?)
 
 data class ObjectTypeInfo(val id: Int, val typeName: String?)
-
-private fun String?.normalized(): String =
-    this.orEmpty().lowercase().replace("\\s+".toRegex(), " ").trim()
