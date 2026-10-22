@@ -127,13 +127,33 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         node.key shouldBe NodeKey.Value(AttributeKey.Designation, "АБ.002")
     }
 
-    should("read attributes even when none are asked, until the legacy designation and name are removed (6d)") {
+    should("not call the attribute endpoint when nothing is asked") {
         val fake = SingleObjectFake("Деталь")
         val client = clientFor(fake)
 
         client.withProperties(PdmNodeId(2), emptySet(), includeUnmapped = false)
 
+        fake.infoCalls.get() shouldBe 0
+    }
+
+    should("not call the attribute endpoint when only the key-attribute designation is asked") {
+        val fake = SingleObjectFake("Деталь")
+        val client = clientFor(fake)
+
+        val node = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Designation))
+
+        fake.infoCalls.get() shouldBe 0
+        node.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.002")
+    }
+
+    should("call the attribute endpoint when a non-key name is asked") {
+        val fake = SingleObjectFake("Деталь")
+        val client = clientFor(fake)
+
+        val node = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Name))
+
         fake.infoCalls.get() shouldBe 1
+        node.attributes[AttributeKey.Name] shouldBe AttributeValue.Text("Вал")
     }
 
     should("call the attribute endpoint when a mapped attribute key is asked") {

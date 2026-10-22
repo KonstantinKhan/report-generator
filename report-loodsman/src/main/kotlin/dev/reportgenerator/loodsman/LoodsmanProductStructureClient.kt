@@ -62,7 +62,7 @@ class LoodsmanProductStructureClient internal constructor(
         var frontier = listOf(rootId)
         var level = 0
         while (frontier.isNotEmpty()) {
-            loadNodes(frontier, snapshot, nodes)
+            loadNodes(frontier, snapshot, nodes, query)
             if (level >= query.depth) break
 
             val expandable = frontier.filter { nodes.getValue(it).kind != null }
@@ -92,7 +92,11 @@ class LoodsmanProductStructureClient internal constructor(
         val kind = kindMapper.map(props.type)
             ?: error("Loodsman object $id: unmapped type '${props.type}'")
         val request = attributeRequest(kind, keyAttributeOf(snapshot, id.asInt(), props), attributeKeys, includeUnmapped)
-        val objectAttributes = api.objectInfo.infoAboutVersion(id.asInt())
+        val objectAttributes = if (request.needsObjectAttributes()) {
+            api.objectInfo.infoAboutVersion(id.asInt())
+        } else {
+            emptyList()
+        }
         return toDomain(props, kind, objectAttributes, request, mapping.properties.version, mapping.properties.state)
     }
 
@@ -159,7 +163,8 @@ class LoodsmanProductStructureClient internal constructor(
     private suspend fun loadNodes(
         ids: List<Int>,
         snapshot: MetadataSnapshot,
-        nodes: MutableMap<Int, LoadedNode>
+        nodes: MutableMap<Int, LoadedNode>,
+        query: StructureQuery,
     ) {
         val props = ids.chunked(PROPS_BATCH_SIZE).flatMap { chunk ->
             api.objectInfo.propObjects(chunk)
@@ -170,14 +175,21 @@ class LoodsmanProductStructureClient internal constructor(
             id to Pair(prop, kindMapper.map(prop.type))
         }
 
-        val attributes = withPermits(prepared.filter { (_, pair) ->
-            pair.second != null && needsAttributes()
-        }.map { it.first }) { id -> api.objectInfo.infoAboutVersion(id) }
+        val keyAttributes = prepared.mapNotNull { (id, pair) ->
+            pair.second?.let { id to keyAttributeOf(snapshot, id, pair.first) }
+        }.toMap()
+        val withAttributeList = prepared.mapNotNull { (id, pair) ->
+            val kind = pair.second ?: return@mapNotNull null
+            id.takeIf {
+                attributeRequest(kind, keyAttributes[id], query.attributes, query.includeUnmappedAttributes)
+                    .needsObjectAttributes()
+            }
+        }
+        val attributes = withPermits(withAttributeList) { id -> api.objectInfo.infoAboutVersion(id) }
 
         prepared.forEach { (id, pair) ->
             val (prop, kind) = pair
-            val keyAttribute = kind?.let { keyAttributeOf(snapshot, id, prop) }
-            nodes[id] = LoadedNode(prop, kind, attributes[id].orEmpty(), keyAttribute)
+            nodes[id] = LoadedNode(prop, kind, attributes[id].orEmpty(), keyAttributes[id])
         }
     }
 
@@ -195,9 +207,6 @@ class LoodsmanProductStructureClient internal constructor(
             val semaphore = Semaphore(concurrency)
             ids.map { id -> async { id to semaphore.withPermit { block(id) } } }.awaitAll().toMap()
         }
-
-    // TODO(6d): грузить атрибуты только при запросе. На 6b временно всегда: designation/name читаются из списка.
-    private fun needsAttributes(): Boolean = true
 
     private suspend fun loadLinkAttributes(
         query: StructureQuery,

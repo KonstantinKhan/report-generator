@@ -16,4 +16,12 @@ data class AttributeRequest(
     val names: Map<AttributeKey, String?>,
     val mappedNames: Set<String> = emptySet(),
     val includeUnmapped: Boolean = false,
-)
+) {
+    /**
+     * Нужен ли список атрибутов объекта. Ключевой атрибут читается из product без списка, поэтому список
+     * нужен только для неключевого запрошенного атрибута вида или при includeUnmapped.
+     */
+    fun needsObjectAttributes(): Boolean = includeUnmapped || names.values.any { name ->
+        name != null && name.trim() != keyAttribute?.trim()
+    }
+}

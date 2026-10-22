@@ -69,6 +69,7 @@ private class FakeLoodsman(
     val propsCalls: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val linkCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val linkAttributeCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
+    val infoCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val linkListFailures = AtomicInteger(0)
     private val linkIdToEdge = mutableMapOf<Int, Edge>()
 
@@ -138,6 +139,7 @@ private class FakeLoodsman(
                 }
                 "/api/v4/ObjectInfo/get-info-about-version-mode-3" -> {
                     val obj = objects.first { it.id == params["idVersion"]!!.toInt() }
+                    infoCalls.add(obj.id)
                     buildJsonArray {
                         obj.attrs.forEach { (name, value) ->
                             add(buildJsonObject {
@@ -469,6 +471,36 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         root.attributes shouldBe mapOf(AttributeKey.Mass to AttributeValue.Empty)
         root.usages[0].child.attributes shouldBe mapOf(AttributeKey.Mass to AttributeValue.Text("1.5"))
+    }
+
+    should("not call the object attribute list when no attributes are requested") {
+        val fake = FakeLoodsman(tree, treeEdges)
+        val client = fake.client()
+
+        client.loadStructure(query(1))
+        client.withProperties(PdmNodeId(2), emptySet())
+
+        fake.infoCalls shouldBe emptyList()
+    }
+
+    should("not call the object attribute list when only the key-attribute designation is requested") {
+        val fake = FakeLoodsman(tree, treeEdges)
+        val client = fake.client()
+
+        val root = client.loadStructure(query(1, AttributeKey.Designation))
+        val shaft = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Designation))
+
+        fake.infoCalls shouldBe emptyList()
+        root.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.001")
+        shaft.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.002")
+    }
+
+    should("call the object attribute list for a non-key attribute only") {
+        val fake = FakeLoodsman(tree, treeEdges)
+
+        fake.client().withProperties(PdmNodeId(2), setOf(AttributeKey.Name))
+
+        fake.infoCalls shouldBe listOf(2)
     }
 
     should("use the attribute name overridden for the object kind") {
