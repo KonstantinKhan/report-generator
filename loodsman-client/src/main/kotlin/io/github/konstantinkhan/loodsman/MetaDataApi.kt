@@ -9,6 +9,7 @@ import io.ktor.client.request.parameter
 // Справочник типов на живом сервере отвечает до ~60 с, поэтому таймаут с запасом.
 private const val TYPE_LIST_REQUEST_TIMEOUT_MS = 180_000L
 private const val ATTRIBUTE_LIST_REQUEST_TIMEOUT_MS = 60_000L
+private const val DEFAULT_REQUEST_TIMEOUT_MS = 60_000L
 
 class MetaDataApi internal constructor(
     private val http: SessionClient,
@@ -24,7 +25,7 @@ class MetaDataApi internal constructor(
 
     suspend fun linkList(): List<GetLinkListOutputDto> =
         http.get("$blockBaseUrl/get-link-list") {
-            timeout { requestTimeoutMillis = TYPE_LIST_REQUEST_TIMEOUT_MS }
+            timeout { requestTimeoutMillis = DEFAULT_REQUEST_TIMEOUT_MS }
         }
 
     /** [mode]: 0 - все атрибуты, 1 - обычные, 2 - служебные. */
@@ -36,6 +37,6 @@ class MetaDataApi internal constructor(
 
     suspend fun cacheVersion(): Long =
         http.get("$blockBaseUrl/cache/version") {
-            timeout { requestTimeoutMillis = TYPE_LIST_REQUEST_TIMEOUT_MS }
+            timeout { requestTimeoutMillis = DEFAULT_REQUEST_TIMEOUT_MS }
         }
 }
