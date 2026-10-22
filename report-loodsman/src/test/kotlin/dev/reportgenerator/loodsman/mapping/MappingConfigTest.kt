@@ -1,6 +1,5 @@
 package dev.reportgenerator.loodsman.mapping
 
-import io.github.konstantinkhan.loodsman.PropField
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.maps.shouldContainKey
@@ -13,10 +12,6 @@ class MappingConfigTest : ShouldSpec({
                 kinds = mapOf("Деталь" to "PART"),
                 relations = mapOf("Состоит из ..." to "COMPOSITION"),
                 requiredRelations = setOf("COMPOSITION"),
-                identity = IdentityMapping(
-                    designation = FieldSource.Prop(PropField.PRODUCT),
-                    name = FieldSource.Attribute("Наименование")
-                ),
                 attributes = mapOf(
                     "mass" to AttributeRule(name = "Масса")
                 )
@@ -24,7 +19,6 @@ class MappingConfigTest : ShouldSpec({
             config.kinds.shouldContainKey("Деталь")
             config.kinds["Деталь"] shouldBe "PART"
             config.relations.shouldContainKey("Состоит из ...")
-            config.identity.designation shouldBe FieldSource.Prop(PropField.PRODUCT)
         }
 
         should("validate valid config") {
@@ -32,10 +26,6 @@ class MappingConfigTest : ShouldSpec({
                 kinds = mapOf("Деталь" to "PART"),
                 relations = mapOf("Состоит из ..." to "COMPOSITION"),
                 requiredRelations = setOf("COMPOSITION"),
-                identity = IdentityMapping(
-                    designation = FieldSource.Prop(PropField.PRODUCT),
-                    name = FieldSource.Attribute("Наименование")
-                ),
                 attributes = mapOf(
                     "mass" to AttributeRule(name = "Масса")
                 )
@@ -50,13 +40,6 @@ class MappingConfigTest : ShouldSpec({
                 relations:
                   Состоит из ...: COMPOSITION
                 requiredRelations: []
-                identity:
-                  designation:
-                    type: prop
-                    field: PRODUCT
-                  name:
-                    type: attribute
-                    name: Наименование
                 attributes:
                   mass:
                     name: Масса
@@ -78,13 +61,6 @@ class MappingConfigTest : ShouldSpec({
                   Документы: DOCUMENT
                 requiredRelations:
                   - COMPOSITION
-                identity:
-                  designation:
-                    type: prop
-                    field: PRODUCT
-                  name:
-                    type: attribute
-                    name: Наименование
                 attributes:
                   mass:
                     name: Масса
@@ -112,13 +88,6 @@ class MappingConfigTest : ShouldSpec({
                 relations:
                   Состоит из ...: COMPOSITION
                 requiredRelations: []
-                identity:
-                  designation:
-                    type: prop
-                    field: PRODUCT
-                  name:
-                    type: attribute
-                    name: Наименование
                 attributes:
                   mass:
                     name: Масса
@@ -139,13 +108,6 @@ class MappingConfigTest : ShouldSpec({
                 relations:
                   Состоит из ...: COMPOSITION
                 requiredRelations: []
-                identity:
-                  designation:
-                    type: prop
-                    field: PRODUCT
-                  name:
-                    type: attribute
-                    name: Наименование
                 attributes:
                   mass: {}
                 onUnmapped:

@@ -56,9 +56,6 @@ class PropertiesAndFieldsConfigTest : ShouldSpec({
                   Деталь: PART
                 relations:
                   Состоит из ...: COMPOSITION
-                identity:
-                  designation: { type: prop, field: PRODUCT }
-                  name: { type: attribute, name: Наименование }
             """.trimIndent()
 
             val config = MappingConfigLoader.parse(yaml)
@@ -73,9 +70,6 @@ class PropertiesAndFieldsConfigTest : ShouldSpec({
                   Деталь: PART
                 relations:
                   Состоит из ...: COMPOSITION
-                identity:
-                  designation: { type: prop, field: PRODUCT }
-                  name: { type: attribute, name: Наименование }
                 properties:
                   state: NOPE
             """.trimIndent()
@@ -89,9 +83,6 @@ class PropertiesAndFieldsConfigTest : ShouldSpec({
                   Деталь: PART
                 relations:
                   Состоит из ...: COMPOSITION
-                identity:
-                  designation: { type: prop, field: PRODUCT }
-                  name: { type: attribute, name: Наименование }
                 link:
                   fields:
                     unit: NOPE

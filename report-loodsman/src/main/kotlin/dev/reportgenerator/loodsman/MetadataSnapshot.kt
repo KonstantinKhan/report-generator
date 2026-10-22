@@ -16,6 +16,11 @@ data class MetadataSnapshot(
         return linkTypes.firstOrNull { normalizeForComparison(it.name.orEmpty()) == target }?.id
     }
 
+    fun hasObjectType(typeName: String): Boolean {
+        val target = normalizeForComparison(typeName)
+        return objectTypes.any { info -> info.typeName?.let(::normalizeForComparison) == target }
+    }
+
     /**
      * Ключевой атрибут типа объекта (`attrName` из get-type-list) или null, если тип неизвестен или ключ не задан.
      * Значение ключа физически лежит в свойстве `product`, а не в списке атрибутов объекта.

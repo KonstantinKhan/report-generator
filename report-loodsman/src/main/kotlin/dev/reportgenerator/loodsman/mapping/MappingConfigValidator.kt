@@ -20,6 +20,13 @@ object MappingConfigValidator {
         config.kinds.keys.forEach { kind ->
             if (normalizeForComparison(kind) !in objectTypes) {
                 errors += "kinds: type '$kind' not found in Loodsman"
+                return@forEach
+            }
+            val keyAttribute = snapshot.keyAttributeOf(kind)
+            if (keyAttribute == null) {
+                errors += "kinds: type '$kind' has no key attribute in Loodsman"
+            } else if (keyAttribute !in attributes) {
+                errors += "kinds: key attribute '$keyAttribute' of type '$kind' not found among Loodsman attributes"
             }
         }
 
@@ -34,14 +41,6 @@ object MappingConfigValidator {
             if (pdmNames.none { normalizeForComparison(it) in linkTypes }) {
                 errors += "requiredRelations: '$requiredId' has no link type in Loodsman, tried: ${pdmNames.joinToString()}"
             }
-        }
-
-        val identity = config.identity
-        errors.checkAttribute("identity.designation", identity.designation.attributeName(), attributes)
-        errors.checkAttribute("identity.name", identity.name.attributeName(), attributes)
-        identity.byKind.forEach { (kind, kindIdentity) ->
-            errors.checkAttribute("identity.byKind.$kind.designation", kindIdentity.designation.attributeName(), attributes)
-            errors.checkAttribute("identity.byKind.$kind.name", kindIdentity.name.attributeName(), attributes)
         }
 
         config.attributes.forEach { (key, rule) ->
@@ -59,8 +58,6 @@ object MappingConfigValidator {
 
         return errors
     }
-
-    private fun FieldSource?.attributeName(): String? = (this as? FieldSource.Attribute)?.name
 
     private fun MutableList<String>.checkAttribute(path: String, name: String?, attributes: Set<String>) {
         if (name != null && name !in attributes) {

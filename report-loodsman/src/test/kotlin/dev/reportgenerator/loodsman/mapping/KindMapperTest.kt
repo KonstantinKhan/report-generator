@@ -1,7 +1,6 @@
 package dev.reportgenerator.loodsman.mapping
 
 import dev.reportgenerator.domain.PdmNodeKind
-import io.github.konstantinkhan.loodsman.PropField
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
 import org.slf4j.LoggerFactory
@@ -18,10 +17,6 @@ class KindMapperTest : ShouldSpec({
             "Состоит из ..." to "COMPOSITION"
         ),
         requiredRelations = setOf("COMPOSITION"),
-        identity = IdentityMapping(
-            designation = FieldSource.Prop(PropField.PRODUCT),
-            name = FieldSource.Attribute("Наименование")
-        ),
         onUnmapped = UnmappedPolicy(kind = OnUnmapped.KEEP, relation = OnUnmapped.SKIP)
     )
     val log = LoggerFactory.getLogger(this::class.java)

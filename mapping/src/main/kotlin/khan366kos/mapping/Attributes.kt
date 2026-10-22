@@ -3,26 +3,24 @@ package khan366kos.mapping
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
 import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
+import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
 
 fun readAttributes(
+    props: PropObjectOutputDto,
     raw: List<ObjectAttributeOutputDto>,
     request: AttributeRequest,
-    sources: IdentitySources,
 ): Map<AttributeKey, AttributeValue> {
     val result = LinkedHashMap<AttributeKey, AttributeValue>()
-    request.names.forEach { (name, key) ->
-        val value = raw.valueOf(name)                  // твой же valueOf
+    request.names.forEach { (key, name) ->
+        val value = name?.let { readAttribute(it, request.keyAttribute, props, raw) }
         result[key] = value?.let { AttributeValue.Text(it) } ?: AttributeValue.Empty
     }
     if (request.includeUnmapped) {
-        val mapped = request.names.keys + listOfNotNull(
-            (sources.designation as? IdentitySource.Attribute)?.name,
-            (sources.name as? IdentitySource.Attribute)?.name,
-        )
-        raw.forEach { a ->
-            val name = a.name?.trim() ?: return@forEach
-            val value = a.value?.trim().orEmpty()
-            if (name !in mapped && value.isNotEmpty()) {
+        val excluded = request.mappedNames + listOfNotNull(request.keyAttribute?.trim())
+        raw.forEach { attribute ->
+            val name = attribute.name?.trim()
+            val value = attribute.value?.trim()
+            if (!name.isNullOrEmpty() && name !in excluded && !value.isNullOrEmpty()) {
                 result[AttributeKey.Unmapped(name)] = AttributeValue.Text(value)
             }
         }

@@ -7,9 +7,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import dev.reportgenerator.loodsman.mapping.MappingConfig
 import dev.reportgenerator.loodsman.mapping.MappingConfigValidator
-import dev.reportgenerator.loodsman.mapping.FieldSource
-import dev.reportgenerator.loodsman.mapping.IdentityMapping
-import io.github.konstantinkhan.loodsman.PropField
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.async
@@ -37,7 +34,7 @@ private class RemoteMetadata {
             MetadataSnapshot(
                 linkTypes = linkTypeNames.mapIndexed { index, name -> LinkTypeInfo(id = index + 1, name = name) },
                 objectTypes = listOf(ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "Обозначение")),
-                attributeNames = setOf("Наименование"),
+                attributeNames = setOf("Наименование", "Обозначение"),
                 version = version,
             )
         },
@@ -83,10 +80,6 @@ class MetadataCacheTest : ShouldSpec({
             kinds = mapOf("Деталь" to "PART"),
             relations = mapOf("Документы" to "DOCUMENT"),
             requiredRelations = setOf("DOCUMENT"),
-            identity = IdentityMapping(
-                designation = FieldSource.Prop(PropField.PRODUCT),
-                name = FieldSource.Attribute("Наименование"),
-            ),
         )
         val remote = RemoteMetadata()
         val cache = remote.cache { MappingConfigValidator.validate(mapping, it) }

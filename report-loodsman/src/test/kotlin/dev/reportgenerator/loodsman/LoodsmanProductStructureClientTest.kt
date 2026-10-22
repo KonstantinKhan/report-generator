@@ -7,6 +7,7 @@ import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.Name
+import dev.reportgenerator.domain.NodeKey
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Quantity
@@ -43,6 +44,9 @@ import io.github.konstantinkhan.loodsman.installLoodsman
 
 private const val COMPOSITION = "Состоит из ..."
 
+// Ключевой атрибут всех видов в фейке: его значение лежит в product объекта.
+private const val KEY_ATTRIBUTE = "Обозначение"
+
 private data class Obj(
     val id: Int,
     val type: String,
@@ -73,10 +77,15 @@ private class FakeLoodsman(
     /** Снимок метаданных, который отдаёт тот же фейк (типы связей по [linkNames], виды по [objects]). */
     fun snapshot(version: Long = 1): MetadataSnapshot = MetadataSnapshot(
         linkTypes = linkNames.mapIndexed { index, name -> LinkTypeInfo(id = index + 1, name = name) },
-        objectTypes = emptyList(),
+        objectTypes = objectTypes(),
         attributeNames = emptySet(),
         version = version,
     )
+
+    private fun objectTypes(): List<ObjectTypeInfo> =
+        objects.map { it.type }.distinct().mapIndexed { index, type ->
+            ObjectTypeInfo(id = index + 1, typeName = type, keyAttribute = KEY_ATTRIBUTE)
+        }
 
     /** Клиент с кэшем метаданных из фейка (загружается при создании) или с заданным [metadata]. */
     suspend fun client(
@@ -119,6 +128,7 @@ private class FakeLoodsman(
                         add(buildJsonObject {
                             put("id", index + 1)
                             put("typeName", type)
+                            put("attrName", KEY_ATTRIBUTE)
                             put("document", 0)
                         })
                     }
@@ -207,8 +217,8 @@ private class FakeLoodsman(
 private val assembly = Obj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус"))
 private val shaft = Obj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал", "Позиция" to "1", "Масса" to "1.5"))
 private val bolt = Obj(
-    3, "Стандартное изделие", "Болт М6",
-    mapOf("Обозначение изделия" to "ГОСТ 7798-70", "Позиция" to "2")
+    3, "Стандартное изделие", "ГОСТ 7798-70",
+    mapOf("Позиция" to "2")
 )
 private val pin = Obj(4, "Деталь", "АБ.003", mapOf("Наименование" to "Штифт"))
 
@@ -266,7 +276,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         fake.propsCalls shouldBe listOf(listOf(1))
     }
 
-    should("map identity, quantity, unit and position of direct children when depth is 1") {
+    should("map designation, name, quantity, unit and position of direct children when depth is 1") {
         val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1))
 
         root.designation shouldBe Designation.Value("АБ.001")
@@ -289,7 +299,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val boltUsage = compositions[1]
         boltUsage.child.kind shouldBe PdmNodeKind.Standard
         boltUsage.child.designation shouldBe Designation.Value("ГОСТ 7798-70")
-        boltUsage.child.name shouldBe Name.Value("Болт М6")
+        boltUsage.child.name shouldBe Name.Missing
         boltUsage.quantity shouldBe Quantity.Range(4.0, 6.0)
         boltUsage.unit shouldBe Field.Missing
         boltUsage.position shouldBe Field.Missing
@@ -570,5 +580,37 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         fake.client(mapping).loadStructure(query(1))
 
         fake.linkAttributeCalls.size shouldBe 1
+    }
+
+    should("read the same key, designation and name in loadStructure and withProperties") {
+        val fake = FakeLoodsman(tree, treeEdges)
+        val client = fake.client()
+
+        val structure = client.loadStructure(query(1, AttributeKey.Mass, includeUnmapped = true))
+        val shaftFromStructure = structure.usages[0].child
+        val boltFromStructure = structure.usages[1].child
+        val shaftFromProperties = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Mass), includeUnmapped = true)
+        val boltFromProperties = client.withProperties(PdmNodeId(3), setOf(AttributeKey.Mass), includeUnmapped = true)
+
+        shaftFromProperties.key shouldBe shaftFromStructure.key
+        shaftFromProperties.designation shouldBe shaftFromStructure.designation
+        shaftFromProperties.name shouldBe shaftFromStructure.name
+        boltFromProperties.key shouldBe boltFromStructure.key
+        boltFromProperties.designation shouldBe boltFromStructure.designation
+        boltFromProperties.name shouldBe boltFromStructure.name
+        boltFromProperties.attributes shouldBe boltFromStructure.attributes
+    }
+
+    should("return NodeKey.Missing and Designation.Missing for an object with empty product") {
+        val empty = Obj(6, "Деталь", "   ", mapOf("Наименование" to "Пустая"))
+        val fake = FakeLoodsman(listOf(assembly, empty), listOf(Edge(1, 6)))
+
+        val structure = fake.client().loadStructure(query(1))
+        val withProperties = fake.client().withProperties(PdmNodeId(6), emptySet())
+
+        structure.usages.single().child.key shouldBe NodeKey.Missing
+        structure.usages.single().child.designation shouldBe Designation.Missing
+        withProperties.key shouldBe NodeKey.Missing
+        withProperties.designation shouldBe Designation.Missing
     }
 })

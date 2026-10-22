@@ -3,7 +3,6 @@ package dev.reportgenerator.loodsman.mapping
 import dev.reportgenerator.loodsman.LinkTypeInfo
 import dev.reportgenerator.loodsman.MetadataSnapshot
 import dev.reportgenerator.loodsman.ObjectTypeInfo
-import io.github.konstantinkhan.loodsman.PropField
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -19,7 +18,7 @@ private val snapshot = MetadataSnapshot(
         ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "Обозначение"),
         ObjectTypeInfo(id = 2, typeName = "Ёлка", keyAttribute = "Обозначение"),
     ),
-    attributeNames = setOf("Наименование", "Обозначение изделия", "Масса", "Позиция"),
+    attributeNames = setOf("Наименование", "Обозначение", "Масса", "Позиция"),
     version = 1,
 )
 
@@ -27,10 +26,6 @@ private fun config(
     kinds: Map<String, String> = mapOf("Деталь" to "PART"),
     relations: Map<String, String> = mapOf("Состоит из ..." to "COMPOSITION"),
     requiredRelations: Set<String> = setOf("COMPOSITION"),
-    identity: IdentityMapping = IdentityMapping(
-        designation = FieldSource.Prop(PropField.PRODUCT),
-        name = FieldSource.Attribute("Наименование"),
-    ),
     attributes: Map<String, AttributeRule> = mapOf("mass" to AttributeRule(name = "Масса")),
     link: LinkMapping = LinkMapping(
         attributes = mapOf("position" to listOf(LinkAttributeRule(relation = "COMPOSITION", name = "Позиция"))),
@@ -39,7 +34,6 @@ private fun config(
     kinds = kinds,
     relations = relations,
     requiredRelations = requiredRelations,
-    identity = identity,
     attributes = attributes,
     link = link,
 )
@@ -80,23 +74,42 @@ class MappingConfigValidatorTest : ShouldSpec({
         )
     }
 
-    should("report an identity attribute that is missing in Loodsman") {
+    should("report designation and name attributes that are missing in Loodsman") {
         val errors = MappingConfigValidator.validate(
             config(
-                identity = IdentityMapping(
-                    designation = FieldSource.Prop(PropField.PRODUCT),
-                    name = FieldSource.Attribute("Наимен"),
-                    byKind = mapOf(
-                        "PART" to KindIdentity(designation = FieldSource.Attribute("Обозначение")),
-                    ),
+                attributes = mapOf(
+                    "designation" to AttributeRule(name = "Обозначение изделия"),
+                    "name" to AttributeRule(name = "Наимен"),
                 ),
             ),
             snapshot,
         )
 
         errors shouldContainExactly listOf(
-            "identity.name: attribute 'Наимен' not found in Loodsman",
-            "identity.byKind.PART.designation: attribute 'Обозначение' not found in Loodsman",
+            "attributes.designation.name: attribute 'Обозначение изделия' not found in Loodsman",
+            "attributes.name.name: attribute 'Наимен' not found in Loodsman",
+        )
+    }
+
+    should("report a kind whose type has no key attribute in Loodsman") {
+        val withoutKey = snapshot.copy(
+            objectTypes = listOf(ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = null)),
+        )
+
+        val errors = MappingConfigValidator.validate(config(), withoutKey)
+
+        errors shouldContainExactly listOf("kinds: type 'Деталь' has no key attribute in Loodsman")
+    }
+
+    should("report a key attribute of a kind that is missing among Loodsman attributes") {
+        val withUnknownKey = snapshot.copy(
+            objectTypes = listOf(ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "Шифр")),
+        )
+
+        val errors = MappingConfigValidator.validate(config(), withUnknownKey)
+
+        errors shouldContainExactly listOf(
+            "kinds: key attribute 'Шифр' of type 'Деталь' not found among Loodsman attributes",
         )
     }
 
@@ -140,11 +153,10 @@ class MappingConfigValidatorTest : ShouldSpec({
             config(
                 kinds = mapOf("Неизвестная" to "PART"),
                 relations = mapOf("Состоит из ..." to "COMPOSITION", "Нет такой" to "DOCUMENT"),
-                identity = IdentityMapping(
-                    designation = FieldSource.Prop(PropField.PRODUCT),
-                    name = FieldSource.Attribute("Наимен"),
+                attributes = mapOf(
+                    "name" to AttributeRule(name = "Наимен"),
+                    "mass" to AttributeRule(name = "Масса кг"),
                 ),
-                attributes = mapOf("mass" to AttributeRule(name = "Масса кг")),
                 link = LinkMapping(
                     attributes = mapOf("note" to listOf(LinkAttributeRule(relation = "COMPOSITION", name = "Прим"))),
                 ),
@@ -170,17 +182,16 @@ class MappingConfigValidatorTest : ShouldSpec({
     should("match attributes strictly: different case is an error") {
         val errors = MappingConfigValidator.validate(
             config(
-                identity = IdentityMapping(
-                    designation = FieldSource.Prop(PropField.PRODUCT),
-                    name = FieldSource.Attribute("наименование"),
+                attributes = mapOf(
+                    "name" to AttributeRule(name = "наименование"),
+                    "mass" to AttributeRule(name = "масса"),
                 ),
-                attributes = mapOf("mass" to AttributeRule(name = "масса")),
             ),
             snapshot,
         )
 
         errors shouldContainExactly listOf(
-            "identity.name: attribute 'наименование' not found in Loodsman",
+            "attributes.name.name: attribute 'наименование' not found in Loodsman",
             "attributes.mass.name: attribute 'масса' not found in Loodsman",
         )
     }
@@ -197,7 +208,7 @@ class MappingConfigValidatorTest : ShouldSpec({
                 "Стандартное изделие", "Прочее изделие", "Материал по КД", "Комплект",
             ).mapIndexed { index, name -> ObjectTypeInfo(id = index + 1, typeName = name, keyAttribute = "Обозначение") },
             attributeNames = setOf(
-                "Наименование", "Обозначение изделия", "Масса", "Наименование предприятия", "Позиция", "Примечание",
+                "Наименование", "Обозначение", "Масса", "Наименование предприятия", "Позиция", "Примечание",
             ),
             version = 1,
         )

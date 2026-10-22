@@ -34,6 +34,9 @@ private const val DOCUMENT_LINK = "Документы"
 private const val COMPOSITION_LINK_ID = 1
 private const val DOCUMENT_LINK_ID = 2
 
+// Ключевой атрибут всех видов: значение лежит в product объекта.
+private const val KEY_ATTRIBUTE = "Обозначение"
+
 private data class ParityObj(
     val id: Int,
     val type: String,
@@ -102,6 +105,7 @@ private class ParityLoodsman(
                         add(buildJsonObject {
                             put("id", index + 1)
                             put("typeName", type)
+                            put("attrName", KEY_ATTRIBUTE)
                             put("document", 0)
                         })
                     }
@@ -190,12 +194,12 @@ class SpecificationPipelineTest : ShouldSpec({
         )
     }
 
-    should("match standard and other products with the designation attribute") {
+    should("match standard and other products with the key attribute in the designation column moved to the name") {
         val actual = loadPipeline(
             objects = listOf(
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
-                ParityObj(4, "Стандартное изделие", "Болт М6", mapOf("Обозначение изделия" to "ГОСТ 7798-70")),
-                ParityObj(5, "Прочее изделие", "Заглушка", mapOf("Обозначение изделия" to "ИЗД.5")),
+                ParityObj(4, "Стандартное изделие", "ГОСТ 7798-70"),
+                ParityObj(5, "Прочее изделие", "ИЗД.5"),
             ),
             edges = listOf(
                 ParityEdge(1, 4, min = 4.0, max = 4.0, unit = "шт"),
@@ -207,8 +211,8 @@ class SpecificationPipelineTest : ShouldSpec({
             documentDesignation = "АБ.001",
             documentName = "Корпус",
             items = listOf(
-                SpecificationItem("ГОСТ 7798-70", "Болт М6", ItemKind.STANDARD, 4.0, "шт"),
-                SpecificationItem("ИЗД.5", "Заглушка", ItemKind.OTHER, 1.0, null),
+                SpecificationItem(null, "ГОСТ 7798-70", ItemKind.STANDARD, 4.0, "шт"),
+                SpecificationItem(null, "ИЗД.5", ItemKind.OTHER, 1.0, null),
             ),
         )
     }

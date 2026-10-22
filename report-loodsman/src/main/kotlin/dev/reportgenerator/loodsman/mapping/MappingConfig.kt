@@ -2,36 +2,11 @@ package dev.reportgenerator.loodsman.mapping
 
 import io.github.konstantinkhan.loodsman.PropField
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerialName
 
 @Serializable
 enum class OnUnmapped {
     KEEP, SKIP, FAIL
 }
-
-@Serializable
-sealed interface FieldSource {
-    @Serializable
-    @SerialName("prop")
-    data class Prop(val field: PropField) : FieldSource
-
-    @Serializable
-    @SerialName("attribute")
-    data class Attribute(val name: String) : FieldSource
-}
-
-@Serializable
-data class KindIdentity(
-    val designation: FieldSource? = null,
-    val name: FieldSource? = null
-)
-
-@Serializable
-data class IdentityMapping(
-    val designation: FieldSource,
-    val name: FieldSource,
-    val byKind: Map<String, KindIdentity> = emptyMap()
-)
 
 @Serializable
 data class UnmappedPolicy(
@@ -90,7 +65,6 @@ data class MappingConfig(
     val kinds: Map<String, String>,
     val relations: Map<String, String>,
     val requiredRelations: Set<String> = emptySet(),
-    val identity: IdentityMapping,
     val attributes: Map<String, AttributeRule> = emptyMap(),
     val properties: PropertiesMapping = PropertiesMapping(),
     val link: LinkMapping = LinkMapping(),
@@ -124,10 +98,6 @@ data class MappingConfig(
                     "Required relation '$relName' not found in relations mapping"
                 )
             }
-        }
-
-        identity.byKind.forEach { (kindKey, _) ->
-            Registries.itemKinds.resolve(kindKey)
         }
 
         require(link.fields.quantityMin.numeric) {

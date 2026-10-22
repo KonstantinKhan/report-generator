@@ -31,7 +31,7 @@ private val confirmedObjectTypes = listOf(
     "Стандартное изделие", "Прочее изделие", "Материал по КД", "Комплект",
 )
 private val confirmedAttributes = listOf(
-    "Наименование", "Обозначение изделия", "Масса", "Наименование предприятия", "Позиция", "Примечание",
+    "Наименование", "Обозначение", "Масса", "Наименование предприятия", "Позиция", "Примечание",
 )
 
 private fun api(typeListStatus: HttpStatusCode = HttpStatusCode.OK): LoodsmanApi {
@@ -73,6 +73,7 @@ private fun api(typeListStatus: HttpStatusCode = HttpStatusCode.OK): LoodsmanApi
                         add(buildJsonObject {
                             put("id", index + 1)
                             put("typeName", name)
+                            put("attrName", "Обозначение")
                             put("document", 0)
                         })
                     }

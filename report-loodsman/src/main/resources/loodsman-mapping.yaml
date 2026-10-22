@@ -16,30 +16,11 @@ requiredRelations:
   - COMPOSITION
   - DOCUMENT
 
-identity:
-  designation:
-    type: prop
-    field: PRODUCT
-  name:
-    type: attribute
-    name: Наименование
-  byKind:
-    STANDARD:
-      designation:
-        type: attribute
-        name: Обозначение изделия
-      name:
-        type: prop
-        field: PRODUCT
-    OTHER:
-      designation:
-        type: attribute
-        name: Обозначение изделия
-      name:
-        type: prop
-        field: PRODUCT
-
 attributes:
+  designation:
+    name: Обозначение
+  name:
+    name: Наименование
   mass:
     name: Масса
   companyName:

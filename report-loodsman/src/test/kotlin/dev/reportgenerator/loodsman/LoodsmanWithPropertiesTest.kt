@@ -4,10 +4,9 @@ import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.Name
+import dev.reportgenerator.domain.NodeKey
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
-import dev.reportgenerator.loodsman.mapping.FieldSource
-import dev.reportgenerator.loodsman.mapping.IdentityMapping
 import dev.reportgenerator.loodsman.mapping.MappingConfig
 import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
 import dev.reportgenerator.loodsman.mapping.OnUnmapped
@@ -15,7 +14,6 @@ import dev.reportgenerator.loodsman.mapping.UnmappedPolicy
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import io.github.konstantinkhan.loodsman.LoodsmanConfig
-import io.github.konstantinkhan.loodsman.PropField
 import io.github.konstantinkhan.loodsman.installLoodsman
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.ShouldSpec
@@ -92,22 +90,35 @@ private class SingleObjectFake(
     }
 }
 
-// Default mapping, but the name comes from the PDM prop, so no attribute is needed for identity.
-private val defaultMapping: MappingConfig = MappingConfigLoader.load(emptyMap())
-
-private val propNameMapping: MappingConfig = defaultMapping.let { default ->
-    default.copy(
-        identity = IdentityMapping(
-            designation = FieldSource.Prop(PropField.PRODUCT),
-            name = FieldSource.Prop(PropField.PRODUCT),
-        )
+/** Метаданные с указанными типами объектов; у каждого типа ключевой атрибут «Обозначение». */
+private fun metadataFor(vararg types: String) = MetadataSource {
+    MetadataSnapshot(
+        linkTypes = emptyList(),
+        objectTypes = types.mapIndexed { index, name ->
+            ObjectTypeInfo(id = index + 1, typeName = name, keyAttribute = "Обозначение")
+        },
+        attributeNames = setOf("Обозначение", "Наименование", "Масса"),
+        version = 1,
     )
 }
 
+private val defaultMapping: MappingConfig = MappingConfigLoader.load(emptyMap())
+
+private val eightKinds = listOf(
+    "Деталь", "Сборочная единица", "Сборочный чертеж", "Комплекс", "Стандартное изделие",
+    "Прочее изделие", "Материал по КД", "Комплект",
+)
+
+private fun clientFor(
+    fake: SingleObjectFake,
+    mapping: MappingConfig = defaultMapping,
+    metadata: MetadataSource = metadataFor(*eightKinds.toTypedArray()),
+) = LoodsmanProductStructureClient(fake.api(), mapping, metadata = metadata)
+
 class LoodsmanWithPropertiesTest : ShouldSpec({
-    should("map the loodsman type to the node kind and read identity from props and attributes") {
+    should("map the loodsman type to the node kind and read designation and name") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api(), defaultMapping, metadata = unusedMetadata)
+        val client = clientFor(fake)
 
         val node = client.withProperties(PdmNodeId(2), emptySet())
 
@@ -115,21 +126,21 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         node.kind shouldBe PdmNodeKind.Part
         node.designation shouldBe Designation.Value("АБ.002")
         node.name shouldBe Name.Value("Вал")
+        node.key shouldBe NodeKey.Value(AttributeKey.Designation, "АБ.002")
     }
 
-    should("not call the attribute endpoint when no attributes are asked and identity needs none") {
+    should("read attributes even when none are asked, until the legacy designation and name are removed (6d)") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api(), propNameMapping, metadata = unusedMetadata)
+        val client = clientFor(fake)
 
-        val node = client.withProperties(PdmNodeId(2), emptySet(), includeUnmapped = false)
+        client.withProperties(PdmNodeId(2), emptySet(), includeUnmapped = false)
 
-        node.name shouldBe Name.Value("АБ.002")
-        fake.infoCalls.get() shouldBe 0
+        fake.infoCalls.get() shouldBe 1
     }
 
     should("call the attribute endpoint when a mapped attribute key is asked") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api(), propNameMapping, metadata = unusedMetadata)
+        val client = clientFor(fake)
 
         val node = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Mass))
 
@@ -139,28 +150,18 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
 
     should("call the attribute endpoint when unmapped attributes are asked") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api(), propNameMapping, metadata = unusedMetadata)
+        val client = clientFor(fake)
 
         client.withProperties(PdmNodeId(2), emptySet(), includeUnmapped = true)
 
         fake.infoCalls.get() shouldBe 1
     }
 
-    should("call the attribute endpoint when identity is read from an attribute") {
-        val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(fake.api(), defaultMapping, metadata = unusedMetadata)
-
-        client.withProperties(PdmNodeId(2), emptySet())
-
-        fake.infoCalls.get() shouldBe 1
-    }
-
     should("fail when an asked attribute key is not configured in mapping.attributes") {
         val fake = SingleObjectFake("Деталь")
-        val client = LoodsmanProductStructureClient(
-            fake.api(),
+        val client = clientFor(
+            fake,
             MappingConfigLoader.load(emptyMap()).copy(attributes = emptyMap()),
-            metadata = unusedMetadata,
         )
 
         shouldThrow<LoodsmanApiException> {
@@ -170,19 +171,30 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
 
     should("keep an unknown loodsman type as unmapped kind with the default KEEP policy") {
         val fake = SingleObjectFake("Неизвестный тип")
-        val client = LoodsmanProductStructureClient(fake.api(), defaultMapping, metadata = unusedMetadata)
+        val client = clientFor(fake, metadata = metadataFor("Неизвестный тип"))
 
         val node = client.withProperties(PdmNodeId(2), emptySet())
 
         node.kind shouldBe PdmNodeKind.Unmapped("Неизвестный тип")
     }
 
+    should("fail when the loodsman object type is missing in the metadata") {
+        val fake = SingleObjectFake("Деталь")
+        val client = clientFor(fake, metadata = metadataFor("Сборочная единица"))
+
+        val error = shouldThrow<LoodsmanApiException> {
+            client.withProperties(PdmNodeId(2), emptySet())
+        }
+
+        error.message shouldBe "Object 2: type 'Деталь' not found in Loodsman metadata"
+    }
+
     should("fail when the loodsman object type is unmapped and the policy is SKIP") {
         val fake = SingleObjectFake("Неизвестный тип")
-        val client = LoodsmanProductStructureClient(
-            fake.api(),
+        val client = clientFor(
+            fake,
             MappingConfigLoader.load(emptyMap()).copy(onUnmapped = UnmappedPolicy(kind = OnUnmapped.SKIP)),
-            metadata = unusedMetadata,
+            metadataFor("Неизвестный тип"),
         )
 
         shouldThrow<IllegalStateException> {
@@ -192,14 +204,50 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
 
     should("fail when the loodsman object type is unmapped and the policy is FAIL") {
         val fake = SingleObjectFake("Неизвестный тип")
-        val client = LoodsmanProductStructureClient(
-            fake.api(),
+        val client = clientFor(
+            fake,
             MappingConfigLoader.load(emptyMap()).copy(onUnmapped = UnmappedPolicy(kind = OnUnmapped.FAIL)),
-            metadata = unusedMetadata,
+            metadataFor("Неизвестный тип"),
         )
 
         shouldThrow<IllegalArgumentException> {
             client.withProperties(PdmNodeId(2), emptySet())
+        }
+    }
+
+    should("return NodeKey.Missing and Designation.Missing when the product is empty") {
+        val fake = SingleObjectFake("Деталь", product = "   ")
+        val client = clientFor(fake)
+
+        val node = client.withProperties(PdmNodeId(2), emptySet())
+
+        node.key shouldBe NodeKey.Missing
+        node.designation shouldBe Designation.Missing
+    }
+
+    // Синтетические объекты по структуре, подтверждённой на сервере (значения выдуманы).
+    // У видов Деталь/СЕ/Сборочный чертёж/Комплекс/Комплект product = обозначение, «Наименование» есть в списке.
+    // У Стандартного/Прочего изделия и Материала по КД product = обозначение, «Наименование» в списке нет.
+    val cases = listOf(
+        Triple("Деталь", mapOf("Наименование" to "Наименование детали"), "ОБ.001" to "Наименование детали"),
+        Triple("Сборочная единица", mapOf("Наименование" to "Наименование СЕ"), "ОБ.002" to "Наименование СЕ"),
+        Triple("Сборочный чертеж", mapOf("Наименование" to "Наименование чертежа"), "ОБ.003 СБ" to "Наименование чертежа"),
+        Triple("Комплекс", mapOf("Наименование" to "Наименование комплекса"), "ОБ.004" to "Наименование комплекса"),
+        Triple("Комплект", mapOf("Наименование" to "Наименование комплекта"), "ОБ.005" to "Наименование комплекта"),
+        Triple("Стандартное изделие", emptyMap(), "ОБ.006" to null),
+        Triple("Прочее изделие", emptyMap(), "ОБ.007" to null),
+        Triple("Материал по КД", emptyMap(), "ОБ.008" to null),
+    )
+    cases.forEach { (type, attrs, expected) ->
+        should("read key, designation and name of '$type' from product and attributes") {
+            val (designation, name) = expected
+            val fake = SingleObjectFake(type, product = designation, attrs = attrs)
+
+            val node = clientFor(fake).withProperties(PdmNodeId(2), emptySet())
+
+            node.key shouldBe NodeKey.Value(AttributeKey.Designation, designation)
+            node.designation shouldBe Designation.Value(designation)
+            node.name shouldBe (name?.let { Name.Value(it) } ?: Name.Missing)
         }
     }
 })

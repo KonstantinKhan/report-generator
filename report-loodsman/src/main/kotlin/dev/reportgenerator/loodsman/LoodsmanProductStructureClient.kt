@@ -3,11 +3,9 @@ package dev.reportgenerator.loodsman
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
-import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
-import dev.reportgenerator.domain.Name
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.PdmNode
@@ -20,13 +18,11 @@ import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto
 import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
 import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
 import dev.reportgenerator.loodsman.mapping.AttributeRule
-import dev.reportgenerator.loodsman.mapping.FieldSource
 import dev.reportgenerator.loodsman.mapping.KindMapper
 import dev.reportgenerator.loodsman.mapping.LinkField
 import dev.reportgenerator.loodsman.mapping.MappingConfig
 import dev.reportgenerator.loodsman.mapping.Registries
 import dev.reportgenerator.loodsman.mapping.RelationMapper
-import dev.reportgenerator.loodsman.mapping.identitySourcesOf
 import dev.reportgenerator.loodsman.mapping.nameFor
 import dev.reportgenerator.loodsman.mapping.select
 import kotlinx.coroutines.async
@@ -37,9 +33,7 @@ import kotlinx.coroutines.sync.withPermit
 import org.slf4j.LoggerFactory
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
-import io.github.konstantinkhan.loodsman.PropField
 import khan366kos.mapping.AttributeRequest
-import khan366kos.mapping.needsAttributes
 import khan366kos.mapping.toDomain
 
 private const val PROPS_BATCH_SIZE = 100
@@ -55,16 +49,12 @@ class LoodsmanProductStructureClient internal constructor(
 
     private val kindMapper = KindMapper(mapping, log)
     private val relationMapper = RelationMapper(mapping, log)
-    private val sourceOf = mapping::identitySourcesOf
-    private val kindOf: (String) -> PdmNodeKind = { name ->
-        kindMapper.map(name) ?: error("Unmapped type '$name' and SKIP policy is not supported by toDomain")
-    }
 
     override suspend fun loadStructure(query: StructureQuery): PdmNode {
         val rootId = query.rootId.asInt()
         val snapshot = metadata.snapshot()
         val relationByLinkTypeId = resolveLinkTypes(snapshot, query.relations)
-        val attributeRules = resolveAttributeRules(query)
+        validateAttributes(query)
         validateLinkAttributes(query)
 
         val nodes = HashMap<Int, LoadedNode>()
@@ -72,7 +62,7 @@ class LoodsmanProductStructureClient internal constructor(
         var frontier = listOf(rootId)
         var level = 0
         while (frontier.isNotEmpty()) {
-            loadNodes(frontier, query, attributeRules, nodes)
+            loadNodes(frontier, snapshot, nodes)
             if (level >= query.depth) break
 
             val expandable = frontier.filter { nodes.getValue(it).kind != null }
@@ -89,7 +79,7 @@ class LoodsmanProductStructureClient internal constructor(
         }
 
         val linkAttributes = loadLinkAttributes(query, nodes, links)
-        return buildNode(rootId, query.depth, query, attributeRules, nodes, links, linkAttributes, emptyList())
+        return buildNode(rootId, query.depth, query, nodes, links, linkAttributes, emptyList())
     }
 
     override suspend fun withProperties(
@@ -97,21 +87,13 @@ class LoodsmanProductStructureClient internal constructor(
         attributeKeys: Set<AttributeKey>,
         includeUnmapped: Boolean
     ): PdmNode {
+        val snapshot = metadata.snapshot()
         val props = api.objectInfo.propObject(id.asInt())
         val kind = kindMapper.map(props.type)
             ?: error("Loodsman object $id: unmapped type '${props.type}'")
-        val request = AttributeRequest(
-            names = attributeKeys.mapNotNull { key ->
-                val rule = Registries.attributeKeys.idOf(key)?.let { mapping.attributes[it] }
-                    ?: throw LoodsmanApiException("Attribute '$key' is not configured in mapping.attributes")
-                rule.nameFor(kind)?.let { it to key }
-            }.toMap(),
-            includeUnmapped = includeUnmapped
-        )
-        val objectAttributes = if (sourceOf(kind).needsAttributes() || request.names.isNotEmpty() || includeUnmapped)
-            api.objectInfo.infoAboutVersion(id.asInt())     // ← вот когда API реально зовётся
-        else emptyList()
-        return toDomain(props, objectAttributes, sourceOf, kindOf, request)
+        val request = attributeRequest(kind, keyAttributeOf(snapshot, id.asInt(), props), attributeKeys, includeUnmapped)
+        val objectAttributes = api.objectInfo.infoAboutVersion(id.asInt())
+        return toDomain(props, kind, objectAttributes, request, mapping.properties.version, mapping.properties.state)
     }
 
     private fun resolveLinkTypes(snapshot: MetadataSnapshot, relations: Set<Relation>): Map<Int, Relation> =
@@ -135,26 +117,50 @@ class LoodsmanProductStructureClient internal constructor(
         }
     }
 
-    private fun resolveAttributeRules(query: StructureQuery): Map<AttributeKey, AttributeRule> =
-        query.attributes.associateWith { key ->
-            Registries.attributeKeys.idOf(key)?.let { mapping.attributes[it] }
-                ?: throw LoodsmanApiException("Attribute '$key' is not configured in mapping.attributes")
-        }
+    private fun validateAttributes(query: StructureQuery) {
+        query.attributes.forEach { ruleOf(it) }
+    }
 
-    private fun attributeRequest(query: StructureQuery, kind: PdmNodeKind): AttributeRequest =
-        AttributeRequest(
-            names = query.attributes.mapNotNull { key ->
-                val rule = Registries.attributeKeys.idOf(key)?.let { mapping.attributes[it] }
-                    ?: throw LoodsmanApiException("Attribute '$key' is not configured")
-                rule.nameFor(kind)?.let { it to key }
-            }.toMap(),
-            includeUnmapped = query.includeUnmappedAttributes,
+    private fun ruleOrNull(key: AttributeKey): AttributeRule? =
+        Registries.attributeKeys.idOf(key)?.let { mapping.attributes[it] }
+
+    private fun ruleOf(key: AttributeKey): AttributeRule =
+        ruleOrNull(key) ?: throw LoodsmanApiException("Attribute '$key' is not configured in mapping.attributes")
+
+    /** Ключевой атрибут типа объекта; тип обязан быть в метаданных Loodsman. */
+    private fun keyAttributeOf(snapshot: MetadataSnapshot, id: Int, props: PropObjectOutputDto): String? {
+        val typeName = requireNotNull(props.type) { "Loodsman object $id: type is null" }
+        if (!snapshot.hasObjectType(typeName)) {
+            throw LoodsmanApiException("Object $id: type '$typeName' not found in Loodsman metadata")
+        }
+        return snapshot.keyAttributeOf(typeName)
+    }
+
+    /** Единое правило чтения для [loadStructure] и [withProperties]: имена атрибутов разрешаются для вида. */
+    private fun attributeRequest(
+        kind: PdmNodeKind,
+        keyAttribute: String?,
+        attributeKeys: Set<AttributeKey>,
+        includeUnmapped: Boolean,
+    ): AttributeRequest {
+        val keyKey = keyAttribute?.let { name ->
+            mapping.attributes.entries.firstOrNull { (_, rule) -> rule.nameFor(kind)?.trim() == name }
+                ?.let { (id, _) -> Registries.attributeKeys.resolve(id) }
+        }
+        return AttributeRequest(
+            keyAttribute = keyAttribute,
+            keyKey = keyKey,
+            designation = ruleOrNull(AttributeKey.Designation)?.nameFor(kind),
+            name = ruleOrNull(AttributeKey.Name)?.nameFor(kind),
+            names = attributeKeys.associateWith { key -> ruleOf(key).nameFor(kind) },
+            mappedNames = mapping.attributes.values.mapNotNullTo(HashSet()) { it.nameFor(kind)?.trim() },
+            includeUnmapped = includeUnmapped,
         )
+    }
 
     private suspend fun loadNodes(
         ids: List<Int>,
-        query: StructureQuery,
-        attributeRules: Map<AttributeKey, AttributeRule>,
+        snapshot: MetadataSnapshot,
         nodes: MutableMap<Int, LoadedNode>
     ) {
         val props = ids.chunked(PROPS_BATCH_SIZE).flatMap { chunk ->
@@ -167,12 +173,13 @@ class LoodsmanProductStructureClient internal constructor(
         }
 
         val attributes = withPermits(prepared.filter { (_, pair) ->
-            val kind = pair.second
-            kind != null && needsAttributes(kind, query, attributeRules)
+            pair.second != null && needsAttributes()
         }.map { it.first }) { id -> api.objectInfo.infoAboutVersion(id) }
 
         prepared.forEach { (id, pair) ->
-            nodes[id] = LoadedNode(pair.first, pair.second, attributes[id].orEmpty())
+            val (prop, kind) = pair
+            val keyAttribute = kind?.let { keyAttributeOf(snapshot, id, prop) }
+            nodes[id] = LoadedNode(prop, kind, attributes[id].orEmpty(), keyAttribute)
         }
     }
 
@@ -191,17 +198,8 @@ class LoodsmanProductStructureClient internal constructor(
             ids.map { id -> async { id to semaphore.withPermit { block(id) } } }.awaitAll().toMap()
         }
 
-    private fun needsAttributes(
-        kind: PdmNodeKind,
-        query: StructureQuery,
-        attributeRules: Map<AttributeKey, AttributeRule>
-    ): Boolean {
-        val identity = identityOf(kind)
-        return identity.designation is FieldSource.Attribute ||
-                identity.name is FieldSource.Attribute ||
-                attributeRules.values.any { it.nameFor(kind) != null } ||
-                query.includeUnmappedAttributes
-    }
+    // TODO(6d): грузить атрибуты только при запросе. На 6b временно всегда: designation/name читаются из списка.
+    private fun needsAttributes(): Boolean = true
 
     private suspend fun loadLinkAttributes(
         query: StructureQuery,
@@ -255,19 +253,10 @@ class LoodsmanProductStructureClient internal constructor(
         return result
     }
 
-    private fun identityOf(kind: PdmNodeKind): Identity {
-        val override = Registries.itemKinds.idOf(kind)?.let { mapping.identity.byKind[it] }
-        return Identity(
-            designation = override?.designation ?: mapping.identity.designation,
-            name = override?.name ?: mapping.identity.name
-        )
-    }
-
     private fun buildNode(
         id: Int,
         remaining: Int,
         query: StructureQuery,
-        attributeRules: Map<AttributeKey, AttributeRule>,
         nodes: Map<Int, LoadedNode>,
         links: Map<Int, List<Link>>,
         linkAttributes: Map<Int, LinkAttributesData>,
@@ -278,7 +267,7 @@ class LoodsmanProductStructureClient internal constructor(
         }
         val node = nodes.getValue(id)
         val kind = node.kind ?: throw LoodsmanApiException("Object $id has unmapped type '${node.prop.type}'")
-        val identity = identityOf(kind)
+        val request = attributeRequest(kind, node.keyAttribute, query.attributes, query.includeUnmappedAttributes)
 
         val usages = if (remaining > 0) {
             links[id].orEmpty().mapNotNull { link ->
@@ -288,7 +277,7 @@ class LoodsmanProductStructureClient internal constructor(
                 val linkAttrs = linkAttributes[link.linkId]?.attributes ?: emptyMap()
                 val attrs = linkAttributesOf(link.relation, kind, childKind, query, linkAttrs)
                 val childNode = buildNode(
-                    link.dto.idChild, remaining - 1, query, attributeRules, nodes, links, linkAttributes, path + id
+                    link.dto.idChild, remaining - 1, query, nodes, links, linkAttributes, path + id
                 )
 
                 when (link.relation) {
@@ -318,70 +307,8 @@ class LoodsmanProductStructureClient internal constructor(
             emptyList()
         }
 
-        return PdmNode(
-            id = PdmNodeId(id),
-            kind = kind,
-            designation = node.read(identity.designation)?.let { Designation.Value(it) } ?: Designation.Missing,
-            name = node.read(identity.name)?.let { Name.Value(it) } ?: Name.Missing,
-            version = node.read(FieldSource.Prop(mapping.properties.version))?.let { Field.Value(it) } ?: Field.Missing,
-            state = node.read(FieldSource.Prop(mapping.properties.state))?.let { Field.Value(it) } ?: Field.Missing,
-            attributes = attributesOf(node, kind, query, attributeRules),
-            usages = usages
-        )
-    }
-
-    private fun attributesOf(
-        node: LoadedNode,
-        kind: PdmNodeKind,
-        query: StructureQuery,
-        rules: Map<AttributeKey, AttributeRule>
-    ): Map<AttributeKey, AttributeValue> {
-        val result = LinkedHashMap<AttributeKey, AttributeValue>()
-        rules.forEach { (key, rule) ->
-            val value = rule.nameFor(kind)?.let { name -> node.read(FieldSource.Attribute(name)) }
-            result[key] = value?.let { AttributeValue.Text(it) } ?: AttributeValue.Empty
-        }
-        if (query.includeUnmappedAttributes) {
-            val mappedNames = mutableSetOf<String>()
-            mapping.attributes.values.forEach { rule ->
-                rule.name?.let { mappedNames.add(it) }
-                rule.byKind.values.forEach { mappedNames.add(it) }
-            }
-            mapping.identity.designation.let { ds ->
-                when (ds) {
-                    is FieldSource.Attribute -> mappedNames.add(ds.name)
-                    else -> {}
-                }
-            }
-            mapping.identity.name.let { n ->
-                when (n) {
-                    is FieldSource.Attribute -> mappedNames.add(n.name)
-                    else -> {}
-                }
-            }
-            mapping.identity.byKind.values.forEach { ki ->
-                ki.designation?.let { ds ->
-                    when (ds) {
-                        is FieldSource.Attribute -> mappedNames.add(ds.name)
-                        else -> {}
-                    }
-                }
-                ki.name?.let { n ->
-                    when (n) {
-                        is FieldSource.Attribute -> mappedNames.add(n.name)
-                        else -> {}
-                    }
-                }
-            }
-            node.attributes.forEach { attribute ->
-                val name = attribute.name?.trim()
-                val value = attribute.value?.trim()
-                if (!name.isNullOrEmpty() && name !in mappedNames && !value.isNullOrEmpty()) {
-                    result[AttributeKey.Unmapped(name)] = AttributeValue.Text(value)
-                }
-            }
-        }
-        return result
+        return toDomain(node.prop, kind, node.attributes, request, mapping.properties.version, mapping.properties.state)
+            .copy(usages = usages)
     }
 
     private fun linkAttributesOf(
@@ -427,21 +354,11 @@ class LoodsmanProductStructureClient internal constructor(
         LinkField.MIN_QUANTITY, LinkField.MAX_QUANTITY -> null
     }
 
-    private fun LoadedNode.read(source: FieldSource): String? = when (source) {
-        is FieldSource.Prop -> when (source.field) {
-            PropField.PRODUCT -> prop.product
-            PropField.VERSION -> prop.version
-            PropField.STATE -> prop.state
-            PropField.TYPE -> prop.type
-        }
-
-        is FieldSource.Attribute -> attributes.firstOrNull { it.name?.trim() == source.name }?.value
-    }?.trim()?.takeIf { it.isNotEmpty() }
-
     private class LoadedNode(
         val prop: PropObjectOutputDto,
         val kind: PdmNodeKind?,
-        val attributes: List<ObjectAttributeOutputDto>
+        val attributes: List<ObjectAttributeOutputDto>,
+        val keyAttribute: String?,
     )
 
     private class Link(
@@ -454,6 +371,4 @@ class LoodsmanProductStructureClient internal constructor(
         val linkId: Int,
         val attributes: Map<String, String>
     )
-
-    private class Identity(val designation: FieldSource, val name: FieldSource)
 }
