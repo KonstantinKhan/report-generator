@@ -121,6 +121,18 @@ class LoodsmanApiTest : ShouldSpec({
         request.session() shouldBe "s1"
     }
 
+    should("fetch metadata cache version as plain int64") {
+        val requests = mutableListOf<HttpRequestData>()
+        val logins = AtomicInteger()
+        val api = ktorApi(requests, logins) { reply("9007199254740993") }
+
+        api.metaData.cacheVersion() shouldBe 9007199254740993L
+
+        val request = requests.last { it.url.encodedPath == "/api/v4/MetaData/cache/version" }
+        request.method shouldBe HttpMethod.Get
+        request.session() shouldBe "s1"
+    }
+
     should("fetch prop objects with comma separated version ids") {
         val requests = mutableListOf<HttpRequestData>()
         val logins = AtomicInteger()

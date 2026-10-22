@@ -22,4 +22,9 @@ class MetaDataApi internal constructor(
         http.get("$blockBaseUrl/get-link-list") {
             timeout { requestTimeoutMillis = TYPE_LIST_REQUEST_TIMEOUT_MS }
         }
+
+    suspend fun cacheVersion(): Long =
+        http.get("$blockBaseUrl/cache/version") {
+            timeout { requestTimeoutMillis = TYPE_LIST_REQUEST_TIMEOUT_MS }
+        }
 }
