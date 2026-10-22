@@ -516,13 +516,6 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 Причина 502 из `SpecificationDataException` — данные изделия в PDM, а не баг сервера: до миграции такие ошибки тоже давали 502.
 
-### report-loodsman (dev-запуск)
-
-`Main.kt` модуля читает реквизиты из переменных окружения: `LOODSMAN_BASE_URL`, `LOODSMAN_DB_NAME`, `LOODSMAN_USERNAME`,
-`LOODSMAN_PASSWORD`. Если переменной нет, запуск падает с сообщением `Environment variable ... is required`. Корневой
-объект, глубина и отношения зашиты в `Main.kt`, их меняют в коде. Модуль не настроен как `application`: задачи `run`
-нет, запуск делается из IDE (`main` в `Main.kt`). Значения реквизитов не хранятся в репозитории.
-
 ## Тесты
 
 - `loodsman-client` — тесты на Ktor `MockEngine` (`ktor-client-mock`): проверяется поведение без сети. `LoodsmanApiTest`
