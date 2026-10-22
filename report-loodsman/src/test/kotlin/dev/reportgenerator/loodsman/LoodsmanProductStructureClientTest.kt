@@ -34,6 +34,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import io.github.konstantinkhan.loodsman.LoodsmanConfig
@@ -65,12 +66,18 @@ private class FakeLoodsman(
     val propsCalls: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val linkCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val linkAttributeCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
+    val linkListFailures = AtomicInteger(0)
 
     fun client(
         mapping: MappingConfig = MappingConfigLoader.load(emptyMap())
     ): LoodsmanProductStructureClient {
         val linkIdToEdge = mutableMapOf<Int, Edge>()
         val engine = MockEngine { request ->
+            if (request.url.encodedPath == "/api/v4/MetaData/get-link-list" &&
+                linkListFailures.getAndUpdate { if (it > 0) it - 1 else 0 } > 0
+            ) {
+                return@MockEngine respond("boom", HttpStatusCode.InternalServerError)
+            }
             val params = request.url.parameters
             val body: JsonElement = when (request.url.encodedPath) {
                 "/api/v4/Auth/login" -> buildJsonObject {
@@ -208,6 +215,17 @@ private fun query(
 )
 
 class LoodsmanProductStructureClientTest : ShouldSpec({
+    should("retry metadata loading after a failed attempt instead of caching the error") {
+        val fake = FakeLoodsman(tree, treeEdges)
+        fake.linkListFailures.set(1)
+        val client = fake.client()
+
+        shouldThrow<LoodsmanApiException> { client.loadStructure(query(1)) }
+        val root = client.loadStructure(query(1))
+
+        root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
+    }
+
     should("load only the root and skip link requests when depth is 0") {
         val fake = FakeLoodsman(tree, treeEdges)
 
