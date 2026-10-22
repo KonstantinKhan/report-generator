@@ -2,7 +2,6 @@ package khan366kos.mapping
 
 import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.Name
-import dev.reportgenerator.domain.PdmNodeKind
 import io.github.konstantinkhan.loodsman.PropField
 import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
 import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
@@ -13,12 +12,10 @@ data class Identity(
 )
 
 fun resolveIdentity(
-    kind: PdmNodeKind,
+    sources: IdentitySources,
     props: PropObjectOutputDto,
     attributes: List<ObjectAttributeOutputDto>,
-    sourceOf: (PdmNodeKind) -> IdentitySources
 ): Identity {
-    val sources = sourceOf(kind)
     return Identity(
         designation = sources.designation.readFrom(props, attributes).toDesignation(),
         name = sources.name.readFrom(props, attributes).toName()
@@ -40,7 +37,7 @@ private fun PropObjectOutputDto.read(field: PropField): String? = when (field) {
     PropField.TYPE -> type
 }
 
-private fun List<ObjectAttributeOutputDto>.valueOf(name: String): String? =
+fun List<ObjectAttributeOutputDto>.valueOf(name: String): String? =
     firstOrNull { it.name?.trim() == name }
         ?.value
         ?.trim()

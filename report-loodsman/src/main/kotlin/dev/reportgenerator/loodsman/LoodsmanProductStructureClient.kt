@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import io.github.konstantinkhan.loodsman.PropField
+import khan366kos.mapping.AttributeRequest
 import khan366kos.mapping.needsAttributes
 import khan366kos.mapping.toDomain
 
@@ -91,14 +92,26 @@ class LoodsmanProductStructureClient(
         return buildNode(rootId, query.depth, query, attributeRules, nodes, links, linkAttributes, emptyList())
     }
 
-    override suspend fun withProperties(id: PdmNodeId): PdmNode {
+    override suspend fun withProperties(
+        id: PdmNodeId,
+        attributeKeys: Set<AttributeKey>,
+        includeUnmapped: Boolean
+    ): PdmNode {
         val props = api.objectInfo.propObject(id.asInt())
         val kind = kindMapper.map(props.type)
-        val attributes =
-            if (kind != null && sourceOf(kind).needsAttributes())
-                api.objectInfo.infoAboutVersion(id.asInt())
-            else emptyList()
-        return toDomain(props, attributes, sourceOf, kindOf)
+            ?: error("Loodsman object $id: unmapped type '${props.type}'")
+        val request = AttributeRequest(
+            names = attributeKeys.mapNotNull { key ->
+                val rule = Registries.attributeKeys.idOf(key)?.let { mapping.attributes[it] }
+                    ?: throw LoodsmanApiException("Attribute '$key' is not configured in mapping.attributes")
+                rule.nameFor(kind)?.let { it to key }
+            }.toMap(),
+            includeUnmapped = includeUnmapped
+        )
+        val objectAttributes = if (sourceOf(kind).needsAttributes() || request.names.isNotEmpty() || includeUnmapped)
+            api.objectInfo.infoAboutVersion(id.asInt())     // ← вот когда API реально зовётся
+        else emptyList()
+        return toDomain(props, objectAttributes, sourceOf, kindOf, request)
     }
 
     private suspend fun resolveLinkTypes(relations: Set<Relation>): Map<Int, Relation> {
@@ -140,6 +153,16 @@ class LoodsmanProductStructureClient(
             Registries.attributeKeys.idOf(key)?.let { mapping.attributes[it] }
                 ?: throw LoodsmanApiException("Attribute '$key' is not configured in mapping.attributes")
         }
+
+    private fun attributeRequest(query: StructureQuery, kind: PdmNodeKind): AttributeRequest =
+        AttributeRequest(
+            names = query.attributes.mapNotNull { key ->
+                val rule = Registries.attributeKeys.idOf(key)?.let { mapping.attributes[it] }
+                    ?: throw LoodsmanApiException("Attribute '$key' is not configured")
+                rule.nameFor(kind)?.let { it to key }
+            }.toMap(),
+            includeUnmapped = query.includeUnmappedAttributes,
+        )
 
     private suspend fun loadNodes(
         ids: List<Int>,
