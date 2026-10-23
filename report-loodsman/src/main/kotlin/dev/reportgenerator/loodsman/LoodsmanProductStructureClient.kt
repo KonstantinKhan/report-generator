@@ -50,7 +50,7 @@ class LoodsmanProductStructureClient internal constructor(
     private val kindMapper = KindMapper(mapping, log)
     private val relationMapper = RelationMapper(mapping, log)
 
-    override suspend fun loadStructure(query: StructureQuery): PdmNode {
+    override suspend fun loadTree(query: StructureQuery): PdmNode {
         val rootId = query.rootId.asInt()
         val snapshot = metadata.snapshot()
         val relationByLinkTypeId = resolveLinkTypes(snapshot, query.relations)
@@ -82,7 +82,7 @@ class LoodsmanProductStructureClient internal constructor(
         return buildNode(rootId, query.depth, query, nodes, links, linkAttributes, emptyList())
     }
 
-    override suspend fun withProperties(
+    override suspend fun loadNode(
         id: PdmNodeId,
         attributeKeys: Set<AttributeKey>,
         includeUnmapped: Boolean
@@ -140,7 +140,7 @@ class LoodsmanProductStructureClient internal constructor(
         return snapshot.keyAttributeOf(typeName)
     }
 
-    /** Единое правило чтения для [loadStructure] и [withProperties]: имена атрибутов разрешаются для вида. */
+    /** Единое правило чтения для [loadTree] и [loadNode]: имена атрибутов разрешаются для вида. */
     private fun attributeRequest(
         kind: PdmNodeKind,
         keyAttribute: String?,

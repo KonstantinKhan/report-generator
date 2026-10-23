@@ -13,7 +13,7 @@ import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.StructureQuery
 
 // Returns the same structure for every query and records the queries it got.
-// If failure is set, loadStructure throws it instead.
+// If failure is set, loadTree throws it instead.
 // If structure is set, it is returned instead of the sample one.
 class FakeProductStructureClient(
     private val failure: Throwable? = null,
@@ -21,13 +21,13 @@ class FakeProductStructureClient(
 ) : PdmNodeStructureClient {
     val queries = mutableListOf<StructureQuery>()
 
-    override suspend fun loadStructure(query: StructureQuery): PdmNode {
+    override suspend fun loadTree(query: StructureQuery): PdmNode {
         queries += query
         failure?.let { throw it }
         return structure ?: sampleStructure()
     }
 
-    override suspend fun withProperties(
+    override suspend fun loadNode(
         id: PdmNodeId,
         attributeKeys: Set<AttributeKey>,
         includeUnmapped: Boolean,

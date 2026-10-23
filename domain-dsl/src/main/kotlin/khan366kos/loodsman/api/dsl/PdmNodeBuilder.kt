@@ -12,7 +12,7 @@ class PdmNodeBuilder : Builder<PdmNode> {
     var includeUnmapped: Boolean = false
 
     override suspend fun build(): PdmNode {
-        val data = pdmClient.withProperties(PdmNodeId(id), attributeKeys, includeUnmapped)
+        val data = pdmClient.loadNode(PdmNodeId(id), attributeKeys, includeUnmapped)
         return data
     }
 }

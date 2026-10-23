@@ -283,7 +283,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
             if (reads.incrementAndGet() == 1) fake.snapshot() else fake.snapshot(version = 2).copy(linkTypes = emptyList())
         }
 
-        val root = fake.client(metadata = metadata).loadStructure(query(1))
+        val root = fake.client(metadata = metadata).loadTree(query(1))
 
         root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
         reads.get() shouldBe 1
@@ -292,7 +292,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     should("load only the root and skip link requests when depth is 0") {
         val fake = FakeLoodsman(tree, treeEdges)
 
-        val root = fake.client().loadStructure(query(0))
+        val root = fake.client().loadTree(query(0))
 
         root.id shouldBe PdmNodeId(1)
         root.kind shouldBe PdmNodeKind.Assembly
@@ -302,7 +302,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     }
 
     should("map designation, name, quantity, unit and position of direct children when depth is 1") {
-        val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1, AttributeKey.Designation, AttributeKey.Name))
+        val root = FakeLoodsman(tree, treeEdges).client().loadTree(query(1, AttributeKey.Designation, AttributeKey.Name))
 
         root.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.001")
         root.attributes[AttributeKey.Name] shouldBe AttributeValue.Text("Корпус")
@@ -331,7 +331,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     }
 
     should("return quantity as missing when the link has no quantity") {
-        val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(2))
+        val root = FakeLoodsman(tree, treeEdges).client().loadTree(query(2))
 
         val composition = root.usages[0].child.usages.single() as CompositionUsage
         composition.quantity shouldBe Quantity.Missing
@@ -340,35 +340,35 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     should("map equal min and max to exact quantity") {
         val fake = FakeLoodsman(tree, listOf(Edge(1, 2, min = 3.0, max = 3.0)))
 
-        val composition = fake.client().loadStructure(query(1)).usages.single() as CompositionUsage
+        val composition = fake.client().loadTree(query(1)).usages.single() as CompositionUsage
         composition.quantity shouldBe Quantity.Exact(3.0)
     }
 
     should("map different min and max to quantity range") {
         val fake = FakeLoodsman(tree, listOf(Edge(1, 2, min = 1.0, max = 5.0)))
 
-        val composition = fake.client().loadStructure(query(1)).usages.single() as CompositionUsage
+        val composition = fake.client().loadTree(query(1)).usages.single() as CompositionUsage
         composition.quantity shouldBe Quantity.Range(1.0, 5.0)
     }
 
     should("reject a quantity range with only min filled") {
         val fake = FakeLoodsman(tree, listOf(Edge(1, 2, min = 2.0)))
 
-        val error = shouldThrow<LoodsmanApiException> { fake.client().loadStructure(query(1)) }
+        val error = shouldThrow<LoodsmanApiException> { fake.client().loadTree(query(1)) }
         error.message shouldBe "Link 100: quantity range is half-filled (min=2.0, max=null)"
     }
 
     should("reject a quantity range with only max filled") {
         val fake = FakeLoodsman(tree, listOf(Edge(1, 2, max = 2.0)))
 
-        val error = shouldThrow<LoodsmanApiException> { fake.client().loadStructure(query(1)) }
+        val error = shouldThrow<LoodsmanApiException> { fake.client().loadTree(query(1)) }
         error.message shouldBe "Link 100: quantity range is half-filled (min=null, max=2.0)"
     }
 
     should("load grandchildren when depth is 2 and request properties once per level") {
         val fake = FakeLoodsman(tree, treeEdges)
 
-        val root = fake.client().loadStructure(query(2))
+        val root = fake.client().loadTree(query(2))
 
         root.usages[0].child.usages.single().child.id shouldBe PdmNodeId(4)
         fake.propsCalls.size shouldBe 3
@@ -379,7 +379,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     should("return empty attributes when not requested") {
         val fake = FakeLoodsman(tree, treeEdges)
 
-        val without = fake.client().loadStructure(query(1))
+        val without = fake.client().loadTree(query(1))
 
         without.attributes shouldBe emptyMap()
     }
@@ -388,27 +388,27 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val cyclic = treeEdges + Edge(4, 1)
 
         shouldThrow<LoodsmanApiException> {
-            FakeLoodsman(tree, cyclic).client().loadStructure(query(Int.MAX_VALUE))
+            FakeLoodsman(tree, cyclic).client().loadTree(query(Int.MAX_VALUE))
         }
     }
 
     should("fail when a required link type is absent in metadata") {
         val fake = FakeLoodsman(tree, treeEdges, linkNames = listOf("Документы"))
 
-        shouldThrow<LoodsmanApiException> { fake.client().loadStructure(query(1)) }
+        shouldThrow<LoodsmanApiException> { fake.client().loadTree(query(1)) }
     }
 
     should("fail when the root object is not found") {
         val fake = FakeLoodsman(emptyList(), emptyList())
 
-        shouldThrow<LoodsmanApiException> { fake.client().loadStructure(query(0)) }
+        shouldThrow<LoodsmanApiException> { fake.client().loadTree(query(0)) }
     }
 
     should("keep an object of unknown type as unmapped by default") {
         val unknown = Obj(5, "Неведомый тип", "XX.001")
         val fake = FakeLoodsman(tree + unknown, treeEdges + Edge(1, 5))
 
-        val root = fake.client().loadStructure(query(1))
+        val root = fake.client().loadTree(query(1))
 
         root.usages.last().child.kind shouldBe PdmNodeKind.Unmapped("Неведомый тип")
     }
@@ -419,13 +419,13 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val mapping = MappingConfigLoader.load(emptyMap())
             .copy(onUnmapped = UnmappedPolicy(kind = OnUnmapped.SKIP))
 
-        val root = fake.client(mapping).loadStructure(query(1))
+        val root = fake.client(mapping).loadTree(query(1))
 
         root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
     }
 
     should("fill version and state from object properties") {
-        val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1))
+        val root = FakeLoodsman(tree, treeEdges).client().loadTree(query(1))
 
         root.version shouldBe Field.Value("1")
         root.state shouldBe Field.Value("Утверждён")
@@ -438,7 +438,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val edges = listOf(edgeWithPosition) + treeEdges.drop(1)
         val fake = FakeLoodsman(tree, edges)
 
-        val root = fake.client().loadStructure(query(1))
+        val root = fake.client().loadTree(query(1))
 
         val composition = root.usages[0] as CompositionUsage
         composition.position shouldBe Field.Value(3)
@@ -450,7 +450,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
             link = LinkMapping()
         )
 
-        fake.client(mapping).loadStructure(query(1))
+        fake.client(mapping).loadTree(query(1))
 
         fake.linkAttributeCalls.shouldBe(emptyList())
     }
@@ -460,7 +460,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val edges = listOf(edgeWithNote) + treeEdges.drop(1)
         val fake = FakeLoodsman(tree, edges)
 
-        val root = fake.client().loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+        val root = fake.client().loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
 
         root.usages[0].attributes shouldBe mapOf(LinkAttributeKey.Note to AttributeValue.Text("тест"))
     }
@@ -468,7 +468,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     should("return Empty for requested linkAttribute without value") {
         val fake = FakeLoodsman(tree, treeEdges)
 
-        val root = fake.client().loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+        val root = fake.client().loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
 
         root.usages[0].attributes shouldBe mapOf(LinkAttributeKey.Note to AttributeValue.Empty)
     }
@@ -478,21 +478,21 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val mapping = MappingConfigLoader.load(emptyMap()).copy(link = LinkMapping())
 
         shouldThrow<LoodsmanApiException> {
-            fake.client(mapping).loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+            fake.client(mapping).loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
         }
     }
 
     should("not call get-link-attributes when depth is 0") {
         val fake = FakeLoodsman(tree, treeEdges)
 
-        fake.client().loadStructure(query(0))
+        fake.client().loadTree(query(0))
 
         fake.linkAttributeCalls.shouldBe(emptyList())
         fake.linkCalls.shouldBe(emptyList())
     }
 
     should("fill requested node attributes and mark absent ones as empty") {
-        val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1, AttributeKey.Mass))
+        val root = FakeLoodsman(tree, treeEdges).client().loadTree(query(1, AttributeKey.Mass))
 
         root.attributes shouldBe mapOf(AttributeKey.Mass to AttributeValue.Empty)
         root.usages[0].child.attributes shouldBe mapOf(AttributeKey.Mass to AttributeValue.Text("1.5"))
@@ -502,8 +502,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val fake = FakeLoodsman(tree, treeEdges)
         val client = fake.client()
 
-        client.loadStructure(query(1))
-        client.withProperties(PdmNodeId(2), emptySet())
+        client.loadTree(query(1))
+        client.loadNode(PdmNodeId(2), emptySet())
 
         fake.infoCalls shouldBe emptyList()
     }
@@ -512,8 +512,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val fake = FakeLoodsman(tree, treeEdges)
         val client = fake.client()
 
-        val root = client.loadStructure(query(1, AttributeKey.Designation))
-        val shaft = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Designation))
+        val root = client.loadTree(query(1, AttributeKey.Designation))
+        val shaft = client.loadNode(PdmNodeId(2), setOf(AttributeKey.Designation))
 
         fake.infoCalls shouldBe emptyList()
         root.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.001")
@@ -523,7 +523,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     should("call the object attribute list for a non-key attribute only") {
         val fake = FakeLoodsman(tree, treeEdges)
 
-        fake.client().withProperties(PdmNodeId(2), setOf(AttributeKey.Name))
+        fake.client().loadNode(PdmNodeId(2), setOf(AttributeKey.Name))
 
         fake.infoCalls shouldBe listOf(2)
     }
@@ -535,7 +535,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         )
 
         val root = FakeLoodsman(listOf(assembly, shaft, standard, pin), treeEdges).client(mapping)
-            .loadStructure(query(1, AttributeKey.Mass))
+            .loadTree(query(1, AttributeKey.Mass))
 
         root.usages[0].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("1.5")
         root.usages[1].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("0.02")
@@ -546,7 +546,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
             attributes = mapOf("mass" to AttributeRule(byKind = mapOf("PART" to "Масса")))
         )
 
-        val root = FakeLoodsman(tree, treeEdges).client(mapping).loadStructure(query(1, AttributeKey.Mass))
+        val root = FakeLoodsman(tree, treeEdges).client(mapping).loadTree(query(1, AttributeKey.Mass))
 
         root.usages[0].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("1.5")
         root.usages[1].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Empty
@@ -557,7 +557,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val mapping = MappingConfigLoader.load(emptyMap()).copy(attributes = emptyMap())
 
         shouldThrow<LoodsmanApiException> {
-            FakeLoodsman(tree, treeEdges).client(mapping).loadStructure(query(1, AttributeKey.Mass))
+            FakeLoodsman(tree, treeEdges).client(mapping).loadTree(query(1, AttributeKey.Mass))
         }
     }
 
@@ -565,7 +565,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val extra = shaft.copy(attrs = shaft.attrs + ("Прочее" to "x"))
 
         val root = FakeLoodsman(listOf(assembly, extra, bolt, pin), treeEdges).client()
-            .loadStructure(query(1, includeUnmapped = true))
+            .loadTree(query(1, includeUnmapped = true))
 
         val attributes = root.usages[0].child.attributes
         attributes[AttributeKey.Unmapped("Прочее")] shouldBe AttributeValue.Text("x")
@@ -589,7 +589,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
             Edge(1, 3, attrs = mapOf("Позиция" to "7", "Позиция изделия" to "2"))
         )
 
-        val root = FakeLoodsman(tree, edges).client(mapping).loadStructure(query(1))
+        val root = FakeLoodsman(tree, edges).client(mapping).loadTree(query(1))
 
         val compositions = root.usages.filterIsInstance<CompositionUsage>()
         compositions[0].position shouldBe Field.Value(1)
@@ -597,7 +597,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     }
 
     should("return missing position when the link has no position attribute") {
-        val root = FakeLoodsman(tree, treeEdges).client().loadStructure(query(1))
+        val root = FakeLoodsman(tree, treeEdges).client().loadTree(query(1))
 
         root.usages.filterIsInstance<CompositionUsage>().map { it.position } shouldBe listOf(Field.Missing, Field.Missing)
     }
@@ -605,7 +605,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     should("reject the built-in position key in the link attributes query") {
         shouldThrow<LoodsmanApiException> {
             FakeLoodsman(tree, treeEdges).client()
-                .loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Position)))
+                .loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Position)))
         }
     }
 
@@ -613,7 +613,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val edges = listOf(Edge(1, 2, attrs = mapOf("Позиция" to "3", "Примечание" to "n")))
 
         val root = FakeLoodsman(tree, edges).client()
-            .loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+            .loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
 
         val usage = root.usages.single() as CompositionUsage
         usage.position shouldBe Field.Value(3)
@@ -632,39 +632,39 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         )
         val fake = FakeLoodsman(tree, treeEdges)
 
-        fake.client(mapping).loadStructure(query(1))
+        fake.client(mapping).loadTree(query(1))
 
         fake.linkAttributeCalls.size shouldBe 1
     }
 
-    should("read the same key, designation and name in loadStructure and withProperties") {
+    should("read the same key, designation and name in loadTree and loadNode") {
         val fake = FakeLoodsman(tree, treeEdges)
         val client = fake.client()
 
         val requested = setOf(AttributeKey.Mass, AttributeKey.Designation, AttributeKey.Name)
-        val structure = client.loadStructure(query(1, *requested.toTypedArray(), includeUnmapped = true))
+        val structure = client.loadTree(query(1, *requested.toTypedArray(), includeUnmapped = true))
         val shaftFromStructure = structure.usages[0].child
         val boltFromStructure = structure.usages[1].child
-        val shaftFromProperties = client.withProperties(PdmNodeId(2), requested, includeUnmapped = true)
-        val boltFromProperties = client.withProperties(PdmNodeId(3), requested, includeUnmapped = true)
+        val shaftFromLoadNode = client.loadNode(PdmNodeId(2), requested, includeUnmapped = true)
+        val boltFromLoadNode = client.loadNode(PdmNodeId(3), requested, includeUnmapped = true)
 
-        shaftFromProperties.key shouldBe shaftFromStructure.key
-        shaftFromProperties.attributes shouldBe shaftFromStructure.attributes
-        boltFromProperties.key shouldBe boltFromStructure.key
-        boltFromProperties.attributes shouldBe boltFromStructure.attributes
+        shaftFromLoadNode.key shouldBe shaftFromStructure.key
+        shaftFromLoadNode.attributes shouldBe shaftFromStructure.attributes
+        boltFromLoadNode.key shouldBe boltFromStructure.key
+        boltFromLoadNode.attributes shouldBe boltFromStructure.attributes
     }
 
     should("return NodeKey.Missing and empty designation for an object with empty product") {
         val empty = Obj(6, "Деталь", "   ", mapOf("Наименование" to "Пустая"))
         val fake = FakeLoodsman(listOf(assembly, empty), listOf(Edge(1, 6)))
 
-        val structure = fake.client().loadStructure(query(1, AttributeKey.Designation))
-        val withProperties = fake.client().withProperties(PdmNodeId(6), setOf(AttributeKey.Designation))
+        val structure = fake.client().loadTree(query(1, AttributeKey.Designation))
+        val nodeById = fake.client().loadNode(PdmNodeId(6), setOf(AttributeKey.Designation))
 
         structure.usages.single().child.key shouldBe NodeKey.Missing
         structure.usages.single().child.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
-        withProperties.key shouldBe NodeKey.Missing
-        withProperties.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
+        nodeById.key shouldBe NodeKey.Missing
+        nodeById.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
     }
 
     should("split properties request of one level into batches of at most 100 objects") {
@@ -672,7 +672,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
             val children = (2..count + 1).map { Obj(it, "Деталь", "АБ.%03d".format(it)) }
             val fake = FakeLoodsman(listOf(assembly) + children, children.map { Edge(1, it.id) })
 
-            val root = fake.client().loadStructure(query(1))
+            val root = fake.client().loadTree(query(1))
 
             val batches = fake.propsCalls.drop(1)
             batches.size shouldBe (count + PROPS_BATCH - 1) / PROPS_BATCH
@@ -690,7 +690,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
             val fake = FakeLoodsman(listOf(assembly) + children, edges, requestDelayMs = 20)
 
             fake.client(concurrency = concurrency)
-                .loadStructure(query(1, AttributeKey.Name, linkAttributes = setOf(LinkAttributeKey.Note)))
+                .loadTree(query(1, AttributeKey.Name, linkAttributes = setOf(LinkAttributeKey.Note)))
 
             fake.maxInFlight.get().shouldBeLessThanOrEqualTo(concurrency)
             if (concurrency > 1) fake.maxInFlight.get().shouldBeGreaterThan(1)
@@ -701,7 +701,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val edges = listOf(Edge(1, 2, attrs = mapOf("Позиция" to "3", "Примечание" to "n")))
         val fake = FakeLoodsman(tree, edges)
 
-        val root = fake.client().loadStructure(query(1))
+        val root = fake.client().loadTree(query(1))
 
         val usage = root.usages.single() as CompositionUsage
         usage.position shouldBe Field.Value(3)
@@ -716,7 +716,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val mapping = MappingConfigLoader.load(emptyMap())
             .copy(onUnmapped = UnmappedPolicy(kind = OnUnmapped.SKIP))
 
-        val root = fake.client(mapping).loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+        val root = fake.client(mapping).loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
 
         root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
         fake.linkAttributeCalls.sorted() shouldBe listOf(100, 101)

@@ -130,7 +130,7 @@ fun Application.reportServerModule(
             val customerRepresentative = call.parameters["customerRepresentative"]?.toBooleanStrictOrNull() ?: true
 
             val id = UUID.randomUUID().toString()
-            val structure = structureClient.loadStructure(specificationQuery(PdmNodeId(versionId)))
+            val structure = structureClient.loadTree(specificationQuery(PdmNodeId(versionId)))
             val file = withContext(Dispatchers.IO) {
                 val data = structure.toSpecificationData()
 

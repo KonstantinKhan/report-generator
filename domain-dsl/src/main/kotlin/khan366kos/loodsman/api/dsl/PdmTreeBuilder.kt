@@ -17,7 +17,7 @@ class PdmTreeBuilder : Builder<PdmNode> {
     var linkAttributeKeys: Set<LinkAttributeKey> = emptySet()
 
     override suspend fun build(): PdmNode =
-        pdmClient.loadStructure(
+        pdmClient.loadTree(
             StructureQuery(
                 rootId = PdmNodeId(id),
                 depth = depth,

@@ -17,12 +17,12 @@ private class RecordingClient : PdmNodeStructureClient {
     val queries = mutableListOf<StructureQuery>()
     val propertyCalls = mutableListOf<Triple<PdmNodeId, Set<AttributeKey>, Boolean>>()
 
-    override suspend fun loadStructure(query: StructureQuery): PdmNode {
+    override suspend fun loadTree(query: StructureQuery): PdmNode {
         queries += query
         return node
     }
 
-    override suspend fun withProperties(
+    override suspend fun loadNode(
         id: PdmNodeId,
         attributeKeys: Set<AttributeKey>,
         includeUnmapped: Boolean
@@ -92,7 +92,7 @@ class PdmDslTest : ShouldSpec({
         node.attributes[AttributeKey.Name] shouldBe AttributeValue.Text("Изделие")
     }
 
-    should("pdmNode call withProperties with id, attribute keys and includeUnmapped") {
+    should("pdmNode call loadNode with id, attribute keys and includeUnmapped") {
         val client = RecordingClient()
 
         pdmNode {
@@ -108,7 +108,7 @@ class PdmDslTest : ShouldSpec({
         client.queries shouldBe emptyList()
     }
 
-    should("pdmNode call withProperties with empty attribute keys and includeUnmapped false by default") {
+    should("pdmNode call loadNode with empty attribute keys and includeUnmapped false by default") {
         val client = RecordingClient()
 
         pdmNode {

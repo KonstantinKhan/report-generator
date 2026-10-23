@@ -113,12 +113,12 @@ private fun clientFor(
     metadata: MetadataSource = metadataFor(*eightKinds.toTypedArray()),
 ) = LoodsmanProductStructureClient(fake.api(), mapping, metadata = metadata)
 
-class LoodsmanWithPropertiesTest : ShouldSpec({
+class LoodsmanLoadNodeTest : ShouldSpec({
     should("map the loodsman type to the node kind and read designation and name") {
         val fake = SingleObjectFake("Деталь")
         val client = clientFor(fake)
 
-        val node = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Designation, AttributeKey.Name))
+        val node = client.loadNode(PdmNodeId(2), setOf(AttributeKey.Designation, AttributeKey.Name))
 
         node.id shouldBe PdmNodeId(2)
         node.kind shouldBe PdmNodeKind.Part
@@ -131,7 +131,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val fake = SingleObjectFake("Деталь")
         val client = clientFor(fake)
 
-        client.withProperties(PdmNodeId(2), emptySet(), includeUnmapped = false)
+        client.loadNode(PdmNodeId(2), emptySet(), includeUnmapped = false)
 
         fake.infoCalls.get() shouldBe 0
     }
@@ -140,7 +140,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val fake = SingleObjectFake("Деталь")
         val client = clientFor(fake)
 
-        val node = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Designation))
+        val node = client.loadNode(PdmNodeId(2), setOf(AttributeKey.Designation))
 
         fake.infoCalls.get() shouldBe 0
         node.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.002")
@@ -150,7 +150,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val fake = SingleObjectFake("Деталь")
         val client = clientFor(fake)
 
-        val node = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Name))
+        val node = client.loadNode(PdmNodeId(2), setOf(AttributeKey.Name))
 
         fake.infoCalls.get() shouldBe 1
         node.attributes[AttributeKey.Name] shouldBe AttributeValue.Text("Вал")
@@ -160,7 +160,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val fake = SingleObjectFake("Деталь")
         val client = clientFor(fake)
 
-        val node = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Mass))
+        val node = client.loadNode(PdmNodeId(2), setOf(AttributeKey.Mass))
 
         fake.infoCalls.get() shouldBe 1
         node.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("1.5")
@@ -170,7 +170,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val fake = SingleObjectFake("Деталь")
         val client = clientFor(fake)
 
-        client.withProperties(PdmNodeId(2), emptySet(), includeUnmapped = true)
+        client.loadNode(PdmNodeId(2), emptySet(), includeUnmapped = true)
 
         fake.infoCalls.get() shouldBe 1
     }
@@ -183,7 +183,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         )
 
         shouldThrow<LoodsmanApiException> {
-            client.withProperties(PdmNodeId(2), setOf(AttributeKey.Mass))
+            client.loadNode(PdmNodeId(2), setOf(AttributeKey.Mass))
         }
     }
 
@@ -191,7 +191,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val fake = SingleObjectFake("Неизвестный тип")
         val client = clientFor(fake, metadata = metadataFor("Неизвестный тип"))
 
-        val node = client.withProperties(PdmNodeId(2), emptySet())
+        val node = client.loadNode(PdmNodeId(2), emptySet())
 
         node.kind shouldBe PdmNodeKind.Unmapped("Неизвестный тип")
     }
@@ -201,7 +201,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val client = clientFor(fake, metadata = metadataFor("Сборочная единица"))
 
         val error = shouldThrow<LoodsmanApiException> {
-            client.withProperties(PdmNodeId(2), emptySet())
+            client.loadNode(PdmNodeId(2), emptySet())
         }
 
         error.message shouldBe "Object 2: type 'Деталь' not found in Loodsman metadata"
@@ -216,7 +216,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         )
 
         shouldThrow<IllegalStateException> {
-            client.withProperties(PdmNodeId(2), emptySet())
+            client.loadNode(PdmNodeId(2), emptySet())
         }
     }
 
@@ -229,7 +229,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         )
 
         shouldThrow<IllegalArgumentException> {
-            client.withProperties(PdmNodeId(2), emptySet())
+            client.loadNode(PdmNodeId(2), emptySet())
         }
     }
 
@@ -237,7 +237,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
         val fake = SingleObjectFake("Деталь", product = "   ")
         val client = clientFor(fake)
 
-        val node = client.withProperties(PdmNodeId(2), setOf(AttributeKey.Designation))
+        val node = client.loadNode(PdmNodeId(2), setOf(AttributeKey.Designation))
 
         node.key shouldBe NodeKey.Missing
         node.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
@@ -261,7 +261,7 @@ class LoodsmanWithPropertiesTest : ShouldSpec({
             val (designation, name) = expected
             val fake = SingleObjectFake(type, product = designation, attrs = attrs)
 
-            val node = clientFor(fake).withProperties(PdmNodeId(2), setOf(AttributeKey.Designation, AttributeKey.Name))
+            val node = clientFor(fake).loadNode(PdmNodeId(2), setOf(AttributeKey.Designation, AttributeKey.Name))
 
             node.key shouldBe NodeKey.Value(AttributeKey.Designation, designation)
             node.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text(designation)

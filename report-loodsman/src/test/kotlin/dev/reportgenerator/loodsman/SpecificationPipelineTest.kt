@@ -26,7 +26,7 @@ import io.github.konstantinkhan.loodsman.LoodsmanConfig
 import io.github.konstantinkhan.loodsman.installLoodsman
 
 // Regression test for the production specification pipeline:
-// LoodsmanProductStructureClient.loadStructure(specificationQuery(...)) -> toSpecificationData().
+// LoodsmanProductStructureClient.loadTree(specificationQuery(...)) -> toSpecificationData().
 // Expected values were fixed against the output of the legacy path (removed) on the same Loodsman responses.
 
 private const val COMPOSITION_LINK = "Состоит из ..."
@@ -166,7 +166,7 @@ private suspend fun loadPipeline(
     val api = LoodsmanApi(config, httpClient)
     val metadata = MetadataCache(api, validate = { emptyList() }).also { it.initialize() }
     return LoodsmanProductStructureClient(api, MappingConfigLoader.load(emptyMap()), metadata = metadata)
-        .loadStructure(specificationQuery(PdmNodeId(1)))
+        .loadTree(specificationQuery(PdmNodeId(1)))
         .toSpecificationData()
 }
 
