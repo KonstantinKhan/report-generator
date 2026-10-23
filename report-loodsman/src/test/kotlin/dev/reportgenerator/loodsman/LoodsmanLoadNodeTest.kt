@@ -234,7 +234,7 @@ class LoodsmanLoadNodeTest : ShouldSpec({
     }
 
     should("return NodeKey.Missing and empty designation when the product is empty") {
-        val fake = SingleObjectFake("Деталь", product = "   ")
+        val fake = SingleObjectFake("Деталь", product = "")
         val client = clientFor(fake)
 
         val node = client.loadNode(PdmNodeId(2), setOf(AttributeKey.Designation))

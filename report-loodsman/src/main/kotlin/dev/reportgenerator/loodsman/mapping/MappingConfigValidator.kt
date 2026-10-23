@@ -1,25 +1,24 @@
 package dev.reportgenerator.loodsman.mapping
 
 import dev.reportgenerator.loodsman.MetadataSnapshot
-import dev.reportgenerator.loodsman.normalizeForComparison
 
 /**
  * Семантическая проверка конфига маппинга против снимка метаданных Loodsman.
  * Собирает все ошибки сразу и не бросает исключений.
- * Типы объектов и связи сравниваются мягко ([normalizeForComparison]), атрибуты — строго.
+ * Типы объектов, связи и атрибуты сравниваются строго, как есть (`==`), без модификаций имён.
  * Структурная проверка конфига выполняется раньше, в [MappingConfig.validate].
  */
 object MappingConfigValidator {
 
     fun validate(config: MappingConfig, snapshot: MetadataSnapshot): List<String> {
-        val objectTypes = snapshot.objectTypes.mapTo(HashSet()) { normalizeForComparison(it.typeName.orEmpty()) }
-        val linkTypes = snapshot.linkTypes.mapTo(HashSet()) { normalizeForComparison(it.name.orEmpty()) }
+        val objectTypes = snapshot.objectTypes.mapNotNullTo(HashSet()) { it.typeName }
+        val linkTypes = snapshot.linkTypes.mapNotNullTo(HashSet()) { it.name }
         val attributes = snapshot.attributeNames
         val errors = mutableListOf<String>()
 
         config.kinds.keys.forEach { kind ->
-            if (normalizeForComparison(kind) !in objectTypes) {
-                errors += "kinds: type '$kind' not found in Loodsman"
+            if (kind !in objectTypes) {
+                errors += "kinds: type '$kind' not found in Loodsman. ${available(objectTypes)}"
                 return@forEach
             }
             val keyAttribute = snapshot.keyAttributeOf(kind)
@@ -31,15 +30,15 @@ object MappingConfigValidator {
         }
 
         config.relations.keys.forEach { relation ->
-            if (normalizeForComparison(relation) !in linkTypes) {
-                errors += "relations: link type '$relation' not found in Loodsman"
+            if (relation !in linkTypes) {
+                errors += "relations: link type '$relation' not found in Loodsman. ${available(linkTypes)}"
             }
         }
 
         config.requiredRelations.forEach { requiredId ->
             val pdmNames = config.relations.filterValues { it == requiredId }.keys
-            if (pdmNames.none { normalizeForComparison(it) in linkTypes }) {
-                errors += "requiredRelations: '$requiredId' has no link type in Loodsman, tried: ${pdmNames.joinToString()}"
+            if (pdmNames.none { it in linkTypes }) {
+                errors += "requiredRelations: '$requiredId' has no link type in Loodsman, tried: ${pdmNames.joinToString()}. ${available(linkTypes)}"
             }
         }
 
@@ -58,6 +57,10 @@ object MappingConfigValidator {
 
         return errors
     }
+
+    /** Список доступных имён из Loodsman, отсортированный, чтобы пользователь скопировал точное имя. */
+    private fun available(names: Set<String>): String =
+        "Available: ${names.sorted().joinToString()}"
 
     private fun MutableList<String>.checkAttribute(path: String, name: String?, attributes: Set<String>) {
         if (name != null && name !in attributes) {

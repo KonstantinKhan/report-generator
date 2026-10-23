@@ -3,6 +3,7 @@ package dev.reportgenerator.loodsman.mapping
 import dev.reportgenerator.domain.PdmNodeKind
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import org.slf4j.LoggerFactory
 import io.kotest.assertions.throwables.shouldThrow
 
@@ -27,28 +28,39 @@ class KindMapperTest : ShouldSpec({
             mapper.map("Деталь") shouldBe PdmNodeKind.Part
         }
 
-        should("map known name ignoring case") {
+        should("not map name that differs in case") {
             val mapper = KindMapper(config, log)
-            mapper.map("деталь") shouldBe PdmNodeKind.Part
-            mapper.map("ДЕТАЛЬ") shouldBe PdmNodeKind.Part
+            mapper.map("деталь") shouldBe PdmNodeKind.Unmapped("деталь")
+            mapper.map("ДЕТАЛЬ") shouldBe PdmNodeKind.Unmapped("ДЕТАЛЬ")
         }
 
-        should("map known name ignoring whitespace") {
+        should("not map name with surrounding or inner whitespace and keep it unchanged") {
             val mapper = KindMapper(config, log)
-            mapper.map("  Деталь  ") shouldBe PdmNodeKind.Part
+            mapper.map("  Деталь  ") shouldBe PdmNodeKind.Unmapped("  Деталь  ")
+            mapper.map("Сборочный  чертеж") shouldBe PdmNodeKind.Unmapped("Сборочный  чертеж")
         }
 
-        should("map name with yo the same as name with ye") {
+        should("not map name with ё when the key has е, and keep the name unchanged") {
             val mapper = KindMapper(config, log)
             mapper.map("Сборочный чертеж") shouldBe PdmNodeKind.AssemblyDrawing
-            mapper.map("Сборочный чертёж") shouldBe PdmNodeKind.AssemblyDrawing
-            mapper.map("СБОРОЧНЫЙ ЧЕРТЁЖ") shouldBe PdmNodeKind.AssemblyDrawing
-            mapper.map("Сборочный  чертёж") shouldBe PdmNodeKind.AssemblyDrawing
+            mapper.map("Сборочный чертёж") shouldBe PdmNodeKind.Unmapped("Сборочный чертёж")
+            mapper.map("СБОРОЧНЫЙ ЧЕРТЁЖ") shouldBe PdmNodeKind.Unmapped("СБОРОЧНЫЙ ЧЕРТЁЖ")
         }
 
         should("keep unknown name with yo unmapped and unchanged") {
             val mapper = KindMapper(config, log)
             mapper.map("Неизвестный чертёж") shouldBe PdmNodeKind.Unmapped("Неизвестный чертёж")
+        }
+
+        should("throw with the exact name and the known keys when FAIL policy and name differs only by case") {
+            val failConfig = config.copy(
+                onUnmapped = config.onUnmapped.copy(kind = OnUnmapped.FAIL)
+            )
+            val mapper = KindMapper(failConfig, log)
+            val error = shouldThrow<IllegalArgumentException> {
+                mapper.map("деталь")
+            }
+            error.message shouldContain "Unknown item kind 'деталь'"
         }
 
         should("return Unmapped when KEEP policy and unknown kind") {

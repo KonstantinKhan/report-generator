@@ -15,19 +15,26 @@ class MetadataSnapshotTest : ShouldSpec({
         version = 1,
     )
 
-    should("find link type id ignoring case and extra whitespace") {
-        snapshot.linkTypeId("  СОСТОИТ   из ...  ") shouldBe 1
-        snapshot.linkTypeId("документы") shouldBe 2
+    should("find link type id by exact name") {
+        snapshot.linkTypeId("Состоит из ...") shouldBe 1
+        snapshot.linkTypeId("Документы") shouldBe 2
     }
 
-    should("find link type id ignoring ё") {
+    should("not find link type id when case, whitespace differ") {
+        snapshot.linkTypeId("  Состоит из ...  ") shouldBe null
+        snapshot.linkTypeId("  СОСТОИТ   из ...  ") shouldBe null
+        snapshot.linkTypeId("документы") shouldBe null
+    }
+
+    should("not find link type id when ё is replaced by е") {
         val withYo = MetadataSnapshot(
             linkTypes = listOf(LinkTypeInfo(id = 3, name = "Ёмкость связи")),
             objectTypes = emptyList(),
             attributeNames = emptySet(),
             version = 1,
         )
-        withYo.linkTypeId("емкость связи") shouldBe 3
+        withYo.linkTypeId("Ёмкость связи") shouldBe 3
+        withYo.linkTypeId("Емкость связи") shouldBe null
     }
 
     should("return null for an unknown link type") {
@@ -48,10 +55,16 @@ class MetadataSnapshotTest : ShouldSpec({
             version = 1,
         )
 
-        should("return key attribute ignoring case, ё and extra whitespace of the type name") {
-            withTypes.keyAttributeOf("  ДЕТАЛЬ ") shouldBe "Обозначение"
-            withTypes.keyAttributeOf("елка") shouldBe "Обозначение"
-            withTypes.keyAttributeOf("комплект") shouldBe "GID"
+        should("return key attribute only for the exact type name") {
+            withTypes.keyAttributeOf("Деталь") shouldBe "Обозначение"
+            withTypes.keyAttributeOf("Комплект") shouldBe "GID"
+        }
+
+        should("return null when case, ё or whitespace of the type name differ") {
+            withTypes.keyAttributeOf("  Деталь ") shouldBe null
+            withTypes.keyAttributeOf("ДЕТАЛЬ") shouldBe null
+            withTypes.keyAttributeOf("Елка") shouldBe null
+            withTypes.keyAttributeOf("комплект") shouldBe null
         }
 
         should("return null for an unknown type") {

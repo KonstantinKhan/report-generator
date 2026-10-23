@@ -657,7 +657,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     }
 
     should("return NodeKey.Missing and empty designation for an object with empty product") {
-        val empty = Obj(6, "Деталь", "   ", mapOf("Наименование" to "Пустая"))
+        val empty = Obj(6, "Деталь", "", mapOf("Наименование" to "Пустая"))
         val fake = FakeLoodsman(listOf(assembly, empty), listOf(Edge(1, 6)))
 
         val structure = fake.client().loadTree(query(1, AttributeKey.Designation))

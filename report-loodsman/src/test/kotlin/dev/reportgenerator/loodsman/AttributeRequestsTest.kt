@@ -31,6 +31,22 @@ class AttributeRequestsTest : ShouldSpec({
             mapOf(AttributeKey.Mass to "Масса")
     }
 
+    should("not resolve the key domain key when the key attribute differs from the rule name by case or whitespace") {
+        requests.attributeRequest(PdmNodeKind.Part, "обозначение", emptySet(), false).keyKey shouldBe null
+        requests.attributeRequest(PdmNodeKind.Part, " Обозначение ", emptySet(), false).keyKey shouldBe null
+    }
+
+    should("keep rule names as is without trimming them into mapped names") {
+        val spaced = AttributeRequests(
+            MappingConfigLoader.load(emptyMap()).copy(
+                attributes = mapOf("designation" to AttributeRule(name = " Обозначение ")),
+            ),
+        )
+        spaced.attributeRequest(PdmNodeKind.Part, null, setOf(AttributeKey.Designation), false).names shouldBe
+            mapOf(AttributeKey.Designation to " Обозначение ")
+        spaced.attributeRequest(PdmNodeKind.Part, null, emptySet(), false).mappedNames shouldBe setOf(" Обозначение ")
+    }
+
     should("collect names of all rules of the kind as mapped") {
         requests.attributeRequest(PdmNodeKind.Part, null, emptySet(), false).mappedNames shouldBe
             setOf("Масса детали", "Обозначение")

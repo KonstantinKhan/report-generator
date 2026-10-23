@@ -8,6 +8,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 
 private val snapshot = MetadataSnapshot(
     linkTypes = listOf(
@@ -47,7 +48,15 @@ class MappingConfigValidatorTest : ShouldSpec({
     should("report a kind that is missing in Loodsman") {
         val errors = MappingConfigValidator.validate(config(kinds = mapOf("Неизвестная" to "PART")), snapshot)
 
-        errors shouldContainExactly listOf("kinds: type 'Неизвестная' not found in Loodsman")
+        errors shouldContainExactly listOf(
+            "kinds: type 'Неизвестная' not found in Loodsman. Available: Ёлка, Деталь",
+        )
+    }
+
+    should("list available Loodsman type names sorted in the kind error") {
+        val errors = MappingConfigValidator.validate(config(kinds = mapOf("Деталь1" to "PART")), snapshot)
+
+        errors.single() shouldContain "Available: Ёлка, Деталь"
     }
 
     should("report a relation that is missing in Loodsman") {
@@ -56,7 +65,9 @@ class MappingConfigValidatorTest : ShouldSpec({
             snapshot,
         )
 
-        errors shouldContainExactly listOf("relations: link type 'Нет такой' not found in Loodsman")
+        errors shouldContainExactly listOf(
+            "relations: link type 'Нет такой' not found in Loodsman. Available: Документы, Состоит из ...",
+        )
     }
 
     should("report a required relation without any matching link type and name the candidates") {
@@ -69,8 +80,8 @@ class MappingConfigValidatorTest : ShouldSpec({
         )
 
         errors shouldContainExactly listOf(
-            "relations: link type 'Ссылки' not found in Loodsman",
-            "requiredRelations: 'DOCUMENT' has no link type in Loodsman, tried: Ссылки",
+            "relations: link type 'Ссылки' not found in Loodsman. Available: Состоит из ...",
+            "requiredRelations: 'DOCUMENT' has no link type in Loodsman, tried: Ссылки. Available: Состоит из ...",
         )
     }
 
@@ -167,7 +178,7 @@ class MappingConfigValidatorTest : ShouldSpec({
         errors shouldHaveSize 5
     }
 
-    should("match kinds and relations ignoring case, ё and whitespace") {
+    should("do not match kinds and relations that differ in case, ё or whitespace") {
         val errors = MappingConfigValidator.validate(
             config(
                 kinds = mapOf("  ДЕТАЛЬ " to "PART", "елка" to "PART"),
@@ -176,7 +187,19 @@ class MappingConfigValidatorTest : ShouldSpec({
             snapshot,
         )
 
-        errors.shouldBeEmpty()
+        errors shouldContainExactly listOf(
+            "kinds: type '  ДЕТАЛЬ ' not found in Loodsman. Available: Ёлка, Деталь",
+            "kinds: type 'елка' not found in Loodsman. Available: Ёлка, Деталь",
+            "relations: link type 'состоит  из ...' not found in Loodsman. Available: Документы, Состоит из ...",
+            "requiredRelations: 'COMPOSITION' has no link type in Loodsman, tried: состоит  из .... Available: Документы, Состоит из ...",
+        )
+    }
+
+    should("match kind with ё only when the name contains ё exactly as in Loodsman") {
+        MappingConfigValidator.validate(config(kinds = mapOf("Ёлка" to "PART")), snapshot).shouldBeEmpty()
+        val errors = MappingConfigValidator.validate(config(kinds = mapOf("Елка" to "PART")), snapshot)
+
+        errors.single() shouldContain "kinds: type 'Елка' not found in Loodsman"
     }
 
     should("match attributes strictly: different case is an error") {

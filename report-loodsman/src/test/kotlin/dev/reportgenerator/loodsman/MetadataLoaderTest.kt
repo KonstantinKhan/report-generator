@@ -70,14 +70,14 @@ class MetadataLoaderTest : ShouldSpec({
                 ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "Обозначение"),
                 ObjectTypeInfo(id = 2, typeName = "Сборочная единица", keyAttribute = "Обозначение"),
             ),
-            attributeNames = setOf("Масса", "Наименование"),
+            attributeNames = setOf(" Масса ", "Наименование", "   "),
             version = 7,
         )
     }
 
-    should("map key attribute of object types trimmed and blank key attribute to null") {
+    should("keep key attribute of object types as is and map empty key attribute to null") {
         val typeList = """[{"id":1,"typeName":"Деталь","attrName":"  Обозначение ","document":0},""" +
-            """{"id":2,"typeName":"Комплект","attrName":"   ","document":0},""" +
+            """{"id":2,"typeName":"Комплект","attrName":"","document":0},""" +
             """{"id":3,"typeName":"Материал по КД","attrName":null,"document":0}]"""
         val api = loodsmanApi { request ->
             when (request.url.encodedPath) {
@@ -91,7 +91,7 @@ class MetadataLoaderTest : ShouldSpec({
         val snapshot = MetadataLoader.load(api)
 
         snapshot.objectTypes shouldBe listOf(
-            ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "Обозначение"),
+            ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "  Обозначение "),
             ObjectTypeInfo(id = 2, typeName = "Комплект", keyAttribute = null),
             ObjectTypeInfo(id = 3, typeName = "Материал по КД", keyAttribute = null),
         )
@@ -138,7 +138,7 @@ class MetadataLoaderTest : ShouldSpec({
         val snapshot = withTimeout(5.seconds) { MetadataLoader.load(api) }
 
         snapshot.linkTypes.map { it.id } shouldBe listOf(10)
-        snapshot.attributeNames shouldBe setOf("Масса", "Наименование")
+        snapshot.attributeNames shouldBe setOf(" Масса ", "Наименование", "   ")
         started.get() shouldBe 3
     }
 

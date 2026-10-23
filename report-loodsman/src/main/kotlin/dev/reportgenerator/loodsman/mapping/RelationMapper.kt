@@ -1,7 +1,6 @@
 package dev.reportgenerator.loodsman.mapping
 
 import dev.reportgenerator.domain.Relation
-import dev.reportgenerator.loodsman.normalizeForComparison
 import org.slf4j.Logger
 
 class RelationMapper(private val config: MappingConfig, private val log: Logger) {
@@ -11,25 +10,22 @@ class RelationMapper(private val config: MappingConfig, private val log: Logger)
             return null
         }
 
-        val normalizedName = pdmRelationName.trim()
-        val mapped = config.relations.entries.find { (key, _) ->
-            normalizeForComparison(key) == normalizeForComparison(normalizedName)
-        }?.value
+        val mapped = config.relations[pdmRelationName]
 
         return if (mapped != null) {
             Registries.relations.resolve(mapped)
         } else {
             when (config.onUnmapped.relation) {
                 OnUnmapped.KEEP -> {
-                    log.warn("Unknown relation '$normalizedName', keeping as unmapped")
-                    Relation.Unmapped(normalizedName)
+                    log.warn("Unknown relation '$pdmRelationName', keeping as unmapped")
+                    Relation.Unmapped(pdmRelationName)
                 }
                 OnUnmapped.SKIP -> {
                     null
                 }
                 OnUnmapped.FAIL -> {
                     throw IllegalArgumentException(
-                        "Unknown relation '$normalizedName'. Known: ${config.relations.keys.joinToString(", ")}"
+                        "Unknown relation '$pdmRelationName'. Known: ${config.relations.keys.joinToString(", ")}"
                     )
                 }
             }

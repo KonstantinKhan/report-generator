@@ -35,14 +35,14 @@ internal class AttributeRequests(private val mapping: MappingConfig) {
         includeUnmapped: Boolean,
     ): AttributeRequest {
         val keyKey = keyAttribute?.let { name ->
-            mapping.attributes.entries.firstOrNull { (_, rule) -> rule.nameFor(kind)?.trim() == name }
+            mapping.attributes.entries.firstOrNull { (_, rule) -> rule.nameFor(kind) == name }
                 ?.let { (id, _) -> Registries.attributeKeys.resolve(id) }
         }
         return AttributeRequest(
             keyAttribute = keyAttribute,
             keyKey = keyKey,
             names = attributeKeys.associateWith { key -> ruleOf(key).nameFor(kind) },
-            mappedNames = mapping.attributes.values.mapNotNullTo(HashSet()) { it.nameFor(kind)?.trim() },
+            mappedNames = mapping.attributes.values.mapNotNullTo(HashSet()) { it.nameFor(kind) },
             includeUnmapped = includeUnmapped,
         )
     }

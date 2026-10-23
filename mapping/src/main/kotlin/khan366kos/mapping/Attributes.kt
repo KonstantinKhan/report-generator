@@ -16,10 +16,10 @@ fun readAttributes(
         result[key] = value?.let { AttributeValue.Text(it) } ?: AttributeValue.Empty
     }
     if (request.includeUnmapped) {
-        val excluded = request.mappedNames + listOfNotNull(request.keyAttribute?.trim())
+        val excluded = request.mappedNames + listOfNotNull(request.keyAttribute)
         raw.forEach { attribute ->
-            val name = attribute.name?.trim()
-            val value = attribute.value?.trim()
+            val name = attribute.name
+            val value = attribute.value
             if (!name.isNullOrEmpty() && name !in excluded && !value.isNullOrEmpty()) {
                 result[AttributeKey.Unmapped(name)] = AttributeValue.Text(value)
             }

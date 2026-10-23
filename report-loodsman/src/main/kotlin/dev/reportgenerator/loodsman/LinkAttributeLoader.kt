@@ -64,7 +64,7 @@ internal class LinkAttributeLoader(
             }
 
             api.objectInfo.linkAttributes(linkId)
-                .associate { it.name?.trim().orEmpty() to (it.value?.trim().orEmpty()) }
+                .associate { it.name.orEmpty() to it.value.orEmpty() }
                 .filterKeys { it.isNotEmpty() }
         }
 

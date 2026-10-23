@@ -22,6 +22,6 @@ data class AttributeRequest(
      * нужен только для неключевого запрошенного атрибута вида или при includeUnmapped.
      */
     fun needsObjectAttributes(): Boolean = includeUnmapped || names.values.any { name ->
-        name != null && name.trim() != keyAttribute?.trim()
+        name != null && name != keyAttribute
     }
 }

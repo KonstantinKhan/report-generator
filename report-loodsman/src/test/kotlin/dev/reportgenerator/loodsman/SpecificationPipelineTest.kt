@@ -253,11 +253,11 @@ class SpecificationPipelineTest : ShouldSpec({
         )
     }
 
-    should("match document of the Сборочный чертёж type written with ё") {
+    should("match document of the Сборочный чертеж type with the exact name from mapping") {
         val actual = loadPipeline(
             objects = listOf(
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
-                ParityObj(10, "Сборочный чертёж", "АБ.010 СБ", mapOf("Наименование" to "Корпус. Сборочный чертёж")),
+                ParityObj(10, "Сборочный чертеж", "АБ.010 СБ", mapOf("Наименование" to "Корпус. Сборочный чертёж")),
             ),
             edges = listOf(ParityEdge(1, 10, link = DOCUMENT_LINK)),
         )
@@ -271,12 +271,12 @@ class SpecificationPipelineTest : ShouldSpec({
         )
     }
 
-    should("exclude an assembly drawing written with ё from the composition") {
+    should("exclude an assembly drawing from the composition when its type name is in mapping") {
         val actual = loadPipeline(
             objects = listOf(
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
                 ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
-                ParityObj(11, "Сборочный чертёж", "АБ.011 СБ", mapOf("Наименование" to "Чертёж в составе")),
+                ParityObj(11, "Сборочный чертеж", "АБ.011 СБ", mapOf("Наименование" to "Чертёж в составе")),
             ),
             edges = listOf(
                 ParityEdge(1, 2, min = 1.0, max = 1.0),
@@ -291,7 +291,7 @@ class SpecificationPipelineTest : ShouldSpec({
                 SpecificationItem("АБ.002", "Вал", ItemKind.PART, 1.0, null),
             ),
         )
-        // Observable exclusion: only the part stays in items, the drawing written with ё is dropped.
+        // Observable exclusion: only the part stays in items, the assembly drawing is dropped.
         actual.items.map { it.name } shouldBe listOf("Вал")
     }
 

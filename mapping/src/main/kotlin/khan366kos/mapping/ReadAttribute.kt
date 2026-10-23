@@ -7,7 +7,7 @@ import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
 /**
  * Единое чтение атрибута объекта. Если [name] равно ключевому атрибуту типа ([keyAttribute]),
  * значение лежит в свойстве `product`, иначе — в списке атрибутов объекта.
- * Пустое значение (после trim) считается отсутствующим.
+ * Имя и значение сравниваются и возвращаются как есть, без trim. Пустое значение считается отсутствующим.
  */
 fun readAttribute(
     name: String,
@@ -15,13 +15,12 @@ fun readAttribute(
     props: PropObjectOutputDto,
     attributes: List<ObjectAttributeOutputDto>,
 ): String? {
-    val target = name.trim()
-    val raw = if (keyAttribute != null && target == keyAttribute.trim()) {
+    val raw = if (keyAttribute != null && name == keyAttribute) {
         props.product
     } else {
-        attributes.firstOrNull { it.name?.trim() == target }?.value
+        attributes.firstOrNull { it.name == name }?.value
     }
-    return raw?.trim()?.takeIf { it.isNotEmpty() }
+    return raw?.takeIf { it.isNotEmpty() }
 }
 
 fun PropObjectOutputDto.readProp(field: PropField): String? = when (field) {
@@ -29,4 +28,4 @@ fun PropObjectOutputDto.readProp(field: PropField): String? = when (field) {
     PropField.VERSION -> version
     PropField.STATE -> state
     PropField.TYPE -> type
-}?.trim()?.takeIf { it.isNotEmpty() }
+}?.takeIf { it.isNotEmpty() }

@@ -26,14 +26,20 @@ class RelationMapperTest : ShouldSpec({
             mapper.map("Состоит из ...") shouldBe Relation.Composition
         }
 
-        should("map known relation ignoring case") {
+        should("not map relation that differs in case, ё or whitespace") {
             val mapper = RelationMapper(config, log)
-            mapper.map("состоит из ...") shouldBe Relation.Composition
+            mapper.map("состоит из ...") shouldBe null
+            mapper.map("  Состоит из ...  ") shouldBe null
+            mapper.map("Состоит  из ...") shouldBe null
         }
 
-        should("map known relation ignoring whitespace") {
-            val mapper = RelationMapper(config, log)
-            mapper.map("  Состоит из ...  ") shouldBe Relation.Composition
+        should("keep relation that differs in case, ё or whitespace as unmapped with the exact name") {
+            val keepConfig = config.copy(
+                onUnmapped = config.onUnmapped.copy(relation = OnUnmapped.KEEP)
+            )
+            val mapper = RelationMapper(keepConfig, log)
+            mapper.map("  Состоит из ...  ") shouldBe Relation.Unmapped("  Состоит из ...  ")
+            mapper.map("Документы ") shouldBe Relation.Unmapped("Документы ")
         }
 
         should("return Unmapped when KEEP policy and unknown relation") {

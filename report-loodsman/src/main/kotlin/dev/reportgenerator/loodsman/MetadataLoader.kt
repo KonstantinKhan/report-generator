@@ -32,12 +32,12 @@ object MetadataLoader {
                     ObjectTypeInfo(
                         id = it.id,
                         typeName = it.typeName,
-                        keyAttribute = it.attrName?.trim()?.takeIf(String::isNotEmpty),
+                        keyAttribute = it.attrName?.takeIf(String::isNotEmpty),
                     )
                 },
-                // Атрибуты сравниваются строго: регистр и «ё» сохраняются, со стороны Loodsman убираем только пробелы по краям.
+                // Имена сравниваются строго, как есть: регистр, «ё» и пробелы не модифицируются.
                 attributeNames = attributes.await()
-                    .mapNotNull { it.name?.trim()?.takeIf(String::isNotEmpty) }
+                    .mapNotNull { it.name?.takeIf(String::isNotEmpty) }
                     .toSet(),
                 version = version,
             )

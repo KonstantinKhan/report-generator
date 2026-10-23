@@ -122,7 +122,7 @@ internal class TreeAssembler(
     }
 
     private fun GetLinkedObjectsForObjectsOutputDto_V4.text(field: LinkField): String? = when (field) {
-        LinkField.UNIT -> unit?.trim()?.takeIf { it.isNotEmpty() }
+        LinkField.UNIT -> unit?.takeIf { it.isNotEmpty() }
         LinkField.MIN_QUANTITY, LinkField.MAX_QUANTITY ->
             error("Link field '$field' is not text: rejected by MappingConfig.validate")
     }
