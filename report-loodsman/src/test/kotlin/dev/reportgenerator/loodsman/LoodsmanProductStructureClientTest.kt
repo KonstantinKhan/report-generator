@@ -43,6 +43,8 @@ import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import io.github.konstantinkhan.loodsman.LoodsmanConfig
 import io.github.konstantinkhan.loodsman.installLoodsman
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val COMPOSITION = "Состоит из ..."
 
@@ -79,7 +81,7 @@ private class FakeLoodsman(
     private val objects: List<Obj>,
     private val edges: List<Edge>,
     private val linkNames: List<String> = listOf(COMPOSITION, "Документы"),
-    private val requestDelayMs: Long = 0,
+    private val requestDelay: Duration = Duration.ZERO,
 ) {
     val propsCalls: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val linkCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
@@ -125,7 +127,7 @@ private class FakeLoodsman(
             if (tracked) {
                 val now = inFlight.incrementAndGet()
                 maxInFlight.accumulateAndGet(now) { a, b -> maxOf(a, b) }
-                if (requestDelayMs > 0) delay(requestDelayMs)
+                if (requestDelay > Duration.ZERO) delay(requestDelay)
             }
             val params = request.url.parameters
             val body: JsonElement = when (request.url.encodedPath) {
@@ -687,7 +689,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val edges = children.map { Edge(1, it.id, attrs = mapOf("Примечание" to "n")) }
 
         for (concurrency in listOf(1, 3)) {
-            val fake = FakeLoodsman(listOf(assembly) + children, edges, requestDelayMs = 20)
+            val fake = FakeLoodsman(listOf(assembly) + children, edges, requestDelay = 20.milliseconds)
 
             fake.client(concurrency = concurrency)
                 .loadTree(query(1, AttributeKey.Name, linkAttributes = setOf(LinkAttributeKey.Note)))
