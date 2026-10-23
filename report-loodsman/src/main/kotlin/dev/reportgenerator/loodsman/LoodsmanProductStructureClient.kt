@@ -16,10 +16,8 @@ import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.domain.UnmappedUsage
 import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
 import dev.reportgenerator.loodsman.mapping.KindMapper
-import dev.reportgenerator.loodsman.mapping.LinkAttributeRule
 import dev.reportgenerator.loodsman.mapping.LinkField
 import dev.reportgenerator.loodsman.mapping.MappingConfig
-import dev.reportgenerator.loodsman.mapping.Registries
 import dev.reportgenerator.loodsman.mapping.RelationMapper
 import dev.reportgenerator.loodsman.mapping.select
 import org.slf4j.LoggerFactory
@@ -40,6 +38,8 @@ class LoodsmanProductStructureClient internal constructor(
     private val limiter = Limiter(concurrency)
     private val attributeRequests = AttributeRequests(mapping)
     private val nodeLoader = NodeLoader(api, mapping, kindMapper, attributeRequests, limiter)
+    private val linkLoader = LinkLoader(api, limiter)
+    private val linkAttributeLoader = LinkAttributeLoader(api, mapping, limiter)
 
     override suspend fun loadTree(query: StructureQuery): PdmNode {
         val rootId = query.rootId.asInt()
@@ -56,7 +56,7 @@ class LoodsmanProductStructureClient internal constructor(
             if (level >= query.depth) break
 
             val expandable = frontier.filter { state.nodes.getValue(it).kind != null }
-            state.links.putAll(loadLinks(expandable, relationByLinkTypeId))
+            state.links.putAll(linkLoader.loadLinks(expandable, relationByLinkTypeId))
             frontier = expandable.flatMap { id -> state.links.getValue(id).map { it.dto.idChild } }
                 .distinct()
                 .filter { it !in state.nodes }
@@ -68,7 +68,7 @@ class LoodsmanProductStructureClient internal constructor(
             throw LoodsmanApiException("Root object $rootId has unmapped type '${root.prop.type}'")
         }
 
-        val linkAttributes = loadLinkAttributes(query, state.nodes, state.links)
+        val linkAttributes = linkAttributeLoader.loadLinkAttributes(query, state.nodes, state.links)
         return buildNode(rootId, query.depth, query, state.nodes, state.links, linkAttributes, emptyList())
     }
 
@@ -94,66 +94,11 @@ class LoodsmanProductStructureClient internal constructor(
             if (key == LinkAttributeKey.Position) {
                 throw LoodsmanApiException("Link attribute 'position' is built in: read Usage.position instead")
             }
-            val id = linkAttributeIdOf(key)
+            val id = linkAttributeLoader.linkAttributeIdOf(key)
             if (id !in mapping.link.attributes) {
                 throw LoodsmanApiException("Link attribute '$id' is not configured in mapping.link.attributes")
             }
         }
-    }
-
-    /** Идентификатор ключа связи в реестре; ключ проверяется в [validateLinkAttributes] до чтения связей. */
-    private fun linkAttributeIdOf(key: LinkAttributeKey): String =
-        Registries.linkAttributeKeys.idOf(key)
-            ?: throw LoodsmanApiException("Link attribute key '$key' not found in Registries")
-
-    private suspend fun loadLinks(ids: List<Int>, relationByLinkTypeId: Map<Int, Relation>): Map<Int, List<Link>> {
-        if (relationByLinkTypeId.isEmpty()) return ids.associateWith { emptyList() }
-        val linkTypeIds = relationByLinkTypeId.keys.toList()
-        return limiter.withPermits(ids) { id ->
-            api.objectInfo.linkedObjects(listOf(id), linkTypeIds, inverse = false)
-                .mapNotNull { dto -> relationByLinkTypeId[dto.idLinkType]?.let { Link(it, dto) } }
-        }
-    }
-
-    private suspend fun loadLinkAttributes(
-        query: StructureQuery,
-        nodes: Map<Int, LoadedNode>,
-        links: Map<Int, List<Link>>
-    ): Map<Int, LinkAttributesData> {
-        if (query.linkAttributes.isEmpty() && mapping.link.positionRules.isEmpty()) {
-            return emptyMap()
-        }
-
-        val linksByLinkId = links.values.flatten().filter { link ->
-            nodes[link.dto.idParent]?.kind != null && nodes[link.dto.idChild]?.kind != null
-        }.associateBy { it.linkId }
-
-        if (linksByLinkId.isEmpty()) {
-            return emptyMap()
-        }
-
-        val requestedRules = query.linkAttributes.map { key ->
-            mapping.link.attributes.getValue(linkAttributeIdOf(key))
-        }
-
-        val attributesByLinkId = limiter.withPermits(linksByLinkId.keys.toList()) { linkId ->
-            val link = linksByLinkId.getValue(linkId)
-            val parentKind = nodes.getValue(link.dto.idParent).kind!!
-            val childKind = nodes.getValue(link.dto.idChild).kind!!
-            val needsAttributeRequest =
-                positionRuleOf(link.relation, parentKind, childKind) != null ||
-                        requestedRules.any { it.select(link.relation, parentKind, childKind) != null }
-
-            if (!needsAttributeRequest) {
-                return@withPermits emptyMap<String, String>()
-            }
-
-            api.objectInfo.linkAttributes(linkId)
-                .associate { it.name?.trim().orEmpty() to (it.value?.trim().orEmpty()) }
-                .filterKeys { it.isNotEmpty() }
-        }
-
-        return attributesByLinkId.mapValues { (_, attributes) -> LinkAttributesData(attributes) }
     }
 
     private fun buildNode(
@@ -187,7 +132,7 @@ class LoodsmanProductStructureClient internal constructor(
 
                 when (link.relation) {
                     Relation.Composition -> {
-                        val position = positionRuleOf(link.relation, kind, childKind)?.name
+                        val position = linkAttributeLoader.positionRuleOf(link.relation, kind, childKind)?.name
                             ?.let { posName -> linkAttrs[posName]?.toIntOrNull() }
                             ?.let { Field.Value(it) } ?: Field.Missing
                         CompositionUsage(
@@ -214,10 +159,6 @@ class LoodsmanProductStructureClient internal constructor(
         return nodeLoader.toPdmNode(node.prop, kind, node.attributes, request).copy(usages = usages)
     }
 
-    /** Правило позиции для пары видов; позиция читается из [MappingConfig.LinkMapping.positionRules]. */
-    private fun positionRuleOf(relation: Relation, parentKind: PdmNodeKind, childKind: PdmNodeKind): LinkAttributeRule? =
-        mapping.link.positionRules.select(relation, parentKind, childKind)
-
     private fun linkAttributesOf(
         relation: Relation,
         parentKind: PdmNodeKind,
@@ -227,7 +168,7 @@ class LoodsmanProductStructureClient internal constructor(
     ): Map<LinkAttributeKey, AttributeValue> {
         val result = LinkedHashMap<LinkAttributeKey, AttributeValue>()
         for (key in query.linkAttributes) {
-            val rules = mapping.link.attributes.getValue(linkAttributeIdOf(key))
+            val rules = mapping.link.attributes.getValue(linkAttributeLoader.linkAttributeIdOf(key))
             val rule = rules.select(relation, parentKind, childKind)
             val value = rule?.name?.let { name -> linkAttrs[name] }?.takeIf { it.isNotEmpty() }
             result[key] = value?.let { AttributeValue.Text(it) } ?: AttributeValue.Empty
