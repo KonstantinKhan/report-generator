@@ -26,11 +26,6 @@ import dev.reportgenerator.loodsman.mapping.Registries
 import dev.reportgenerator.loodsman.mapping.RelationMapper
 import dev.reportgenerator.loodsman.mapping.nameFor
 import dev.reportgenerator.loodsman.mapping.select
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import org.slf4j.LoggerFactory
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
@@ -50,6 +45,7 @@ class LoodsmanProductStructureClient internal constructor(
 
     private val kindMapper = KindMapper(mapping, log)
     private val relationMapper = RelationMapper(mapping, log)
+    private val limiter = Limiter(concurrency)
 
     override suspend fun loadTree(query: StructureQuery): PdmNode {
         val rootId = query.rootId.asInt()
@@ -58,29 +54,28 @@ class LoodsmanProductStructureClient internal constructor(
         query.attributes.forEach { ruleOf(it) }
         validateLinkAttributes(query)
 
-        val nodes = HashMap<Int, LoadedNode>()
-        val links = HashMap<Int, List<Link>>()
+        val state = TraversalState()
         var frontier = listOf(rootId)
         var level = 0
         while (frontier.isNotEmpty()) {
-            loadNodes(frontier, snapshot, nodes, query)
+            loadNodes(frontier, snapshot, state.nodes, query)
             if (level >= query.depth) break
 
-            val expandable = frontier.filter { nodes.getValue(it).kind != null }
-            links.putAll(loadLinks(expandable, relationByLinkTypeId))
-            frontier = expandable.flatMap { id -> links.getValue(id).map { it.dto.idChild } }
+            val expandable = frontier.filter { state.nodes.getValue(it).kind != null }
+            state.links.putAll(loadLinks(expandable, relationByLinkTypeId))
+            frontier = expandable.flatMap { id -> state.links.getValue(id).map { it.dto.idChild } }
                 .distinct()
-                .filter { it !in nodes }
+                .filter { it !in state.nodes }
             level++
         }
 
-        val root = nodes.getValue(rootId)
+        val root = state.nodes.getValue(rootId)
         if (root.kind == null) {
             throw LoodsmanApiException("Root object $rootId has unmapped type '${root.prop.type}'")
         }
 
-        val linkAttributes = loadLinkAttributes(query, nodes, links)
-        return buildNode(rootId, query.depth, query, nodes, links, linkAttributes, emptyList())
+        val linkAttributes = loadLinkAttributes(query, state.nodes, state.links)
+        return buildNode(rootId, query.depth, query, state.nodes, state.links, linkAttributes, emptyList())
     }
 
     override suspend fun loadNode(
@@ -187,7 +182,7 @@ class LoodsmanProductStructureClient internal constructor(
             val kind = pair.second ?: return@mapNotNull null
             id to attributeRequest(kind, keyAttributes[id], query.attributes, query.includeUnmappedAttributes)
         }.toMap()
-        val attributes = withPermits(requests.keys.toList()) { id -> objectAttributesOf(id, requests.getValue(id)) }
+        val attributes = limiter.withPermits(requests.keys.toList()) { id -> objectAttributesOf(id, requests.getValue(id)) }
 
         prepared.forEach { (id, pair) ->
             val (prop, kind) = pair
@@ -198,17 +193,11 @@ class LoodsmanProductStructureClient internal constructor(
     private suspend fun loadLinks(ids: List<Int>, relationByLinkTypeId: Map<Int, Relation>): Map<Int, List<Link>> {
         if (relationByLinkTypeId.isEmpty()) return ids.associateWith { emptyList() }
         val linkTypeIds = relationByLinkTypeId.keys.toList()
-        return withPermits(ids) { id ->
+        return limiter.withPermits(ids) { id ->
             api.objectInfo.linkedObjects(listOf(id), linkTypeIds, inverse = false)
                 .mapNotNull { dto -> relationByLinkTypeId[dto.idLinkType]?.let { Link(it, dto) } }
         }
     }
-
-    private suspend fun <T> withPermits(ids: List<Int>, block: suspend (Int) -> T): Map<Int, T> =
-        coroutineScope {
-            val semaphore = Semaphore(concurrency)
-            ids.map { id -> async { id to semaphore.withPermit { block(id) } } }.awaitAll().toMap()
-        }
 
     private suspend fun loadLinkAttributes(
         query: StructureQuery,
@@ -231,7 +220,7 @@ class LoodsmanProductStructureClient internal constructor(
             mapping.link.attributes.getValue(linkAttributeIdOf(key))
         }
 
-        val attributesByLinkId = withPermits(linksByLinkId.keys.toList()) { linkId ->
+        val attributesByLinkId = limiter.withPermits(linksByLinkId.keys.toList()) { linkId ->
             val link = linksByLinkId.getValue(linkId)
             val parentKind = nodes.getValue(link.dto.idParent).kind!!
             val childKind = nodes.getValue(link.dto.idChild).kind!!
@@ -358,22 +347,4 @@ class LoodsmanProductStructureClient internal constructor(
             error("Link field '$field' is not text: rejected by MappingConfig.validate")
     }
 
-    private class LoadedNode(
-        val prop: PropObjectOutputDto,
-        val kind: PdmNodeKind?,
-        val attributes: List<ObjectAttributeOutputDto>,
-        val keyAttribute: String?,
-        /** Запрос атрибутов вычисляется один раз при загрузке узла; для узлов без вида не задан. */
-        val request: AttributeRequest?,
-    )
-
-    private class Link(
-        val relation: Relation,
-        val dto: GetLinkedObjectsForObjectsOutputDto_V4,
-        val linkId: Int = dto.idLink
-    )
-
-    private data class LinkAttributesData(
-        val attributes: Map<String, String>
-    )
 }
