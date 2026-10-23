@@ -17,14 +17,12 @@ import dev.reportgenerator.domain.UnmappedUsage
 import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
 import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
 import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
-import dev.reportgenerator.loodsman.mapping.AttributeRule
 import dev.reportgenerator.loodsman.mapping.KindMapper
 import dev.reportgenerator.loodsman.mapping.LinkAttributeRule
 import dev.reportgenerator.loodsman.mapping.LinkField
 import dev.reportgenerator.loodsman.mapping.MappingConfig
 import dev.reportgenerator.loodsman.mapping.Registries
 import dev.reportgenerator.loodsman.mapping.RelationMapper
-import dev.reportgenerator.loodsman.mapping.nameFor
 import dev.reportgenerator.loodsman.mapping.select
 import org.slf4j.LoggerFactory
 import io.github.konstantinkhan.loodsman.LoodsmanApi
@@ -46,12 +44,13 @@ class LoodsmanProductStructureClient internal constructor(
     private val kindMapper = KindMapper(mapping, log)
     private val relationMapper = RelationMapper(mapping, log)
     private val limiter = Limiter(concurrency)
+    private val attributeRequests = AttributeRequests(mapping)
 
     override suspend fun loadTree(query: StructureQuery): PdmNode {
         val rootId = query.rootId.asInt()
         val snapshot = metadata.snapshot()
         val relationByLinkTypeId = resolveLinkTypes(snapshot, query.relations)
-        query.attributes.forEach { ruleOf(it) }
+        query.attributes.forEach { attributeRequests.ruleOf(it) }
         validateLinkAttributes(query)
 
         val state = TraversalState()
@@ -87,7 +86,12 @@ class LoodsmanProductStructureClient internal constructor(
         val props = api.objectInfo.propObject(id.asInt())
         val kind = kindMapper.map(props.type)
             ?: error("Loodsman object $id: unmapped type '${props.type}'")
-        val request = attributeRequest(kind, keyAttributeOf(snapshot, id.asInt(), props), attributeKeys, includeUnmapped)
+        val request = attributeRequests.attributeRequest(
+            kind,
+            attributeRequests.keyAttributeOf(snapshot, id.asInt(), props),
+            attributeKeys,
+            includeUnmapped,
+        )
         return toPdmNode(props, kind, objectAttributesOf(id.asInt(), request), request)
     }
 
@@ -116,39 +120,6 @@ class LoodsmanProductStructureClient internal constructor(
         Registries.linkAttributeKeys.idOf(key)
             ?: throw LoodsmanApiException("Link attribute key '$key' not found in Registries")
 
-    private fun ruleOf(key: AttributeKey): AttributeRule =
-        Registries.attributeKeys.idOf(key)?.let { mapping.attributes[it] }
-            ?: throw LoodsmanApiException("Attribute '$key' is not configured in mapping.attributes")
-
-    /** Ключевой атрибут типа объекта; тип обязан быть в метаданных Loodsman. */
-    private fun keyAttributeOf(snapshot: MetadataSnapshot, id: Int, props: PropObjectOutputDto): String? {
-        val typeName = requireNotNull(props.type) { "Loodsman object $id: type is null" }
-        if (!snapshot.hasObjectType(typeName)) {
-            throw LoodsmanApiException("Object $id: type '$typeName' not found in Loodsman metadata")
-        }
-        return snapshot.keyAttributeOf(typeName)
-    }
-
-    /** Единое правило чтения для [loadTree] и [loadNode]: имена атрибутов разрешаются для вида. */
-    private fun attributeRequest(
-        kind: PdmNodeKind,
-        keyAttribute: String?,
-        attributeKeys: Set<AttributeKey>,
-        includeUnmapped: Boolean,
-    ): AttributeRequest {
-        val keyKey = keyAttribute?.let { name ->
-            mapping.attributes.entries.firstOrNull { (_, rule) -> rule.nameFor(kind)?.trim() == name }
-                ?.let { (id, _) -> Registries.attributeKeys.resolve(id) }
-        }
-        return AttributeRequest(
-            keyAttribute = keyAttribute,
-            keyKey = keyKey,
-            names = attributeKeys.associateWith { key -> ruleOf(key).nameFor(kind) },
-            mappedNames = mapping.attributes.values.mapNotNullTo(HashSet()) { it.nameFor(kind)?.trim() },
-            includeUnmapped = includeUnmapped,
-        )
-    }
-
     /** Атрибуты объекта читаются, только если запрос требует не ключевые атрибуты. */
     private suspend fun objectAttributesOf(id: Int, request: AttributeRequest): List<ObjectAttributeOutputDto> =
         if (request.needsObjectAttributes()) api.objectInfo.infoAboutVersion(id) else emptyList()
@@ -176,11 +147,13 @@ class LoodsmanProductStructureClient internal constructor(
         }
 
         val keyAttributes = prepared.mapNotNull { (id, pair) ->
-            pair.second?.let { id to keyAttributeOf(snapshot, id, pair.first) }
+            pair.second?.let { id to attributeRequests.keyAttributeOf(snapshot, id, pair.first) }
         }.toMap()
         val requests = prepared.mapNotNull { (id, pair) ->
             val kind = pair.second ?: return@mapNotNull null
-            id to attributeRequest(kind, keyAttributes[id], query.attributes, query.includeUnmappedAttributes)
+            id to attributeRequests.attributeRequest(
+                kind, keyAttributes[id], query.attributes, query.includeUnmappedAttributes
+            )
         }.toMap()
         val attributes = limiter.withPermits(requests.keys.toList()) { id -> objectAttributesOf(id, requests.getValue(id)) }
 
