@@ -15,8 +15,6 @@ import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.domain.UnmappedUsage
 import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
-import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
-import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
 import dev.reportgenerator.loodsman.mapping.KindMapper
 import dev.reportgenerator.loodsman.mapping.LinkAttributeRule
 import dev.reportgenerator.loodsman.mapping.LinkField
@@ -27,10 +25,6 @@ import dev.reportgenerator.loodsman.mapping.select
 import org.slf4j.LoggerFactory
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
-import khan366kos.mapping.AttributeRequest
-import khan366kos.mapping.toDomain
-
-private const val PROPS_BATCH_SIZE = 100
 
 class LoodsmanProductStructureClient internal constructor(
     private val api: LoodsmanApi,
@@ -45,6 +39,7 @@ class LoodsmanProductStructureClient internal constructor(
     private val relationMapper = RelationMapper(mapping, log)
     private val limiter = Limiter(concurrency)
     private val attributeRequests = AttributeRequests(mapping)
+    private val nodeLoader = NodeLoader(api, mapping, kindMapper, attributeRequests, limiter)
 
     override suspend fun loadTree(query: StructureQuery): PdmNode {
         val rootId = query.rootId.asInt()
@@ -57,7 +52,7 @@ class LoodsmanProductStructureClient internal constructor(
         var frontier = listOf(rootId)
         var level = 0
         while (frontier.isNotEmpty()) {
-            loadNodes(frontier, snapshot, state.nodes, query)
+            nodeLoader.loadNodes(frontier, snapshot, state.nodes, query)
             if (level >= query.depth) break
 
             val expandable = frontier.filter { state.nodes.getValue(it).kind != null }
@@ -83,16 +78,7 @@ class LoodsmanProductStructureClient internal constructor(
         includeUnmapped: Boolean
     ): PdmNode {
         val snapshot = metadata.snapshot()
-        val props = api.objectInfo.propObject(id.asInt())
-        val kind = kindMapper.map(props.type)
-            ?: error("Loodsman object $id: unmapped type '${props.type}'")
-        val request = attributeRequests.attributeRequest(
-            kind,
-            attributeRequests.keyAttributeOf(snapshot, id.asInt(), props),
-            attributeKeys,
-            includeUnmapped,
-        )
-        return toPdmNode(props, kind, objectAttributesOf(id.asInt(), request), request)
+        return nodeLoader.loadNode(id, snapshot, attributeKeys, includeUnmapped)
     }
 
     private fun resolveLinkTypes(snapshot: MetadataSnapshot, relations: Set<Relation>): Map<Int, Relation> =
@@ -119,49 +105,6 @@ class LoodsmanProductStructureClient internal constructor(
     private fun linkAttributeIdOf(key: LinkAttributeKey): String =
         Registries.linkAttributeKeys.idOf(key)
             ?: throw LoodsmanApiException("Link attribute key '$key' not found in Registries")
-
-    /** Атрибуты объекта читаются, только если запрос требует не ключевые атрибуты. */
-    private suspend fun objectAttributesOf(id: Int, request: AttributeRequest): List<ObjectAttributeOutputDto> =
-        if (request.needsObjectAttributes()) api.objectInfo.infoAboutVersion(id) else emptyList()
-
-    private fun toPdmNode(
-        prop: PropObjectOutputDto,
-        kind: PdmNodeKind,
-        attributes: List<ObjectAttributeOutputDto>,
-        request: AttributeRequest,
-    ): PdmNode = toDomain(prop, kind, attributes, request, mapping.properties.version, mapping.properties.state)
-
-    private suspend fun loadNodes(
-        ids: List<Int>,
-        snapshot: MetadataSnapshot,
-        nodes: MutableMap<Int, LoadedNode>,
-        query: StructureQuery,
-    ) {
-        val props = ids.chunked(PROPS_BATCH_SIZE).flatMap { chunk ->
-            api.objectInfo.propObjects(chunk)
-        }.associateBy { it.idVersion }
-
-        val prepared = ids.map { id ->
-            val prop = props[id] ?: throw LoodsmanApiException("Object not found in Loodsman: id=$id")
-            id to Pair(prop, kindMapper.map(prop.type))
-        }
-
-        val keyAttributes = prepared.mapNotNull { (id, pair) ->
-            pair.second?.let { id to attributeRequests.keyAttributeOf(snapshot, id, pair.first) }
-        }.toMap()
-        val requests = prepared.mapNotNull { (id, pair) ->
-            val kind = pair.second ?: return@mapNotNull null
-            id to attributeRequests.attributeRequest(
-                kind, keyAttributes[id], query.attributes, query.includeUnmappedAttributes
-            )
-        }.toMap()
-        val attributes = limiter.withPermits(requests.keys.toList()) { id -> objectAttributesOf(id, requests.getValue(id)) }
-
-        prepared.forEach { (id, pair) ->
-            val (prop, kind) = pair
-            nodes[id] = LoadedNode(prop, kind, attributes[id].orEmpty(), keyAttributes[id], requests[id])
-        }
-    }
 
     private suspend fun loadLinks(ids: List<Int>, relationByLinkTypeId: Map<Int, Relation>): Map<Int, List<Link>> {
         if (relationByLinkTypeId.isEmpty()) return ids.associateWith { emptyList() }
@@ -268,7 +211,7 @@ class LoodsmanProductStructureClient internal constructor(
             emptyList()
         }
 
-        return toPdmNode(node.prop, kind, node.attributes, request).copy(usages = usages)
+        return nodeLoader.toPdmNode(node.prop, kind, node.attributes, request).copy(usages = usages)
     }
 
     /** Правило позиции для пары видов; позиция читается из [MappingConfig.LinkMapping.positionRules]. */
@@ -319,5 +262,4 @@ class LoodsmanProductStructureClient internal constructor(
         LinkField.MIN_QUANTITY, LinkField.MAX_QUANTITY ->
             error("Link field '$field' is not text: rejected by MappingConfig.validate")
     }
-
 }
