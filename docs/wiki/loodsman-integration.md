@@ -222,7 +222,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 Пример для тестов: `SpecificationPipelineTest` (report-loodsman) фиксирует эти правила.
 
 **(а) Количество.** Источник — поля связи `minQuantity` / `maxQuantity` (`link.fields`), не текстовый атрибут
-«Количество». Правило в `LoodsmanProductStructureClient.quantityOf`:
+«Количество». Правило в `TreeAssembler.quantityOf`:
 
 - оба `null` → `Quantity.Missing`;
 - ровно одно `null` → `LoodsmanApiException` (половина диапазона — ошибка данных Loodsman);
@@ -421,6 +421,19 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - **Атрибуты — строго.** Регистр, `ё` и пробелы внутри имени важны. Со стороны Loodsman имена при загрузке снимка
   обрезаются по краям (`trim`); пустые и `null` отбрасываются. Рантайм-поиск атрибутов в клиенте не нормализует имена.
 
+### Устройство клиента
+
+`LoodsmanProductStructureClient` — фасад: `loadTree` проверяет запрос, ведёт обход по уровням и проверяет корень;
+`loadNode` читает один узел. Остальное — `internal` классы пакета `dev.reportgenerator.loodsman`:
+
+- `AttributeRequests` — правила атрибутов (`ruleOf`), ключевой атрибут вида, `AttributeRequest` для вида.
+- `NodeLoader` — свойства и атрибуты объектов: `loadNodes` пачками по 100, `loadNode` для одного узла, `toPdmNode`.
+- `LinkLoader` — связи уровня по типам связей (`get-linked-objects-for-objects`).
+- `LinkAttributeLoader` — атрибуты связей, правило позиции (`positionRuleOf`), ключи связей в реестре (`linkAttributeIdOf`).
+- `TreeAssembler` — рекурсивная сборка `PdmNode` с `usages`, атрибуты связей, `quantityOf`.
+- `Limiter` — параллельные вызовы с лимитом `concurrency` (семафор создаётся на каждый вызов `withPermits`).
+- `StructureModels.kt` — `TraversalState` (узлы и связи обхода), `LoadedNode`, `Link`, `LinkAttributesData`.
+
 ### Алгоритм загрузки структуры
 
 `LoodsmanProductStructureClient.loadTree(query: StructureQuery)`:
@@ -436,12 +449,12 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
    - свойства всех узлов уровня запрашиваются одним `get-prop-objects` (чанками по 100);
    - тип узла определяется по `type` из свойств (`KindMapper`), а не по обозначению;
    - связи (`get-linked-objects-for-objects`) и узловые атрибуты (`get-info-about-version-mode-3`, один запрос на узел)
-     запрашиваются параллельно через `Semaphore(concurrency)` — если нужны;
+     запрашиваются параллельно через `Limiter` (`Semaphore(concurrency)`) — если нужны;
    - следующий уровень — дети, которых ещё нет среди загруженных узлов. Поэтому обход конечен даже при цикле.
 
 3. **Загрузка атрибутов связей (фаза 2).** ПОСЛЕ полного обхода дерева: если запрошены `query.linkAttributes`
    или есть правило для `position`, для каждой загруженной связи с известными видами обоих концов, у которой правило
-   подходит по тройке, делается один запрос `/api/v4/ObjectInfo/get-link-attributes` (параллельно, `Semaphore(concurrency)`).
+   подходит по тройке, делается один запрос `/api/v4/ObjectInfo/get-link-attributes` (параллельно, через `Limiter`).
    Результаты собираются в карту `linkId → атрибуты`.
 
 4. **Кэш.** Свойства, узловые атрибуты и связи хранятся по `idVersion`/`idLink`. Узел разворачивается один раз на
@@ -612,8 +625,9 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 - `loodsman-client/src/main/kotlin/io/github/konstantinkhan/loodsman/` — клиент (`LoodsmanApi`, группы `AuthApi` / `ObjectInfoApi` /
   `MetaDataApi`, `SessionClient`, `SessionHolder`, DTO)
-- `report-loodsman/src/main/kotlin/dev/reportgenerator/loodsman/` — `LoodsmanProductStructureClient.kt`,
-  `mapping/` (`KindMapper`, `RelationMapper`, `Registries`, `MappingConfig`)
+- `report-loodsman/src/main/kotlin/dev/reportgenerator/loodsman/` — `LoodsmanProductStructureClient.kt` и вспомогательные
+  классы обхода (`NodeLoader`, `LinkLoader`, `LinkAttributeLoader`, `TreeAssembler`, `AttributeRequests`, `Limiter`,
+  `StructureModels.kt`), `mapping/` (`KindMapper`, `RelationMapper`, `Registries`, `MappingConfig`)
 - `reports/specification/src/main/kotlin/dev/reportgenerator/reports/specification/` — `SpecificationQuery.kt`,
   `ProductNodeSpecification.kt` (правила отчёта)
 - [development-status.md](development-status.md) — статус интеграции по коммитам

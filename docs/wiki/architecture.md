@@ -21,8 +21,9 @@ Loodsman REST API v4
 loodsman-client   — LoodsmanApi: группы эндпоинтов (auth, objectInfo, metaData), DTO, сессия (повтор при 401/419).
       │             Ничего о доменной модели не знает
       ▼  LoodsmanApi (DTO)
-report-loodsman   — DTO → домен: LoodsmanProductStructureClient (PdmNodeStructureClient),
-      │             конфиг маппинга (YAML), обход дерева, KindMapper / RelationMapper
+report-loodsman   — DTO → домен: LoodsmanProductStructureClient (PdmNodeStructureClient) — фасад;
+      │             обход дерева делят NodeLoader / LinkLoader / LinkAttributeLoader / TreeAssembler;
+      │             конфиг маппинга (YAML), KindMapper / RelationMapper
       ▼  ProductNode / Usage (модель структуры)
 report-domain     — модель структуры изделия: ProductNode, Usage, Field<T>, ProductKind, Relation,
       │             AttributeKey, AttributeValue, StructureQuery; порт PdmNodeStructureClient (единственный путь к PDM);
