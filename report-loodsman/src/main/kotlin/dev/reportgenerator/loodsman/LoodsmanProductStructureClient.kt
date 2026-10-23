@@ -15,9 +15,9 @@ import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
 
 class LoodsmanProductStructureClient internal constructor(
-    private val api: LoodsmanApi,
+    api: LoodsmanApi,
     private val mapping: MappingConfig,
-    private val concurrency: Int = 8,
+    concurrency: Int = 8,
     private val metadata: MetadataSource
 ) : PdmNodeStructureClient {
 
