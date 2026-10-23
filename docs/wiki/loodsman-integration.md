@@ -253,10 +253,10 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 `specificationQuery` просит оба ключа): `Text` → значение, `Empty` → отсутствует, ключа нет → «не загружено»
 (`SpecificationDataException`). У `PdmNode` нет полей `designation`/`name`: читается только `attributes`.
 
-## Конфиг маппинга и ProductStructureClient
+## Конфиг маппинга и PdmNodeStructureClient
 
 `LoodsmanProductStructureClient(api, mapping, concurrency = 8, metadata)` — адаптер, реализующий интерфейс `PdmNodeStructureClient`
-из `report-domain` (`loadStructure(StructureQuery): PdmNode`). Возвращает дерево состава изделия в доменной модели
+из `report-domain` (`loadTree(StructureQuery): PdmNode`). Возвращает дерево состава изделия в доменной модели
 (`PdmNode` + `Usage`), не зависящей от словаря Loodsman. Соответствие названий типов, связей и атрибутов PDM
 моделям задаётся конфигом маппинга, а не кодом. Конструктор `internal`, без значения по умолчанию для `mapping`:
 создать клиент с непроверенным маппингом снаружи модуля нельзя. Собирает его только `LoodsmanContext.bootstrap`.
@@ -423,7 +423,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 ### Алгоритм загрузки структуры
 
-`LoodsmanProductStructureClient.loadStructure(query: StructureQuery)`:
+`LoodsmanProductStructureClient.loadTree(query: StructureQuery)`:
 
 1. **Разрешение связей и атрибутов узла.** Для каждого отношения из `query.relations` ищется id типа связи в `get-link-list`
    (только `type == 0`, имя сравнивается без учёта регистра и лишних пробелов). Каждая связь из `requiredRelations`
@@ -446,7 +446,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 4. **Кэш.** Свойства, узловые атрибуты и связи хранятся по `idVersion`/`idLink`. Узел разворачивается один раз на
    минимальной глубине, повторные вхождения в дерево используют те же данные. Метаданные (типы связей и объектов)
-   берутся из `MetadataSource` один раз на `loadStructure` (см. раздел «Метаданные: снимок, MetadataCache, обновление»).
+   берутся из `MetadataSource` один раз на `loadTree` (см. раздел «Метаданные: снимок, MetadataCache, обновление»).
 
 5. **Сборка дерева** идёт из кэша рекурсией с остаточной глубиной, используя загруженные атрибуты связей. Цикл
    определяется по текущему пути → `LoodsmanApiException` с путём. Дети, чей тип пропущен политикой `SKIP`, в
@@ -558,7 +558,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
   - каждый вызов логируется на INFO с результатом, без учётных данных.
   - Аутентификации нет: решение владельца. Эндпоинт доступен всем, кто достучится до `report-server`.
 - **Клиент** `LoodsmanProductStructureClient` получает `MetadataSource` параметром без значения по умолчанию. Снимок
-  берётся один раз на `loadStructure`: смена снимка в кэше во время обхода на уже начатый обход не влияет.
+  берётся один раз на `loadTree`: смена снимка в кэше во время обхода на уже начатый обход не влияет.
 - **Длительность (живые замеры, 2026-10-22):**
   - старт (`initialize()`, полная загрузка) — ~37 с;
   - `get-type-list` — до ~50 с в неудачный момент; таймаут запроса `TYPE_LIST_REQUEST_TIMEOUT_MS` в `MetaDataApi` = 180 с
@@ -602,8 +602,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - `loodsman-client` — тесты на Ktor `MockEngine` (`ktor-client-mock`): проверяется поведение без сети. `LoodsmanApiTest`
   покрывает группы эндпоинтов, сессию и повтор при 401/419.
 - `report-loodsman`:
-  - `LoodsmanWithPropertiesTest` — восемь видов на синтетических объектах с реальным YAML, пустой `product`;
-  - `LoodsmanProductStructureClientTest` — `loadStructure` и `withProperties` дают одинаковые `key`, `designation`, `name`;
+  - `LoodsmanLoadNodeTest` — восемь видов на синтетических объектах с реальным YAML, пустой `product`;
+  - `LoodsmanProductStructureClientTest` — `loadTree` и `loadNode` дают одинаковые `key`, `designation`, `name`;
   - `SpecificationPipelineTest` — регрессионный тест конвейера: структура → спецификация. Фиксирует правила прежней сборки
     (материал и столбец «Наименование», ё, стандартные и прочие изделия, документы). Если правило меняется намеренно,
     тест обновляется вместе с правилом.
