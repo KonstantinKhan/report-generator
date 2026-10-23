@@ -116,8 +116,6 @@
 
 Остаточные долги после миграции на `loodsman-client`. Найдены при сверке кода; ничто из них не блокирует работу.
 
-- **Ё не сводится в `RelationMapper`.** Свёртка `ё` → `е` есть только в `KindMapper`; `RelationMapper.normalizeForComparison`
-  её не делает. Правило — [loodsman-integration.md](loodsman-integration.md#правила-преобразования-в-спецификацию).
 - **Остаточное старое имя: параметр `pdmTypeName` в `KindMapper.map`.** Имя из эпохи `PdmClient`, на поведение не влияет.
   Переименовать в `typeName` (косметика, отдельным коммитом).
 - **Проверить лишние зависимости `report-loodsman/build.gradle.kts`.** Не проверялось: `testImplementation(libs.kotlin.reflect)`,
