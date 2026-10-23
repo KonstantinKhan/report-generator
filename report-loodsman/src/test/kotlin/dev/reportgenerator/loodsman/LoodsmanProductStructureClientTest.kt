@@ -20,6 +20,8 @@ import dev.reportgenerator.loodsman.mapping.OnUnmapped
 import dev.reportgenerator.loodsman.mapping.UnmappedPolicy
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.ShouldSpec
+import io.kotest.matchers.comparables.shouldBeGreaterThan
+import io.kotest.matchers.comparables.shouldBeLessThanOrEqualTo
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -33,7 +35,9 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.delay
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
@@ -41,6 +45,9 @@ import io.github.konstantinkhan.loodsman.LoodsmanConfig
 import io.github.konstantinkhan.loodsman.installLoodsman
 
 private const val COMPOSITION = "Состоит из ..."
+
+// Размер пачки получения свойств объектов, как в клиенте.
+private const val PROPS_BATCH = 100
 
 // Ключевой атрибут всех видов в фейке: его значение лежит в product объекта.
 private const val KEY_ATTRIBUTE = "Обозначение"
@@ -61,17 +68,27 @@ private data class Edge(
     val attrs: Map<String, String> = emptyMap()
 )
 
+// Запросы, которые клиент распараллеливает через семафор: по ним считается число одновременных запросов.
+private val CONCURRENT_PATHS = setOf(
+    "/api/v4/ObjectInfo/get-linked-objects-for-objects",
+    "/api/v4/ObjectInfo/get-link-attributes",
+    "/api/v4/ObjectInfo/get-info-about-version-mode-3",
+)
+
 private class FakeLoodsman(
     private val objects: List<Obj>,
     private val edges: List<Edge>,
-    private val linkNames: List<String> = listOf(COMPOSITION, "Документы")
+    private val linkNames: List<String> = listOf(COMPOSITION, "Документы"),
+    private val requestDelayMs: Long = 0,
 ) {
     val propsCalls: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val linkCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val linkAttributeCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val infoCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val linkListFailures = AtomicInteger(0)
-    private val linkIdToEdge = mutableMapOf<Int, Edge>()
+    val maxInFlight = AtomicInteger(0)
+    private val inFlight = AtomicInteger(0)
+    private val linkIdToEdge = ConcurrentHashMap<Int, Edge>()
 
     /** Снимок метаданных, который отдаёт тот же фейк (типы связей по [linkNames], виды по [objects]). */
     fun snapshot(version: Long = 1): MetadataSnapshot = MetadataSnapshot(
@@ -90,10 +107,11 @@ private class FakeLoodsman(
     suspend fun client(
         mapping: MappingConfig = MappingConfigLoader.load(emptyMap()),
         metadata: MetadataSource? = null,
+        concurrency: Int = 8,
     ): LoodsmanProductStructureClient {
         val api = api()
         val source = metadata ?: MetadataCache(api, validate = { emptyList() }).also { it.initialize() }
-        return LoodsmanProductStructureClient(api, mapping, metadata = source)
+        return LoodsmanProductStructureClient(api, mapping, concurrency = concurrency, metadata = source)
     }
 
     private fun api(): LoodsmanApi {
@@ -102,6 +120,12 @@ private class FakeLoodsman(
                 linkListFailures.getAndUpdate { if (it > 0) it - 1 else 0 } > 0
             ) {
                 return@MockEngine respond("boom", HttpStatusCode.InternalServerError)
+            }
+            val tracked = request.url.encodedPath in CONCURRENT_PATHS
+            if (tracked) {
+                val now = inFlight.incrementAndGet()
+                maxInFlight.accumulateAndGet(now) { a, b -> maxOf(a, b) }
+                if (requestDelayMs > 0) delay(requestDelayMs)
             }
             val params = request.url.parameters
             val body: JsonElement = when (request.url.encodedPath) {
@@ -176,6 +200,7 @@ private class FakeLoodsman(
                 }
                 else -> error("Unexpected request ${request.url}")
             }
+            if (tracked) inFlight.decrementAndGet()
             respond(
                 content = body.toString(),
                 status = HttpStatusCode.OK,
@@ -640,5 +665,60 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         structure.usages.single().child.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
         withProperties.key shouldBe NodeKey.Missing
         withProperties.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
+    }
+
+    should("split properties request of one level into batches of at most 100 objects") {
+        listOf(101, 250).forEach { count ->
+            val children = (2..count + 1).map { Obj(it, "Деталь", "АБ.%03d".format(it)) }
+            val fake = FakeLoodsman(listOf(assembly) + children, children.map { Edge(1, it.id) })
+
+            val root = fake.client().loadStructure(query(1))
+
+            val batches = fake.propsCalls.drop(1)
+            batches.size shouldBe (count + PROPS_BATCH - 1) / PROPS_BATCH
+            batches.all { it.size <= PROPS_BATCH } shouldBe true
+            batches.flatten() shouldBe children.map { it.id }
+            root.usages.map { it.child.id } shouldBe children.map { PdmNodeId(it.id) }
+        }
+    }
+
+    should("never exceed the configured concurrency for parallel requests") {
+        val children = (2..11).map { Obj(it, "Деталь", "АБ.%03d".format(it), mapOf("Наименование" to "Д$it")) }
+        val edges = children.map { Edge(1, it.id, attrs = mapOf("Примечание" to "n")) }
+
+        for (concurrency in listOf(1, 3)) {
+            val fake = FakeLoodsman(listOf(assembly) + children, edges, requestDelayMs = 20)
+
+            fake.client(concurrency = concurrency)
+                .loadStructure(query(1, AttributeKey.Name, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+            fake.maxInFlight.get().shouldBeLessThanOrEqualTo(concurrency)
+            if (concurrency > 1) fake.maxInFlight.get().shouldBeGreaterThan(1)
+        }
+    }
+
+    should("read only the position when no link attributes are requested") {
+        val edges = listOf(Edge(1, 2, attrs = mapOf("Позиция" to "3", "Примечание" to "n")))
+        val fake = FakeLoodsman(tree, edges)
+
+        val root = fake.client().loadStructure(query(1))
+
+        val usage = root.usages.single() as CompositionUsage
+        usage.position shouldBe Field.Value(3)
+        usage.attributes shouldBe emptyMap()
+        fake.linkAttributeCalls shouldBe listOf(100)
+    }
+
+    should("not request link attributes for a link to a skipped object") {
+        val unknown = Obj(5, "Неведомый тип", "XX.001")
+        val edges = treeEdges.take(2) + Edge(1, 5, attrs = mapOf("Примечание" to "n"))
+        val fake = FakeLoodsman(tree + unknown, edges)
+        val mapping = MappingConfigLoader.load(emptyMap())
+            .copy(onUnmapped = UnmappedPolicy(kind = OnUnmapped.SKIP))
+
+        val root = fake.client(mapping).loadStructure(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+        root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
+        fake.linkAttributeCalls.sorted() shouldBe listOf(100, 101)
     }
 })
