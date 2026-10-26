@@ -35,10 +35,11 @@
 | Свойство `LoodsmanApi` | Класс | Контроллер Loodsman | Эндпоинты |
 |---|---|---|---|
 | `auth` | `AuthApi` | `/api/v4/Auth` | `databases()` (без сессии), `isAdmin()` |
-| `objectInfo` | `ObjectInfoApi` | `/api/v4/ObjectInfo` | `propObjects(versionIds)`, `infoAboutVersion(versionId)`, `linkedObjects(objectIds, linkTypeIds, inverse = false)`, `linkAttributes(linkId)` |
-| `metaData` | `MetaDataApi` | `/api/v4/MetaData` | `typeList()`, `linkList()` |
+| `objectInfo` | `ObjectInfoApi` | `/api/v4/ObjectInfo` | `propObjects(versionIds)`, `propObject(versionId)`, `infoAboutVersion(versionId)`, `linkedObjects(objectIds, linkTypeIds, inverse = false)`, `linkAttributes(linkId)` |
+| `metaData` | `MetaDataApi` | `/api/v4/MetaData` | `typeList()`, `linkList()`, `attributeList(mode)`, `cacheVersion()` |
+| `metaDataCustom` | `MetaDataCustomApi` | `/api/v4/MetaDataCustom` | `typesLinks()` (`types-links`: какие типы объектов могут быть связаны каким типом связи и в каком направлении) |
 
-Итого 8 эндпоинтов и `logout()`. Одна группа — один файл. Конструкторы групп `internal`: создать группу снаружи нельзя.
+Итого 12 эндпоинтов и `logout()`. Одна группа — один файл. Конструкторы групп `internal`: создать группу снаружи нельзя.
 Почему группы, а не плоский интерфейс, — в [design-decisions.md](design-decisions.md#группы-эндпоинтов-вместо-плоского-интерфейса).
 До коммита `bd5afc1` был плоский интерфейс `LoodsmanApi` с 9 методами (включая `logout`) и реализация `KtorLoodsmanApi`;
 заменено на группы.
@@ -184,7 +185,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 ## Виды объектов и связи
 
-Маппинг названия вида Loodsman → `PdmNodeKind` задаёт секция `kinds` в YAML. Сравнение названий — правило (в) ниже.
+Маппинг названия вида Loodsman → `PdmNodeKind` задаёт секция `kinds` в YAML. Сравнение названий — строгое, правило (в) ниже.
 Затем `PdmNodeKind` → `ItemKind` отчёта выполняет `toItemKind()` в `ProductNodeSpecification.kt`:
 
 | Тип Loodsman | `PdmNodeKind` | `ItemKind` (спецификация) |
@@ -198,9 +199,10 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 | Материал по КД | `Material` | MATERIAL |
 | Комплект | `Kit` | SET |
 
-Связи: `relations` в YAML — «Состоит из ...» (`COMPOSITION`) и «Документы» (`DOCUMENT`). Состав идёт по `COMPOSITION`,
+Связи: `relations` в YAML — список правил («Состоит из ...» → `COMPOSITION`, «Документы» → `DOCUMENT`,
+«Технологическая ДСЕ для» → `TECHNOLOGICAL_PART`; правила — в [«Правила связей»](#правила-связей-relations)). Состав идёт по `COMPOSITION`,
 документация (сборочный чертеж) — по `DOCUMENT` (имя связи не проверено на живом стенде; нет связи — группа пуста).
-Количество у документации не нужно.
+Количество у документации не нужно. `TECHNOLOGICAL_PART` в спецификацию не попадает (`ProductNodeSpecification` его не выводит).
 
 Обозначение стандартных и прочих изделий — ключевой атрибут типа (значение в `product`), отдельный атрибут для него
 не используется. Список атрибутов объекта (`get-info-about-version-mode-3`) читается только по необходимости
@@ -237,12 +239,13 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 доменную модель как есть. Без обозначения у материала — `SpecificationDataException`. Единица измерения только у
 материалов — [specification-table-format.md](specification-table-format.md).
 
-**(в) Ё.** `KindMapper` при сравнении названий видов из YAML и из PDM приводит строку к нижнему регистру, схлопывает
-пробелы и сводит `ё` к `е`. Это сделано, потому что в данных Loodsman одно и то же слово пишется с `ё` и с `е`.
-`RelationMapper` такого сведения не делает (см. [known-gaps.md](known-gaps.md)).
+**(в) Названия строго.** `KindMapper` ищет вид точным совпадением `config.kinds[имя]`: регистр, `ё` и пробелы важны.
+Нормализации (lowercase, `ё` → `е`, схлопывание пробелов) нет. Расхождение имени ловит валидация на старте: ошибка
+перечисляет доступные имена из Loodsman.
 
-**(г) Неизвестные виды.** `ProductKind.Unmapped` (политика `onUnmapped.kind: KEEP` сохраняет такой вид в домене) и
-`UnmappedUsage` спецификация пропускает, в отчёт не попадают. Если неизвестен вид самого корня, загрузка падает
+**(г) Неизвестные виды.** `PdmNodeKind.Unmapped` (политика `onUnmapped.kind: KEEP` сохраняет такой вид в домене) и
+`UnmappedUsage` спецификация пропускает, в отчёт не попадают. Узел с неизвестным видом при `KEEP` раскрывается дальше:
+его связи читаются, потомки попадают в дерево (пример: «Технологическая деталь»). Если неизвестен вид самого корня, загрузка падает
 `LoodsmanApiException` (`Root object ... has unmapped type`).
 
 **Корень документа.** Без обозначения — `SpecificationDataException`. Без наименования вместо него выводится
@@ -280,7 +283,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 Ресурс `report-loodsman/src/main/resources/loodsman-mapping.yaml` (актуальная версия, полный файл):
 
 ```yaml
-kinds:                      # имя типа в PDM -> id вида (без учёта регистра и лишних пробелов)
+kinds:                      # имя типа в PDM -> id вида (точное совпадение, см. правило (в))
   Деталь: PART
   Сборочная единица: ASSEMBLY
   Сборочный чертеж: ASSEMBLY_DRAWING
@@ -290,11 +293,17 @@ kinds:                      # имя типа в PDM -> id вида (без уч
   Материал по КД: MATERIAL
   Комплект: KIT
 
-relations:                  # имя связи в PDM -> id отношения
-  Состоит из ...: COMPOSITION
-  Документы: DOCUMENT
+relations:                  # правила связей: список (см. «Правила связей»)
+  - link: "Состоит из ..."  # прямое имя типа связи в Loodsman
+    as: COMPOSITION         # смысл в домене (Relation)
+  - link: "Документы"
+    as: DOCUMENT
+  - link: "Технологическая ДСЕ для"
+    direction: INVERSE      # по умолчанию FORWARD
+    from: [Деталь]          # с каких типов узлов читать; пусто — любые
+    as: TECHNOLOGICAL_PART
 
-requiredRelations:          # должны существовать в метаданных PDM, иначе LoodsmanApiException
+requiredRelations:          # смыслы из relations (поле as), которые должны существовать в метаданных PDM, иначе LoodsmanApiException
   - COMPOSITION
   - DOCUMENT
 
@@ -303,8 +312,6 @@ attributes:                 # атрибуты узла: id ключа моде�
     name: Обозначение
   name:
     name: Наименование
-  mass:
-    name: Масса
   companyName:              # атрибут есть только у сборочных единиц и деталей: общего name нет
     byKind:
       ASSEMBLY: Наименование предприятия
@@ -354,13 +361,39 @@ onUnmapped:
 оба селектора (3) > только `child` (2) > только `parent` (1) > без селекторов (0). Пересечение одинаково специфичных
 правил — ошибка валидации.
 
+### Правила связей (`relations`)
+
+`relations` — список правил. Поля правила:
+
+- `link` — прямое имя типа связи в Loodsman (из `get-link-list`), сравнение строгое;
+- `as` — смысл в домене (`Relation`): `COMPOSITION`, `DOCUMENT`, `TECHNOLOGICAL_PART`. Домен направления не знает;
+- `direction` — `FORWARD` (по умолчанию) или `INVERSE`. От него зависит параметр `inverse` запроса `linkedObjects`;
+- `from` — имена типов Loodsman, с узлов которых читается связь; пусто — любые типы.
+
+Одно имя `link` может быть в двух правилах с разными направлениями. Правила с одинаковыми `link` и `direction`
+не должны пересекаться по `from` (пустой `from` пересекается со всем); это проверяет `MappingConfig.validate()`.
+Старый формат (map «имя связи: ID») не поддерживается.
+
+**Обход по направлению.** `LinkLoader` для каждого раскрываемого узла выбирает правила, подходящие по его типу (`from`),
+группирует их по направлению и делает один запрос `linkedObjects` на группу.
+Факт, проверенный на живом Loodsman: при `inverse=true` для объекта X ответ содержит записи с `idParent` = X и
+`idChild` = сосед на другом конце связи. Поэтому обход и `TreeAssembler` читают `idChild` как цель и для `INVERSE`:
+`Usage.target` — связанный узел; для `INVERSE` это не потомок, а сосед.
+
+Пример: связь id 11 «Технологическая ДСЕ для» (обратное имя «Технологическая ДСЕ»). В самой связи технологическая
+деталь (тип 44) — родитель, деталь (тип 60) — ребёнок. От детали связь читается `direction: INVERSE`, `from: [Деталь]`:
+в ответе `idParent` = деталь, `idChild` = технологическая деталь. Поэтому в `from` указывается тип детали (60).
+
+**Ограничение.** `types-links` (см. «Метаданные: снимок») не защищает от подъёма по вложенности однотипных узлов:
+технологическая сборка 65 ↔ 65 имеет и прямое (1), и обратное (-1) направление. Поэтому `from` задаётся вручную.
+
 ### Реестры (Registries)
 
 `Registries` (`mapping/Registries.kt`) содержит словари известных видов, связей и ключей атрибутов:
 
 ```kotlin
 Registries.itemKinds          // ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, ASSEMBLY_DRAWING, COMPLEX, KIT
-Registries.relations          // COMPOSITION, DOCUMENT
+Registries.relations          // COMPOSITION, DOCUMENT, TECHNOLOGICAL_PART
 Registries.attributeKeys      // mass, companyName
 Registries.linkAttributeKeys  // position, note
 ```
@@ -376,14 +409,15 @@ onUnmapped:
   relation: SKIP  # или KEEP, FAIL
 ```
 
-- **KEEP** — неизвестный тип/связь сохраняется как `ProductKind.Unmapped` / `Relation.Unmapped`.
+- **KEEP** — неизвестный тип сохраняется как `PdmNodeKind.Unmapped` и узел раскрывается дальше.
 - **SKIP** — объект неизвестного типа пропускается (ребёнок не появляется в `usages`). Если неизвестен тип
   самого корня — `LoodsmanApiException`.
 - **FAIL** — исключение при неизвестном типе.
 
-Политика `onUnmapped.kind` применяется к видам объектов. `onUnmapped.relation` реализована в `RelationMapper.map`, но
-адаптер вызывает только обратное преобразование `pdmNameOf` и запрашивает отношения из `StructureQuery.relations`:
-остальные связи объекта игнорируются.
+Политика `onUnmapped.kind` применяется к видам объектов. Правила связей при загрузке берутся только из `relations`
+конфига для отношений из `StructureQuery.relations`. Запрос `Relation.Unmapped` в загрузке не поддерживается:
+`LoodsmanApiException` (`Relation ... is not configured in mapping`). Поэтому `onUnmapped.relation` при обходе не
+применяется: связи, не описанные в `relations`, не читаются.
 
 ### Загрузка конфига
 
@@ -403,8 +437,10 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
    `kinds: type 'X' not found in Loodsman`. Проверяется:
    - ключи `kinds` — среди типов объектов снимка; у каждого типа есть ключевой атрибут, и он среди атрибутов Loodsman
      (`kinds: type 'X' has no key attribute in Loodsman`, `kinds: key attribute 'K' of type 'X' not found among Loodsman attributes`);
-   - ключи `relations` — среди связей снимка;
-   - каждый элемент `requiredRelations` — хотя бы одно имя связи из `relations` найдено в снимке;
+   - `relations`: `link` каждого правила — среди связей снимка; каждый тип из `from` — среди типов объектов;
+     направление правила допустимо по `types-links` для каждого типа из `from`: `FORWARD` требует `1` или `0`,
+     `INVERSE` требует `-1` или `0` (`linkDirections(тип, id связи)`);
+   - каждый элемент `requiredRelations` — хотя бы одно имя связи из `relations` (поле `link`) найдено в снимке;
    - атрибуты: `attributes.*.name` и `attributes.*.byKind`, `link.attributes.*[].name`.
 
    Не проверяются: доменные реестры, `PropField`, `LinkField`, `onUnmapped`, `properties`.
@@ -427,7 +463,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 - `AttributeRequests` — правила атрибутов (`ruleOf`), ключевой атрибут вида, `AttributeRequest` для вида.
 - `NodeLoader` — свойства и атрибуты объектов: `loadNodes` пачками по 100, `loadNode` для одного узла, `toPdmNode`.
-- `LinkLoader` — связи уровня по типам связей (`get-linked-objects-for-objects`).
+- `LinkLoader` — связи уровня по правилам `relations`: правила отбираются по типу узла (`from`), группируются по направлению,
+  один запрос `get-linked-objects-for-objects` на группу.
 - `LinkAttributeLoader` — атрибуты связей, правило позиции (`positionRuleOf`), ключи связей в реестре (`linkAttributeIdOf`).
 - `TreeAssembler` — рекурсивная сборка `PdmNode` с `usages`, атрибуты связей, `quantityOf`.
 - `Limiter` — параллельные вызовы с лимитом `concurrency` (семафор создаётся на каждый вызов `withPermits`).
@@ -437,8 +474,9 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 `LoodsmanProductStructureClient.loadTree(query: StructureQuery)`:
 
-1. **Разрешение связей и атрибутов узла.** Для каждого отношения из `query.relations` ищется id типа связи в `get-link-list`
-   (только `type == 0`, имя сравнивается без учёта регистра и лишних пробелов). Каждая связь из `requiredRelations`
+1. **Разрешение связей и атрибутов узла.** Для каждого отношения из `query.relations` берутся правила из `relations` конфига;
+   для каждого правила ищется id типа связи в `get-link-list` по полю `link` (имя строго, `==`; горизонтальные связи
+   тоже попадают в снимок). Отношение без правила — `LoodsmanApiException`. Каждая связь из `requiredRelations`
    конфига обязана быть в метаданных, иначе `LoodsmanApiException`. Для каждого атрибута узла из `query.attributes`
    проверяется наличие конфигурированного правила в `mapping.attributes`, иначе `LoodsmanApiException`.
 
@@ -448,7 +486,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
    - свойства всех узлов уровня запрашиваются одним `get-prop-objects` (чанками по 100);
    - тип узла определяется по `type` из свойств (`KindMapper`), а не по обозначению;
    - связи (`get-linked-objects-for-objects`) и узловые атрибуты (`get-info-about-version-mode-3`, один запрос на узел)
-     запрашиваются параллельно через `Limiter` (`Semaphore(concurrency)`) — если нужны;
+     запрашиваются параллельно через `Limiter` (`Semaphore(concurrency)`) — если нужны; связи — по правилам, подходящим
+     по типу узла (`from`), один запрос на каждое направление (`FORWARD` / `INVERSE`);
    - следующий уровень — дети, которых ещё нет среди загруженных узлов. Поэтому обход конечен даже при цикле.
 
 3. **Загрузка атрибутов связей (фаза 2).** ПОСЛЕ полного обхода дерева: если запрошены `query.linkAttributes`
@@ -501,6 +540,9 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 дереву) вызывающий код разбирает `Quantity` сам и выбирает границу диапазона по смыслу отчёта.
 Текст для пустых значений (прочерк, «отсутствует», пустая строка) выбирает отчёт, модель его не хранит.
 
+- **Связанный узел** (`Usage.target`) — поле переименовано из `Usage.child`. Для `FORWARD` это потомок, для `INVERSE` — сосед
+  по связи (см. «Правила связей»). `Usage` — `CompositionUsage`, `DocumentUsage`, `TechnologicalPartUsage`, `UnmappedUsage`.
+  `TechnologicalPartUsage` в спецификацию не попадает.
 - **Позиция** (`Usage.position`) — выбирается по правилам ключа `position` в `mapping.link.attributes` (`select(relation, parentKind, childKind)`).
   Если есть правило, ищется атрибут связи с именем из правила в ответе `/get-link-attributes`. Значение преобразуется
   в `Int`: успешно → `Field.Value(число)`, нет → `Field.Missing`.
@@ -529,7 +571,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 | Единица | поле связи `unit` | `link.fields.unit` | `Usage.unit` |
 | Позиция | атрибут связи (`get-link-attributes`) | `link.attributes.position` | `Usage.position` |
 | Прочие атрибуты связи | атрибуты связи (`get-link-attributes`) | `link.attributes.<ключ>` | `Usage.attributes` |
-| Тип связи | `idLinkType` + `get-link-list` | `relations` | `Usage.relation` |
+| Тип связи | `idLinkType` + `get-link-list` (имя `link`) | `relations` (`as`, `direction`, `from`) | `Usage.relation` |
+| Связанный узел | `idChild` ответа `get-linked-objects-for-objects` | — | `Usage.target` (для `INVERSE` — сосед, не потомок) |
 
 Правило: всё, что приходит вместе с объектом или списком связей (свойства и поля связи), не требует
 дополнительных запросов. Атрибуты узла и связи — отдельные запросы, поэтому они настраиваются правилами и
@@ -542,17 +585,24 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 ## Метаданные: снимок, MetadataCache, обновление
 
-- **Снимок.** `MetadataLoader.load(api)` строит `MetadataSnapshot(linkTypes, objectTypes, attributeNames, version)`. Сначала читается версия
-  кэша метаданных `GET /api/v4/MetaData/cache/version` (ответ — голое число int64), затем параллельно `get-type-list`,
-  `get-link-list` и `GET /api/v4/MetaData/get-attribute-list-2?mode=0` (`attributeList(mode)`). Ошибка любого запроса
-  отменяет остальные. `attributeNames` — имена атрибутов как есть, без пустых и `null`. В снимок попадают только связи `type == 0` (подтверждено на сервере 2026-10-22: `type=0` у 82 из 88 связей,
-  включая «Состоит из ...» и «Документы»; `type=1` — прочие виды). Версия читается **до** данных: если метаданные изменятся
-  во время загрузки, сохранённая версия окажется старой, и следующая проверка повторно обновит снимок.
+- **Снимок.** `MetadataLoader.load(api)` строит `MetadataSnapshot(linkTypes, objectTypes, attributeNames, version, typeLinks)`.
+  Сначала читается версия кэша метаданных `GET /api/v4/MetaData/cache/version` (ответ — голое число int64), затем параллельно
+  `get-type-list`, `get-link-list`, `GET /api/v4/MetaData/get-attribute-list-2?mode=0` (`attributeList(mode)`) и
+  `GET /api/v4/MetaDataCustom/types-links` (`typesLinks()`). Ошибка любого запроса отменяет остальные. `attributeNames` —
+  имена атрибутов как есть, без пустых и `null`.
+  - Связи в снимок попадают **все**, фильтра `type == 0` больше нет. Горизонтальные связи (`type=1`: «Взаимозаменяемые»,
+    «Чек-лист», «Пакет», «Результат проверки», «Преобразовано», «Удостоверяющий лист») помечены `LinkTypeInfo.horizontal`.
+    Имена связей на сервере уникальны.
+  - `types-links`: строки `typeId1`, `typeId2`, `idLinkType`, `direction`. `direction`: `1` — прямое, `-1` — только обратное,
+    `0` — оба. `MetadataSnapshot.linkDirections(тип, id связи)` возвращает набор направлений для типа объекта.
+    Допустимость направления проверяет `MappingConfigValidator` (см. «Структура YAML»).
+  - Версия читается **до** данных: если метаданные изменятся во время загрузки, сохранённая версия окажется старой,
+    и следующая проверка повторно обновит снимок.
 - **Ключевой атрибут типа.** Это `attrName` из `get-type-list`, обрезанный по краям; пустое значение → `null`
   (`ObjectTypeInfo.keyAttribute`). Подтверждено на сервере 2026-10-22: 232 из 266 типов — «Обозначение»; исключения:
   Наименование (14), Обозначение оснастки (9), GID (7), K3Dkey (4); все 8 видов из конфига — «Обозначение».
   Значение ключа физически хранится в свойстве `product` объекта, в списке его атрибутов (`get-info-about-version-mode-3`)
-  его нет. Поиск: `MetadataSnapshot.keyAttributeOf(typeName)` — мягкое сравнение имени типа (как у `linkTypeId`);
+  его нет. Поиск: `MetadataSnapshot.keyAttributeOf(typeName)` — строгое сравнение имени типа (`==`, как у `linkTypeId`);
   `null`, если тип неизвестен или ключ не задан.
 - **`MetadataCache`** (`report-loodsman`) — `MetadataSource` с `AtomicReference<MetadataSnapshot?>`. Вторичный конструктор
   `MetadataCache(api, validate)` требует `validate` явно, значения по умолчанию нет:
