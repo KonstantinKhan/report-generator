@@ -9,8 +9,14 @@ kinds:
   Комплект: KIT
 
 relations:
-  Состоит из ...: COMPOSITION
-  Документы: DOCUMENT
+  - link: "Состоит из ..."
+    as: COMPOSITION
+  - link: "Документы"
+    as: DOCUMENT
+  - link: "Технологическая ДСЕ для"
+    direction: INVERSE
+    from: [Деталь]
+    as: TECHNOLOGICAL_PART
 
 requiredRelations:
   - COMPOSITION

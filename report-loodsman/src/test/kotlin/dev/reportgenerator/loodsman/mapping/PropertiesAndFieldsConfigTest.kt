@@ -55,7 +55,8 @@ class PropertiesAndFieldsConfigTest : ShouldSpec({
                 kinds:
                   Деталь: PART
                 relations:
-                  Состоит из ...: COMPOSITION
+                  - link: "Состоит из ..."
+                    as: COMPOSITION
             """.trimIndent()
 
             val config = MappingConfigLoader.parse(yaml)
@@ -69,7 +70,8 @@ class PropertiesAndFieldsConfigTest : ShouldSpec({
                 kinds:
                   Деталь: PART
                 relations:
-                  Состоит из ...: COMPOSITION
+                  - link: "Состоит из ..."
+                    as: COMPOSITION
                 properties:
                   state: NOPE
             """.trimIndent()
@@ -82,7 +84,8 @@ class PropertiesAndFieldsConfigTest : ShouldSpec({
                 kinds:
                   Деталь: PART
                 relations:
-                  Состоит из ...: COMPOSITION
+                  - link: "Состоит из ..."
+                    as: COMPOSITION
                 link:
                   fields:
                     unit: NOPE

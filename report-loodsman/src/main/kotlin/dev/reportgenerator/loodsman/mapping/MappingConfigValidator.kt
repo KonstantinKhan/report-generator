@@ -29,14 +29,33 @@ object MappingConfigValidator {
             }
         }
 
-        config.relations.keys.forEach { relation ->
-            if (relation !in linkTypes) {
-                errors += "relations: link type '$relation' not found in Loodsman. ${available(linkTypes)}"
+        config.relations.forEach { rule ->
+            if (rule.link !in linkTypes) {
+                errors += "relations: link type '${rule.link}' not found in Loodsman. ${available(linkTypes)}"
+            }
+            rule.from.forEach { type ->
+                if (type !in objectTypes) {
+                    errors += "relations: from type '$type' of link '${rule.link}' not found in Loodsman. ${available(objectTypes)}"
+                }
+            }
+        }
+
+        config.relations.forEach { rule ->
+            val linkTypeId = snapshot.linkTypeId(rule.link) ?: return@forEach
+            rule.from.filter { it in objectTypes }.forEach { type ->
+                val allowed = snapshot.linkDirections(type, linkTypeId)
+                val permitted = when (rule.direction) {
+                    LinkDirection.FORWARD -> 1 in allowed || 0 in allowed
+                    LinkDirection.INVERSE -> -1 in allowed || 0 in allowed
+                }
+                if (!permitted) {
+                    errors += "правило '${rule.link}': тип '$type' не может быть источником связи в направлении ${rule.direction} по метаданным Loodsman"
+                }
             }
         }
 
         config.requiredRelations.forEach { requiredId ->
-            val pdmNames = config.relations.filterValues { it == requiredId }.keys
+            val pdmNames = config.relations.filter { it.relation == requiredId }.map { it.link }.distinct()
             if (pdmNames.none { it in linkTypes }) {
                 errors += "requiredRelations: '$requiredId' has no link type in Loodsman, tried: ${pdmNames.joinToString()}. ${available(linkTypes)}"
             }

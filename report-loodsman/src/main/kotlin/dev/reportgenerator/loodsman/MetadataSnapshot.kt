@@ -9,6 +9,8 @@ data class MetadataSnapshot(
     /** Имена атрибутов Loodsman как есть; пустые и отсутствующие имена отброшены. */
     val attributeNames: Set<String>,
     val version: Long,
+    /** Связи между типами объектов (metaDataCustom types-links); пусто, если не загружены. */
+    val typeLinks: List<TypeLinkInfo> = emptyList(),
 ) {
 
     fun linkTypeId(pdmName: String): Int? =
@@ -23,9 +25,24 @@ data class MetadataSnapshot(
      */
     fun keyAttributeOf(typeName: String): String? =
         objectTypes.firstOrNull { it.typeName == typeName }?.keyAttribute
+
+    /**
+     * Допустимые направления ([TypeLinkInfo.direction]) связи [linkTypeId] для типа объекта с именем [typeName]:
+     * 1 — только прямое, -1 — только обратное, 0 — оба. Пусто, если строк для типа нет.
+     */
+    fun linkDirections(typeName: String, linkTypeId: Int): Set<Int> {
+        val typeIds = objectTypes.filter { it.typeName == typeName }.mapTo(HashSet()) { it.id }
+        return typeLinks
+            .filter { it.typeId1 in typeIds && it.idLinkType == linkTypeId }
+            .mapTo(HashSet()) { it.direction }
+    }
 }
 
-data class LinkTypeInfo(val id: Int, val name: String?)
+/** [horizontal] — связь горизонтальная (type=1 в get-link-list), например «Взаимозаменяемые». */
+data class LinkTypeInfo(val id: Int, val name: String?, val horizontal: Boolean = false)
+
+/** Строка metaDataCustom types-links: тип [typeId1] может быть источником связи [idLinkType] к типу [typeId2] в [direction]. */
+data class TypeLinkInfo(val typeId1: Int, val typeId2: Int, val idLinkType: Int, val direction: Int)
 
 /** [keyAttribute] — ключевой атрибут типа как есть; null, если не задан или пуст. */
 data class ObjectTypeInfo(val id: Int, val typeName: String?, val keyAttribute: String?)

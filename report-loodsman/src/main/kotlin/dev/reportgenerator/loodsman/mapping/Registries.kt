@@ -24,7 +24,8 @@ object Registries {
         "relation",
         mapOf(
             "COMPOSITION" to Relation.Composition,
-            "DOCUMENT" to Relation.Document
+            "DOCUMENT" to Relation.Document,
+            "TECHNOLOGICAL_PART" to Relation.TechnologicalPart
         )
     )
 

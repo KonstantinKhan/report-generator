@@ -14,9 +14,7 @@ class KindMapperTest : ShouldSpec({
             "Сборочная единица" to "ASSEMBLY",
             "Сборочный чертеж" to "ASSEMBLY_DRAWING"
         ),
-        relations = mapOf(
-            "Состоит из ..." to "COMPOSITION"
-        ),
+        relations = listOf(RelationRule(link = "Состоит из ...", relation = "COMPOSITION")),
         requiredRelations = setOf("COMPOSITION"),
         onUnmapped = UnmappedPolicy(kind = OnUnmapped.KEEP, relation = OnUnmapped.SKIP)
     )

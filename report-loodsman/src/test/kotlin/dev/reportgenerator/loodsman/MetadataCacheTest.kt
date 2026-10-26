@@ -7,6 +7,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import dev.reportgenerator.loodsman.mapping.MappingConfig
 import dev.reportgenerator.loodsman.mapping.MappingConfigValidator
+import dev.reportgenerator.loodsman.mapping.RelationRule
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.async
@@ -78,7 +79,7 @@ class MetadataCacheTest : ShouldSpec({
     should("reject a mapping that does not match Loodsman and keep the old snapshot on refresh") {
         val mapping = MappingConfig(
             kinds = mapOf("Деталь" to "PART"),
-            relations = mapOf("Документы" to "DOCUMENT"),
+            relations = listOf(RelationRule(link = "Документы", relation = "DOCUMENT")),
             requiredRelations = setOf("DOCUMENT"),
         )
         val remote = RemoteMetadata()

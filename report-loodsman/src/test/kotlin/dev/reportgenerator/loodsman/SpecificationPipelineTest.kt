@@ -100,6 +100,7 @@ private class ParityLoodsman(
                         .filter { (_, edge) -> edge.parent == parent && linkTypeId(edge.link) in linkTypes }
                         .map { (index, edge) -> linkOf(edge, index + 1) })
                 }
+                "/api/v4/MetaDataCustom/types-links" -> buildJsonArray {}
                 "/api/v4/MetaData/get-type-list" -> buildJsonArray {
                     objects.map { it.type }.distinct().forEachIndexed { index, type ->
                         add(buildJsonObject {

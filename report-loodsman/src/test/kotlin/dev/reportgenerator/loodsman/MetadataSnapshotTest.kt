@@ -79,4 +79,35 @@ class MetadataSnapshotTest : ShouldSpec({
             withTypes.keyAttributeOf("") shouldBe null
         }
     }
+
+    context("linkDirections") {
+        val withTypeLinks = MetadataSnapshot(
+            linkTypes = listOf(LinkTypeInfo(id = 10, name = "Технологическая ДСЕ для")),
+            objectTypes = listOf(
+                ObjectTypeInfo(id = 1, typeName = "Деталь", keyAttribute = "Обозначение"),
+                ObjectTypeInfo(id = 2, typeName = "Комплект", keyAttribute = "Обозначение"),
+            ),
+            attributeNames = emptySet(),
+            version = 1,
+            typeLinks = listOf(
+                TypeLinkInfo(typeId1 = 1, typeId2 = 3, idLinkType = 10, direction = -1),
+                TypeLinkInfo(typeId1 = 1, typeId2 = 4, idLinkType = 10, direction = 1),
+                TypeLinkInfo(typeId1 = 2, typeId2 = 3, idLinkType = 11, direction = 0),
+            ),
+        )
+
+        should("return all directions of rows for the type name and link type id") {
+            withTypeLinks.linkDirections("Деталь", 10) shouldBe setOf(-1, 1)
+        }
+
+        should("return empty set when no row matches the type or the link type") {
+            withTypeLinks.linkDirections("Комплект", 10) shouldBe emptySet()
+            withTypeLinks.linkDirections("Деталь", 11) shouldBe emptySet()
+            withTypeLinks.linkDirections("Неизвестный", 10) shouldBe emptySet()
+        }
+
+        should("match type name exactly") {
+            withTypeLinks.linkDirections("деталь", 10) shouldBe emptySet()
+        }
+    }
 })

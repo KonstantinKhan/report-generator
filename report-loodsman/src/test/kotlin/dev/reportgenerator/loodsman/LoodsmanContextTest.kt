@@ -25,7 +25,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 // Имена совпадают с подтверждёнными метаданными Loodsman из MappingConfigValidatorTest.
-private val confirmedLinkTypes = listOf("Состоит из ...", "Документы")
+private val confirmedLinkTypes = listOf("Состоит из ...", "Документы", "Технологическая ДСЕ для")
 private val confirmedObjectTypes = listOf(
     "Деталь", "Сборочная единица", "Сборочный чертеж", "Комплекс",
     "Стандартное изделие", "Прочее изделие", "Материал по КД", "Комплект",
@@ -63,6 +63,15 @@ private fun api(typeListStatus: HttpStatusCode = HttpStatusCode.OK): LoodsmanApi
                         put("onlyListItems", 0)
                     })
                 }
+            }
+            "/api/v4/MetaDataCustom/types-links" -> buildJsonArray {
+                // Деталь (id 1) читает «Технологическая ДСЕ для» (id 8, см. get-link-list) только в обратном направлении.
+                add(buildJsonObject {
+                    put("typeId1", 1)
+                    put("typeId2", 2)
+                    put("idLinkType", 8)
+                    put("direction", -1)
+                })
             }
             "/api/v4/MetaData/get-type-list" -> {
                 if (typeListStatus != HttpStatusCode.OK) {

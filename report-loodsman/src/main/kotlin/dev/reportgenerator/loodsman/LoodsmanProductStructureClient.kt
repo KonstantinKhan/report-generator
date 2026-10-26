@@ -35,7 +35,7 @@ class LoodsmanProductStructureClient internal constructor(
     override suspend fun loadTree(query: StructureQuery): PdmNode {
         val rootId = query.rootId.asInt()
         val snapshot = metadata.snapshot()
-        val relationByLinkTypeId = resolveLinkTypes(snapshot, query.relations)
+        val linkTypes = resolveLinkTypes(snapshot, query.relations)
         query.attributes.forEach { attributeRequests.ruleOf(it) }
         validateLinkAttributes(query)
 
@@ -47,7 +47,9 @@ class LoodsmanProductStructureClient internal constructor(
             if (level >= query.depth) break
 
             val expandable = frontier.filter { state.nodes.getValue(it).kind != null }
-            state.links.putAll(linkLoader.loadLinks(expandable, relationByLinkTypeId))
+            // Тип узла Loodsman нужен для отбора правил: раскрываемый узел имеет вид, значит тип задан.
+            val typeNameById = expandable.associateWith { requireNotNull(state.nodes.getValue(it).prop.type) }
+            state.links.putAll(linkLoader.loadLinks(typeNameById, linkTypes))
             frontier = expandable.flatMap { id -> state.links.getValue(id).map { it.dto.idChild } }
                 .distinct()
                 .filter { it !in state.nodes }
@@ -72,13 +74,19 @@ class LoodsmanProductStructureClient internal constructor(
         return nodeLoader.loadNode(id, snapshot, attributeKeys, includeUnmapped)
     }
 
-    private fun resolveLinkTypes(snapshot: MetadataSnapshot, relations: Set<Relation>): Map<Int, Relation> =
-        relations.associateBy { relation ->
-            val pdmName = relationMapper.pdmNameOf(relation)
-                ?: throw LoodsmanApiException("Relation $relation is not configured in mapping")
-            snapshot.linkTypeId(pdmName)
-                ?: throw LoodsmanApiException("Link type '$pdmName' not found in Loodsman metadata")
+    private fun resolveLinkTypes(snapshot: MetadataSnapshot, relations: Set<Relation>): List<LinkTypeRule> {
+        val rules = relationMapper.rulesFor(relations)
+        relations.forEach { relation ->
+            if (rules.none { it.relation == relation }) {
+                throw LoodsmanApiException("Relation $relation is not configured in mapping")
+            }
         }
+        return rules.map { rule ->
+            val linkTypeId = snapshot.linkTypeId(rule.link)
+                ?: throw LoodsmanApiException("Link type '${rule.link}' not found in Loodsman metadata")
+            LinkTypeRule(linkTypeId, rule)
+        }
+    }
 
     private fun validateLinkAttributes(query: StructureQuery) {
         for (key in query.linkAttributes) {

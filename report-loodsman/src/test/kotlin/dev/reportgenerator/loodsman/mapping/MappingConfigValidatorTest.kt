@@ -2,6 +2,7 @@ package dev.reportgenerator.loodsman.mapping
 
 import dev.reportgenerator.loodsman.LinkTypeInfo
 import dev.reportgenerator.loodsman.MetadataSnapshot
+import dev.reportgenerator.loodsman.TypeLinkInfo
 import dev.reportgenerator.loodsman.ObjectTypeInfo
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -25,7 +26,7 @@ private val snapshot = MetadataSnapshot(
 
 private fun config(
     kinds: Map<String, String> = mapOf("Деталь" to "PART"),
-    relations: Map<String, String> = mapOf("Состоит из ..." to "COMPOSITION"),
+    relations: List<RelationRule> = listOf(RelationRule(link = "Состоит из ...", relation = "COMPOSITION")),
     requiredRelations: Set<String> = setOf("COMPOSITION"),
     attributes: Map<String, AttributeRule> = mapOf("mass" to AttributeRule(name = "Масса")),
     link: LinkMapping = LinkMapping(
@@ -61,7 +62,12 @@ class MappingConfigValidatorTest : ShouldSpec({
 
     should("report a relation that is missing in Loodsman") {
         val errors = MappingConfigValidator.validate(
-            config(relations = mapOf("Состоит из ..." to "COMPOSITION", "Нет такой" to "DOCUMENT")),
+            config(
+                relations = listOf(
+                    RelationRule(link = "Состоит из ...", relation = "COMPOSITION"),
+                    RelationRule(link = "Нет такой", relation = "DOCUMENT"),
+                ),
+            ),
             snapshot,
         )
 
@@ -73,7 +79,10 @@ class MappingConfigValidatorTest : ShouldSpec({
     should("report a required relation without any matching link type and name the candidates") {
         val errors = MappingConfigValidator.validate(
             config(
-                relations = mapOf("Состоит из ..." to "COMPOSITION", "Ссылки" to "DOCUMENT"),
+                relations = listOf(
+                    RelationRule(link = "Состоит из ...", relation = "COMPOSITION"),
+                    RelationRule(link = "Ссылки", relation = "DOCUMENT"),
+                ),
                 requiredRelations = setOf("DOCUMENT"),
             ),
             snapshot.copy(linkTypes = listOf(LinkTypeInfo(id = 6, name = "Состоит из ..."))),
@@ -163,7 +172,10 @@ class MappingConfigValidatorTest : ShouldSpec({
         val errors = MappingConfigValidator.validate(
             config(
                 kinds = mapOf("Неизвестная" to "PART"),
-                relations = mapOf("Состоит из ..." to "COMPOSITION", "Нет такой" to "DOCUMENT"),
+                relations = listOf(
+                    RelationRule(link = "Состоит из ...", relation = "COMPOSITION"),
+                    RelationRule(link = "Нет такой", relation = "DOCUMENT"),
+                ),
                 attributes = mapOf(
                     "name" to AttributeRule(name = "Наимен"),
                     "mass" to AttributeRule(name = "Масса кг"),
@@ -182,7 +194,7 @@ class MappingConfigValidatorTest : ShouldSpec({
         val errors = MappingConfigValidator.validate(
             config(
                 kinds = mapOf("  ДЕТАЛЬ " to "PART", "елка" to "PART"),
-                relations = mapOf("состоит  из ..." to "COMPOSITION"),
+                relations = listOf(RelationRule(link = "состоит  из ...", relation = "COMPOSITION")),
             ),
             snapshot,
         )
@@ -225,6 +237,7 @@ class MappingConfigValidatorTest : ShouldSpec({
             linkTypes = listOf(
                 LinkTypeInfo(id = 6, name = "Состоит из ..."),
                 LinkTypeInfo(id = 1, name = "Документы"),
+                LinkTypeInfo(id = 7, name = "Технологическая ДСЕ для"),
             ),
             objectTypes = listOf(
                 "Деталь", "Сборочная единица", "Сборочный чертеж", "Комплекс",
@@ -234,8 +247,104 @@ class MappingConfigValidatorTest : ShouldSpec({
                 "Наименование", "Обозначение", "Масса", "Наименование предприятия", "Позиция", "Примечание",
             ),
             version = 1,
+            typeLinks = listOf(TypeLinkInfo(typeId1 = 1, typeId2 = 2, idLinkType = 7, direction = -1)),
         )
 
         MappingConfigValidator.validate(mapping, confirmed).shouldBeEmpty()
+    }
+
+    context("relation rules from and direction") {
+        val techRule = RelationRule(
+            link = "Технологическая ДСЕ для",
+            relation = "TECHNOLOGICAL_PART",
+            direction = LinkDirection.INVERSE,
+            from = listOf("Деталь"),
+        )
+        fun withTechLink(vararg directions: Int) = snapshot.copy(
+            linkTypes = snapshot.linkTypes + LinkTypeInfo(id = 7, name = "Технологическая ДСЕ для"),
+            typeLinks = directions.map { TypeLinkInfo(typeId1 = 1, typeId2 = 2, idLinkType = 7, direction = it) },
+        )
+
+        should("accept INVERSE rule when the from type allows the inverse direction") {
+            MappingConfigValidator.validate(
+                config(relations = listOf(techRule), requiredRelations = emptySet()),
+                withTechLink(-1),
+            ).shouldBeEmpty()
+        }
+
+        should("accept rule when the from type allows both directions") {
+            MappingConfigValidator.validate(
+                config(relations = listOf(techRule), requiredRelations = emptySet()),
+                withTechLink(0),
+            ).shouldBeEmpty()
+        }
+
+        should("report INVERSE rule when the from type allows only the forward direction") {
+            val errors = MappingConfigValidator.validate(
+                config(relations = listOf(techRule), requiredRelations = emptySet()),
+                withTechLink(1),
+            )
+
+            errors shouldContainExactly listOf(
+                "правило 'Технологическая ДСЕ для': тип 'Деталь' не может быть источником связи в направлении INVERSE по метаданным Loodsman",
+            )
+        }
+
+        should("report FORWARD rule when the from type allows only the inverse direction") {
+            val errors = MappingConfigValidator.validate(
+                config(
+                    relations = listOf(RelationRule(link = "Технологическая ДСЕ для", relation = "TECHNOLOGICAL_PART", from = listOf("Деталь"))),
+                    requiredRelations = emptySet(),
+                ),
+                withTechLink(-1),
+            )
+
+            errors shouldContainExactly listOf(
+                "правило 'Технологическая ДСЕ для': тип 'Деталь' не может быть источником связи в направлении FORWARD по метаданным Loodsman",
+            )
+        }
+
+        should("report from type without any link row in metadata") {
+            val errors = MappingConfigValidator.validate(
+                config(relations = listOf(techRule), requiredRelations = emptySet()),
+                withTechLink(),
+            )
+
+            errors.single() shouldContain "тип 'Деталь' не может быть источником связи в направлении INVERSE"
+        }
+
+        should("report from type that is missing in Loodsman") {
+            val errors = MappingConfigValidator.validate(
+                config(
+                    relations = listOf(techRule.copy(from = listOf("Неизвестная"))),
+                    requiredRelations = emptySet(),
+                ),
+                withTechLink(-1),
+            )
+
+            errors shouldContainExactly listOf(
+                "relations: from type 'Неизвестная' of link 'Технологическая ДСЕ для' not found in Loodsman. Available: Ёлка, Деталь",
+            )
+        }
+
+        should("skip direction check when from is empty") {
+            val rule = techRule.copy(from = emptyList())
+
+            MappingConfigValidator.validate(
+                config(relations = listOf(rule), requiredRelations = emptySet()),
+                withTechLink(1),
+            ).shouldBeEmpty()
+        }
+
+        should("skip direction check when link itself is missing in Loodsman") {
+            val errors = MappingConfigValidator.validate(
+                config(relations = listOf(techRule), requiredRelations = emptySet()),
+                snapshot,
+            )
+
+            errors shouldContainExactly listOf(
+                "relations: link type 'Технологическая ДСЕ для' not found in Loodsman. Available: Документы, Состоит из ...",
+            )
+        }
     }
 })

@@ -9,6 +9,7 @@ import dev.reportgenerator.domain.NodeKey
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Quantity
+import dev.reportgenerator.domain.TechnologicalPartUsage
 import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.loodsman.mapping.AttributeRule
@@ -47,9 +48,13 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 private const val COMPOSITION = "Состоит из ..."
+private const val TECHNOLOGICAL_PART = "Технологическая ДСЕ для"
 
 // Размер пачки получения свойств объектов, как в клиенте.
 private const val PROPS_BATCH = 100
+
+// Базовый id обратных связей в фейке: не пересекается с id прямых связей (parent*100+порядок).
+private const val INVERSE_LINK_ID_BASE = 100_000
 
 // Ключевой атрибут всех видов в фейке: его значение лежит в product объекта.
 private const val KEY_ATTRIBUTE = "Обозначение"
@@ -64,6 +69,7 @@ private data class Obj(
 private data class Edge(
     val parent: Int,
     val child: Int,
+    val link: String = COMPOSITION,
     val min: Double? = null,
     val max: Double? = null,
     val unit: String? = null,
@@ -77,6 +83,9 @@ private val CONCURRENT_PATHS = setOf(
     "/api/v4/ObjectInfo/get-info-about-version-mode-3",
 )
 
+/** Запрос связей фейку: объект, id типов связей и признак inverse. */
+private data class LinkRequest(val objectId: Int, val linkTypeIds: List<Int>, val inverse: Boolean)
+
 private class FakeLoodsman(
     private val objects: List<Obj>,
     private val edges: List<Edge>,
@@ -85,12 +94,15 @@ private class FakeLoodsman(
 ) {
     val propsCalls: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val linkCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
+    val linkRequests: MutableList<LinkRequest> = Collections.synchronizedList(mutableListOf())
     val linkAttributeCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val infoCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val linkListFailures = AtomicInteger(0)
     val maxInFlight = AtomicInteger(0)
     private val inFlight = AtomicInteger(0)
     private val linkIdToEdge = ConcurrentHashMap<Int, Edge>()
+
+    private fun linkTypeIdOf(name: String): Int = linkNames.indexOf(name) + 1
 
     /** Снимок метаданных, который отдаёт тот же фейк (типы связей по [linkNames], виды по [objects]). */
     fun snapshot(version: Long = 1): MetadataSnapshot = MetadataSnapshot(
@@ -148,6 +160,7 @@ private class FakeLoodsman(
                     }
                 }
                 "/api/v4/MetaData/get-attribute-list-2" -> buildJsonArray {}
+                "/api/v4/MetaDataCustom/types-links" -> buildJsonArray {}
                 "/api/v4/MetaData/get-type-list" -> buildJsonArray {
                     objects.map { it.type }.distinct().forEachIndexed { index, type ->
                         add(buildJsonObject {
@@ -176,12 +189,22 @@ private class FakeLoodsman(
                     }
                 }
                 "/api/v4/ObjectInfo/get-linked-objects-for-objects" -> {
-                    val parent = params["objectsIds"]!!.toInt()
-                    linkCalls.add(parent)
-                    JsonArray(edges.filter { it.parent == parent }.mapIndexed { index, edge ->
-                        val linkId = edge.parent * 100 + index
+                    val requested = params["objectsIds"]!!.toInt()
+                    val linkTypeIds = params["linksTypesIds"]!!.split(",").map { it.toInt() }
+                    val inverse = params["inverse"]!!.toBoolean()
+                    linkCalls.add(requested)
+                    linkRequests.add(LinkRequest(requested, linkTypeIds, inverse))
+                    // Как у Loodsman: inverse смотрит с точки запрошенного объекта, idParent = запрошенный.
+                    val matched = edges.filter { edge ->
+                        (if (inverse) edge.child else edge.parent) == requested &&
+                                linkTypeIdOf(edge.link) in linkTypeIds
+                    }
+                    JsonArray(matched.mapIndexed { index, edge ->
+                        val neighbor = if (inverse) edge.parent else edge.child
+                        // Id связи уникален в фейке: прямые связи — parent*100+порядок, обратные — за пределами.
+                        val linkId = if (inverse) INVERSE_LINK_ID_BASE + edges.indexOf(edge) else edge.parent * 100 + index
                         linkIdToEdge[linkId] = edge
-                        linkOf(edge, index)
+                        linkOf(linkId, requested, neighbor, edge.link)
                     })
                 }
                 "/api/v4/ObjectInfo/get-link-attributes" -> {
@@ -227,14 +250,15 @@ private class FakeLoodsman(
         put("mainId", obj.id)
     }
 
-    private fun linkOf(edge: Edge, index: Int) = buildJsonObject {
-        put("idLink", edge.parent * 100 + index)
-        put("idParent", edge.parent)
-        put("idChild", edge.child)
-        put("idLinkType", 1)
-        put("linkTypeName", COMPOSITION)
+    private fun linkOf(linkId: Int, parent: Int, child: Int, linkName: String) = buildJsonObject {
+        put("idLink", linkId)
+        put("idParent", parent)
+        put("idChild", child)
+        put("idLinkType", linkTypeIdOf(linkName))
+        put("linkTypeName", linkName)
         put("idType", 0)
         put("idState", 0)
+        val edge = linkIdToEdge.getValue(linkId)
         edge.min?.let { put("minQuantity", it) }
         edge.max?.let { put("maxQuantity", it) }
         edge.unit?.let { put("unit", it) }
@@ -267,6 +291,32 @@ private fun query(
     attributes = attributes.toSet(),
     linkAttributes = linkAttributes,
     includeUnmappedAttributes = includeUnmapped
+)
+
+// Корень-деталь и технологическая деталь, связанная обратной связью "Технологическая ДСЕ для" (от детали).
+private val detail = Obj(10, "Деталь", "АБ.010", mapOf("Наименование" to "Деталь"))
+private val technological = Obj(11, "Технологическая деталь", "ТД.011", mapOf("Наименование" to "Технологическая"))
+private val technologicalObjects = listOf(detail, technological, pin)
+private val technologicalEdges = listOf(
+    Edge(parent = 11, child = 10, link = TECHNOLOGICAL_PART),
+    Edge(parent = 11, child = 4)
+)
+
+// Тип "Технологическая деталь" в маппинге видов; правила связей берутся из loodsman-mapping.yaml.
+private fun technologicalMapping(): MappingConfig = MappingConfigLoader.load(emptyMap()).let { base ->
+    base.copy(kinds = base.kinds + ("Технологическая деталь" to "PART"))
+}
+
+private fun technologicalFake() = FakeLoodsman(
+    technologicalObjects,
+    technologicalEdges,
+    linkNames = listOf(COMPOSITION, "Документы", TECHNOLOGICAL_PART),
+)
+
+private fun technologicalQuery(depth: Int) = StructureQuery(
+    rootId = PdmNodeId(10),
+    depth = depth,
+    relations = setOf(Relation.Composition, Relation.TechnologicalPart),
 )
 
 class LoodsmanProductStructureClientTest : ShouldSpec({
@@ -722,5 +772,47 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         root.usages.map { it.target.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
         fake.linkAttributeCalls.sorted() shouldBe listOf(100, 101)
+    }
+
+    should("load a technological part by the inverse rule with the id of the rule link") {
+        val fake = technologicalFake()
+
+        val root = fake.client(technologicalMapping()).loadTree(technologicalQuery(1))
+
+        val usage = root.usages.single() as TechnologicalPartUsage
+        usage.target.id shouldBe PdmNodeId(11)
+        usage.target.kind shouldBe PdmNodeKind.Part
+        fake.linkRequests.filter { it.inverse } shouldBe listOf(LinkRequest(objectId = 10, linkTypeIds = listOf(3), inverse = true))
+    }
+
+    should("not apply the inverse rule of the root kind to a technological part and expand its composition") {
+        val fake = technologicalFake()
+
+        val root = fake.client(technologicalMapping()).loadTree(technologicalQuery(2))
+
+        val technologicalPart = (root.usages.single() as TechnologicalPartUsage).target
+        technologicalPart.usages.single().target.id shouldBe PdmNodeId(4)
+        fake.linkRequests.filter { it.objectId == 11 } shouldBe
+            listOf(LinkRequest(objectId = 11, linkTypeIds = listOf(1), inverse = false))
+        fake.linkRequests.filter { it.inverse } shouldBe listOf(LinkRequest(objectId = 10, linkTypeIds = listOf(3), inverse = true))
+    }
+
+    should("not request inverse links when the relation of the inverse rule is not queried") {
+        val fake = technologicalFake()
+
+        val root = fake.client(technologicalMapping()).loadTree(StructureQuery(rootId = PdmNodeId(10), depth = 1))
+
+        root.usages shouldBe emptyList()
+        fake.linkRequests.none { it.inverse } shouldBe true
+    }
+
+    should("request only forward links for rules without from") {
+        val fake = FakeLoodsman(tree, treeEdges)
+
+        fake.client().loadTree(query(2))
+
+        fake.linkRequests.isNotEmpty() shouldBe true
+        fake.linkRequests.map { it.inverse }.distinct() shouldBe listOf(false)
+        fake.linkRequests.map { it.linkTypeIds }.distinct() shouldBe listOf(listOf(1))
     }
 })

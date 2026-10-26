@@ -10,7 +10,7 @@ object MetadataLoader {
     private val log = LoggerFactory.getLogger(this::class.java)
 
     /**
-     * Сначала читает версию кэша метаданных, затем параллельно загружает типы объектов, связи и атрибуты.
+     * Сначала читает версию кэша метаданных, затем параллельно загружает типы объектов, связи, атрибуты и связи между типами.
      * Ошибка любого запроса отменяет остальные и пробрасывается.
      * Версия читается до данных, чтобы изменение метаданных во время загрузки привело к повторному обновлению при следующей проверке.
      */
@@ -21,13 +21,11 @@ object MetadataLoader {
             val types = async { timed("types") { api.metaData.typeList() } }
             val links = async { timed("links") { api.metaData.linkList() } }
             val attributes = async { timed("attributes") { api.metaData.attributeList(mode = 0) } }
+            val typeLinks = async { timed("typeLinks") { api.metaDataCustom.typesLinks() } }
             val snapshot = MetadataSnapshot(
                 linkTypes = links.await()
-                    // Поле `type` в swagger описано противоречиво (описания `type` и `inverseName` перепутаны).
-                    // Подтверждено на сервере (2026-10-22): type=0 у 82 из 88 связей, включая «Состоит из ...» и «Документы»;
-                    // type=1 — прочие виды связей.
-                    .filter { it.type == 0 }
-                    .map { LinkTypeInfo(id = it.id, name = it.name) },
+                    // type=1 — горизонтальные связи («Взаимозаменяемые», «Чек-лист» и др.), дублей имён нет.
+                    .map { LinkTypeInfo(id = it.id, name = it.name, horizontal = it.type == 1) },
                 objectTypes = types.await().map {
                     ObjectTypeInfo(
                         id = it.id,
@@ -40,14 +38,23 @@ object MetadataLoader {
                     .mapNotNull { it.name?.takeIf(String::isNotEmpty) }
                     .toSet(),
                 version = version,
+                typeLinks = typeLinks.await().map {
+                    TypeLinkInfo(
+                        typeId1 = it.typeId1,
+                        typeId2 = it.typeId2,
+                        idLinkType = it.idLinkType,
+                        direction = it.direction,
+                    )
+                },
             )
             log.info(
-                "Metadata loaded in {} ms: version {}, types {}, links {}, attributes {}",
+                "Metadata loaded in {} ms: version {}, types {}, links {}, attributes {}, type links {}",
                 elapsedMs(startedAt),
                 snapshot.version,
                 snapshot.objectTypes.size,
                 snapshot.linkTypes.size,
                 snapshot.attributeNames.size,
+                snapshot.typeLinks.size,
             )
             snapshot
         }
