@@ -57,7 +57,8 @@ private const val OBJECT_INFO_JSON = """[{"name":"Наименование","val
 private const val LINKED_OBJECTS_JSON = """[{"idLink":7,"idParent":10,"idChild":20,"idLinkType":1,
     "linkTypeName":"Состоит из ...","idType":3,"product":"SUB-1","version":"1","idState":1,
     "minQuantity":2.0,"maxQuantity":2.0,"unit":"шт"}]"""
-private const val LINK_ATTRIBUTES_JSON = """[{"id":5,"name":"Позиция","value":"1","type":0,"accessLevel":1}]"""
+private const val TYPES_LINKS_JSON = """[{"typeId1":1,"typeId2":2,"idLinkType":3,"direction":1},{"typeId1":2,"typeId2":1,"idLinkType":4,"direction":-1}]"""
+private const val LINK_ATTRIBUTES_JSON ="""[{"id":5,"name":"Позиция","value":"1","type":0,"accessLevel":1}]"""
 
 class LoodsmanApiTest : ShouldSpec({
 
@@ -118,6 +119,26 @@ class LoodsmanApiTest : ShouldSpec({
             it.order shouldBe 1
         }
         val request = requests.last { it.url.encodedPath == "/api/v4/MetaData/get-link-list" }
+        request.method shouldBe HttpMethod.Get
+        request.session() shouldBe "s1"
+    }
+
+    should("fetch types links with session") {
+        val requests = mutableListOf<HttpRequestData>()
+        val logins = AtomicInteger()
+        val api = ktorApi(requests, logins) { reply(TYPES_LINKS_JSON) }
+
+        val links = api.metaDataCustom.typesLinks()
+
+        links.size shouldBe 2
+        links[0].also {
+            it.typeId1 shouldBe 1
+            it.typeId2 shouldBe 2
+            it.idLinkType shouldBe 3
+            it.direction shouldBe 1
+        }
+        links[1].direction shouldBe -1
+        val request = requests.last { it.url.encodedPath == "/api/v4/MetaDataCustom/types-links" }
         request.method shouldBe HttpMethod.Get
         request.session() shouldBe "s1"
     }
