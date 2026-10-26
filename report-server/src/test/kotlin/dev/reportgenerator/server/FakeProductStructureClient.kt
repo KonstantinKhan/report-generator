@@ -42,7 +42,7 @@ class FakeProductStructureClient(
         attributes = attributesOf("ИЗД.001", "Изделие"),
         usages = listOf(
             CompositionUsage(
-                child = PdmNode(
+                target = PdmNode(
                     PdmNodeId(2),
                     PdmNodeKind.Part,
                     attributes = attributesOf("АБ.002", "Вал"),
@@ -52,7 +52,7 @@ class FakeProductStructureClient(
                 unit = Field.Value("шт"),
             ),
             CompositionUsage(
-                child = PdmNode(
+                target = PdmNode(
                     PdmNodeId(3),
                     PdmNodeKind.Assembly,
                     attributes = attributesOf("АБ.003", "Корпус"),
@@ -62,7 +62,7 @@ class FakeProductStructureClient(
                 unit = Field.Value("шт"),
             ),
             DocumentUsage(
-                child = PdmNode(
+                target = PdmNode(
                     PdmNodeId(4),
                     PdmNodeKind.AssemblyDrawing,
                     attributes = attributesOf("ИЗД.001 СБ", "Изделие. Сборочный чертёж"),

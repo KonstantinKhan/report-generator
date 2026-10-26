@@ -8,6 +8,7 @@ import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.Relation
+import dev.reportgenerator.domain.TechnologicalPartUsage
 import dev.reportgenerator.domain.UnmappedUsage
 import dev.reportgenerator.domain.Usage
 
@@ -26,17 +27,18 @@ fun usagesOf(links: List<ResolvedLink>): List<Usage> = links.map { link ->
     }
     when (link.relation) {
         Relation.Composition -> CompositionUsage(
-            child = link.child,
+            target = link.child,
             position = link.positionValue?.toIntOrNull()?.let { Field.Value(it) } ?: Field.Missing,
             quantity = link.quantity,
             unit = link.unit,
             attributes = attrs,
         )
 
-        Relation.Document -> DocumentUsage(child = link.child, attributes = attrs)
+        Relation.Document -> DocumentUsage(target = link.child, attributes = attrs)
+        Relation.TechnologicalPart -> TechnologicalPartUsage(target = link.child, attributes = attrs)
         is Relation.Unmapped -> UnmappedUsage(
             relation = link.relation,
-            child = link.child,
+            target = link.child,
             attributes = attrs,
         )
     }

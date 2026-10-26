@@ -10,6 +10,7 @@ import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.StructureQuery
+import dev.reportgenerator.domain.TechnologicalPartUsage
 import dev.reportgenerator.domain.UnmappedUsage
 import dev.reportgenerator.loodsman.mapping.LinkField
 import dev.reportgenerator.loodsman.mapping.MappingConfig
@@ -59,7 +60,7 @@ internal class TreeAssembler(
                             ?.let { posName -> linkAttrs[posName]?.toIntOrNull() }
                             ?.let { Field.Value(it) } ?: Field.Missing
                         CompositionUsage(
-                            child = childNode,
+                            target = childNode,
                             position = position,
                             quantity = quantityOf(link.dto),
                             unit = link.dto.text(mapping.link.fields.unit)?.let { Field.Value(it) } ?: Field.Missing,
@@ -67,10 +68,11 @@ internal class TreeAssembler(
                         )
                     }
 
-                    Relation.Document -> DocumentUsage(child = childNode, attributes = attrs)
+                    Relation.Document -> DocumentUsage(target = childNode, attributes = attrs)
+                    Relation.TechnologicalPart -> TechnologicalPartUsage(target = childNode, attributes = attrs)
                     is Relation.Unmapped -> UnmappedUsage(
                         relation = link.relation,
-                        child = childNode,
+                        target = childNode,
                         attributes = attrs
                     )
                 }

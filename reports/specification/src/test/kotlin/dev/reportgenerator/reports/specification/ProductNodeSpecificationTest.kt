@@ -58,13 +58,13 @@ private fun composition(
     child: PdmNode,
     quantity: Quantity = Quantity.Exact(1.0),
     unit: Field<String> = Field.Missing,
-) = CompositionUsage(child = child, position = Field.Missing, quantity = quantity, unit = unit)
+) = CompositionUsage(target = child, position = Field.Missing, quantity = quantity, unit = unit)
 
 private fun document(child: PdmNode) = DocumentUsage(child)
 
 private fun unmapped(child: PdmNode) = UnmappedUsage(
     relation = Relation.Unmapped("Неведомая связь"),
-    child = child,
+    target = child,
 )
 
 private fun SpecificationData.single(): SpecificationItem = items.single()

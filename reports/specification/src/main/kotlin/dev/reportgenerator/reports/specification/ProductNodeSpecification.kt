@@ -11,11 +11,12 @@ import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.SpecificationData
 import dev.reportgenerator.domain.SpecificationItem
+import dev.reportgenerator.domain.TechnologicalPartUsage
 import dev.reportgenerator.domain.Usage
 import dev.reportgenerator.domain.UnmappedUsage
 
 // Converts the product structure of the root node into the specification data.
-// Composition items go first (in usage order), then documents (usages with the AssemblyDrawing child).
+// Composition items go first (in usage order), then documents (usages with the AssemblyDrawing target).
 // Usages of unknown kind are skipped.
 fun PdmNode.toSpecificationData(): SpecificationData {
     val documentDesignation = when (val value = attributeText(AttributeKey.Designation)) {
@@ -37,31 +38,35 @@ private enum class UsageGroup { COMPOSITION, DOCUMENT }
 
 private fun Usage.group(): UsageGroup? = when (this) {
     is CompositionUsage -> UsageGroup.COMPOSITION.takeIf {
-        child.kind != PdmNodeKind.AssemblyDrawing && child.kind !is PdmNodeKind.Unmapped
+        target.kind != PdmNodeKind.AssemblyDrawing && target.kind !is PdmNodeKind.Unmapped
     }
-    is DocumentUsage -> UsageGroup.DOCUMENT.takeIf { child.kind == PdmNodeKind.AssemblyDrawing }
+    is DocumentUsage -> UsageGroup.DOCUMENT.takeIf { target.kind == PdmNodeKind.AssemblyDrawing }
+    is TechnologicalPartUsage -> null
     is UnmappedUsage -> null
 }
 
 private fun Usage.toItem(): SpecificationItem = when (this) {
-    is CompositionUsage -> child.toItem(quantity = quantityOf(), unit = unitOf())
-    is DocumentUsage -> child.toItem(quantity = 0.0, unit = null)
-    is UnmappedUsage -> error("Node ${child.id.asInt()}: unmapped usage must be filtered out before conversion")
+    is CompositionUsage -> target.toItem(quantity = quantityOf(), unit = unitOf())
+    is DocumentUsage -> target.toItem(quantity = 0.0, unit = null)
+    is TechnologicalPartUsage -> error(
+        "Node ${target.id.asInt()}: technological part usage must be filtered out before conversion"
+    )
+    is UnmappedUsage -> error("Node ${target.id.asInt()}: unmapped usage must be filtered out before conversion")
 }
 
 private fun CompositionUsage.quantityOf(): Double = when (val value = quantity) {
     is Quantity.Exact -> value.amount
     is Quantity.Range -> throw SpecificationDataException(
-        "Node ${child.id.asInt()}: quantity range ${value.min}..${value.max} is not supported in specification"
+        "Node ${target.id.asInt()}: quantity range ${value.min}..${value.max} is not supported in specification"
     )
-    is Quantity.Missing -> throw SpecificationDataException("Node ${child.id.asInt()}: quantity is missing")
-    is Quantity.NotLoaded -> throw SpecificationDataException("Node ${child.id.asInt()}: quantity is not loaded")
+    is Quantity.Missing -> throw SpecificationDataException("Node ${target.id.asInt()}: quantity is missing")
+    is Quantity.NotLoaded -> throw SpecificationDataException("Node ${target.id.asInt()}: quantity is not loaded")
 }
 
 private fun CompositionUsage.unitOf(): String? = when (val value = unit) {
     is Field.Value -> value.value
     is Field.Missing -> null
-    is Field.NotLoaded -> throw SpecificationDataException("Node ${child.id.asInt()}: unit is not loaded")
+    is Field.NotLoaded -> throw SpecificationDataException("Node ${target.id.asInt()}: unit is not loaded")
 }
 
 private fun PdmNode.toItem(quantity: Double, unit: String?): SpecificationItem {

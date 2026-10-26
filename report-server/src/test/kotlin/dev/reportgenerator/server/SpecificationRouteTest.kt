@@ -68,7 +68,7 @@ class SpecificationRouteTest {
             ),
             usages = listOf(
                 CompositionUsage(
-                    child = PdmNode(
+                    target = PdmNode(
                         PdmNodeId(2),
                         PdmNodeKind.Part,
                         attributes = mapOf(

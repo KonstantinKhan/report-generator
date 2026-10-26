@@ -2,6 +2,7 @@ package dev.reportgenerator.domain
 
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 
 class StructureOpsTest : ShouldSpec({
     context("usagesOf") {
@@ -25,11 +26,30 @@ class StructureOpsTest : ShouldSpec({
 
             val compositionUsages = assembly.usagesOf(Relation.Composition)
             compositionUsages.size shouldBe 1
-            compositionUsages[0].child.id shouldBe PdmNodeId(1)
+            compositionUsages[0].target.id shouldBe PdmNodeId(1)
 
             val documentUsages = assembly.usagesOf(Relation.Document)
             documentUsages.size shouldBe 1
-            documentUsages[0].child.id shouldBe PdmNodeId(2)
+            documentUsages[0].target.id shouldBe PdmNodeId(2)
+        }
+
+        should("filter technological part usages by relation") {
+            val part1 = PdmNode(id = PdmNodeId(1), kind = PdmNodeKind.Part)
+            val techPart = PdmNode(id = PdmNodeId(2), kind = PdmNodeKind.Part)
+            val assembly = PdmNode(
+                id = PdmNodeId(3),
+                kind = PdmNodeKind.Assembly,
+                usages = listOf(
+                    CompositionUsage(part1, Field.Missing, Quantity.Missing, Field.Missing),
+                    TechnologicalPartUsage(techPart)
+                )
+            )
+
+            val technologicalUsages = assembly.usagesOf(Relation.TechnologicalPart)
+            technologicalUsages.size shouldBe 1
+            technologicalUsages[0].shouldBeInstanceOf<TechnologicalPartUsage>()
+            technologicalUsages[0].target.id shouldBe PdmNodeId(2)
+            technologicalUsages[0].relation shouldBe Relation.TechnologicalPart
         }
 
         should("return empty list when no usages match") {
@@ -60,7 +80,7 @@ class StructureOpsTest : ShouldSpec({
                 )
             )
 
-            val walked = root.walk().map { it.child.id.asInt() }.toList()
+            val walked = root.walk().map { it.target.id.asInt() }.toList()
             walked shouldBe listOf(2, 4, 5)
         }
 
@@ -74,11 +94,11 @@ class StructureOpsTest : ShouldSpec({
                 )
             )
 
-            val compositionWalk = assembly.walk(Relation.Composition).map { it.child.id.asInt() }.toList()
+            val compositionWalk = assembly.walk(Relation.Composition).map { it.target.id.asInt() }.toList()
             compositionWalk.size shouldBe 1
             compositionWalk[0] shouldBe 2
 
-            val documentWalk = assembly.walk(Relation.Document).map { it.child.id.asInt() }.toList()
+            val documentWalk = assembly.walk(Relation.Document).map { it.target.id.asInt() }.toList()
             documentWalk.size shouldBe 1
             documentWalk[0] shouldBe 3
         }

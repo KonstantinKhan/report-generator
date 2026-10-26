@@ -5,5 +5,7 @@ sealed interface Relation {
 
     data object Document : Relation
 
+    data object TechnologicalPart : Relation
+
     data class Unmapped(val pdmName: String) : Relation
 }

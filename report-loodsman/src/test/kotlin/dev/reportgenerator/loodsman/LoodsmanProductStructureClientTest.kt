@@ -287,7 +287,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = fake.client(metadata = metadata).loadTree(query(1))
 
-        root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
+        root.usages.map { it.target.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
         reads.get() shouldBe 1
     }
 
@@ -308,25 +308,25 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         root.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.001")
         root.attributes[AttributeKey.Name] shouldBe AttributeValue.Text("Корпус")
-        root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
+        root.usages.map { it.target.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
         root.usages.all { it.relation == Relation.Composition } shouldBe true
 
         val compositions = root.usages.filterIsInstance<CompositionUsage>()
         compositions.size shouldBe 2
 
         val shaftUsage = compositions[0]
-        shaftUsage.child.kind shouldBe PdmNodeKind.Part
-        shaftUsage.child.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.002")
-        shaftUsage.child.attributes[AttributeKey.Name] shouldBe AttributeValue.Text("Вал")
+        shaftUsage.target.kind shouldBe PdmNodeKind.Part
+        shaftUsage.target.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("АБ.002")
+        shaftUsage.target.attributes[AttributeKey.Name] shouldBe AttributeValue.Text("Вал")
         shaftUsage.quantity shouldBe Quantity.Exact(2.0)
         shaftUsage.unit shouldBe Field.Value("шт")
         shaftUsage.position shouldBe Field.Missing
-        shaftUsage.child.usages shouldBe emptyList()
+        shaftUsage.target.usages shouldBe emptyList()
 
         val boltUsage = compositions[1]
-        boltUsage.child.kind shouldBe PdmNodeKind.Standard
-        boltUsage.child.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("ГОСТ 7798-70")
-        boltUsage.child.attributes[AttributeKey.Name] shouldBe AttributeValue.Empty
+        boltUsage.target.kind shouldBe PdmNodeKind.Standard
+        boltUsage.target.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("ГОСТ 7798-70")
+        boltUsage.target.attributes[AttributeKey.Name] shouldBe AttributeValue.Empty
         boltUsage.quantity shouldBe Quantity.Range(4.0, 6.0)
         boltUsage.unit shouldBe Field.Missing
         boltUsage.position shouldBe Field.Missing
@@ -335,7 +335,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     should("return quantity as missing when the link has no quantity") {
         val root = FakeLoodsman(tree, treeEdges).client().loadTree(query(2))
 
-        val composition = root.usages[0].child.usages.single() as CompositionUsage
+        val composition = root.usages[0].target.usages.single() as CompositionUsage
         composition.quantity shouldBe Quantity.Missing
     }
 
@@ -372,7 +372,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = fake.client().loadTree(query(2))
 
-        root.usages[0].child.usages.single().child.id shouldBe PdmNodeId(4)
+        root.usages[0].target.usages.single().target.id shouldBe PdmNodeId(4)
         fake.propsCalls.size shouldBe 3
         fake.propsCalls[1].toSet() shouldBe setOf(2, 3)
         fake.propsCalls[2] shouldBe listOf(4)
@@ -412,7 +412,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = fake.client().loadTree(query(1))
 
-        root.usages.last().child.kind shouldBe PdmNodeKind.Unmapped("Неведомый тип")
+        root.usages.last().target.kind shouldBe PdmNodeKind.Unmapped("Неведомый тип")
     }
 
     should("skip an object of unknown type when the policy is SKIP") {
@@ -423,7 +423,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = fake.client(mapping).loadTree(query(1))
 
-        root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
+        root.usages.map { it.target.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
     }
 
     should("fill version and state from object properties") {
@@ -431,8 +431,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         root.version shouldBe Field.Value("1")
         root.state shouldBe Field.Value("Утверждён")
-        root.usages[0].child.version shouldBe Field.Value("1")
-        root.usages[0].child.state shouldBe Field.Value("Утверждён")
+        root.usages[0].target.version shouldBe Field.Value("1")
+        root.usages[0].target.state shouldBe Field.Value("Утверждён")
     }
 
     should("load position from link attribute when rule exists") {
@@ -497,7 +497,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val root = FakeLoodsman(tree, treeEdges).client().loadTree(query(1, AttributeKey.Mass))
 
         root.attributes shouldBe mapOf(AttributeKey.Mass to AttributeValue.Empty)
-        root.usages[0].child.attributes shouldBe mapOf(AttributeKey.Mass to AttributeValue.Text("1.5"))
+        root.usages[0].target.attributes shouldBe mapOf(AttributeKey.Mass to AttributeValue.Text("1.5"))
     }
 
     should("not call the object attribute list when no attributes are requested") {
@@ -539,8 +539,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val root = FakeLoodsman(listOf(assembly, shaft, standard, pin), treeEdges).client(mapping)
             .loadTree(query(1, AttributeKey.Mass))
 
-        root.usages[0].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("1.5")
-        root.usages[1].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("0.02")
+        root.usages[0].target.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("1.5")
+        root.usages[1].target.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("0.02")
     }
 
     should("read an attribute defined only for some kinds") {
@@ -550,8 +550,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = FakeLoodsman(tree, treeEdges).client(mapping).loadTree(query(1, AttributeKey.Mass))
 
-        root.usages[0].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("1.5")
-        root.usages[1].child.attributes[AttributeKey.Mass] shouldBe AttributeValue.Empty
+        root.usages[0].target.attributes[AttributeKey.Mass] shouldBe AttributeValue.Text("1.5")
+        root.usages[1].target.attributes[AttributeKey.Mass] shouldBe AttributeValue.Empty
         root.attributes[AttributeKey.Mass] shouldBe AttributeValue.Empty
     }
 
@@ -569,7 +569,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val root = FakeLoodsman(listOf(assembly, extra, bolt, pin), treeEdges).client()
             .loadTree(query(1, includeUnmapped = true))
 
-        val attributes = root.usages[0].child.attributes
+        val attributes = root.usages[0].target.attributes
         attributes[AttributeKey.Unmapped("Прочее")] shouldBe AttributeValue.Text("x")
         attributes.containsKey(AttributeKey.Unmapped("Масса")) shouldBe false
         attributes.containsKey(AttributeKey.Unmapped("Наименование")) shouldBe false
@@ -645,8 +645,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val requested = setOf(AttributeKey.Mass, AttributeKey.Designation, AttributeKey.Name)
         val structure = client.loadTree(query(1, *requested.toTypedArray(), includeUnmapped = true))
-        val shaftFromStructure = structure.usages[0].child
-        val boltFromStructure = structure.usages[1].child
+        val shaftFromStructure = structure.usages[0].target
+        val boltFromStructure = structure.usages[1].target
         val shaftFromLoadNode = client.loadNode(PdmNodeId(2), requested, includeUnmapped = true)
         val boltFromLoadNode = client.loadNode(PdmNodeId(3), requested, includeUnmapped = true)
 
@@ -663,8 +663,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         val structure = fake.client().loadTree(query(1, AttributeKey.Designation))
         val nodeById = fake.client().loadNode(PdmNodeId(6), setOf(AttributeKey.Designation))
 
-        structure.usages.single().child.key shouldBe NodeKey.Missing
-        structure.usages.single().child.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
+        structure.usages.single().target.key shouldBe NodeKey.Missing
+        structure.usages.single().target.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
         nodeById.key shouldBe NodeKey.Missing
         nodeById.attributes[AttributeKey.Designation] shouldBe AttributeValue.Empty
     }
@@ -680,7 +680,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
             batches.size shouldBe (count + PROPS_BATCH - 1) / PROPS_BATCH
             batches.all { it.size <= PROPS_BATCH } shouldBe true
             batches.flatten() shouldBe children.map { it.id }
-            root.usages.map { it.child.id } shouldBe children.map { PdmNodeId(it.id) }
+            root.usages.map { it.target.id } shouldBe children.map { PdmNodeId(it.id) }
         }
     }
 
@@ -720,7 +720,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
         val root = fake.client(mapping).loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
 
-        root.usages.map { it.child.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
+        root.usages.map { it.target.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
         fake.linkAttributeCalls.sorted() shouldBe listOf(100, 101)
     }
 })
