@@ -69,6 +69,7 @@ fun main(): Unit = runBlocking {
             depth = 3
             relations = setOf(Relation.Composition, Relation.Document)
             attributeKeys = setOf(AttributeKey.Designation, AttributeKey.Name, AttributeKey.Format)
+            linkAttributeKeys = setOf(LinkAttributeKey.Note)
         }
 
         println("Объект: ${tree.title()} [${tree.kind}]")
@@ -92,6 +93,7 @@ private fun PdmNode.formatText(): String = attributes[AttributeKey.Format].orEls
 // Объект и его данные: документы по связи DOCUMENT (имя, вид, формат) и входящие объекты по COMPOSITION —
 // рекурсивно в пределах загруженной глубины. У входящих объектов — количество и единица: это поля связи
 // (MIN/MAX_QUANTITY, UNIT из get-linked-objects-for-objects), грузятся со списком связей без отдельных запросов.
+// Примечание — атрибут связи COMPOSITION (link.attributes.note), грузится при linkAttributeKeys в запросе.
 // Формат замаплен только для SPECIFICATION и DETAIL_DRAWING, у остальных видов будет «—».
 private fun PdmNode.printStructure(level: Int) {
     usages.filterIsInstance<DocumentUsage>().forEach { usage ->
@@ -103,7 +105,8 @@ private fun PdmNode.printStructure(level: Int) {
         val target = usage.target
         val indent = "  ".repeat(level + 1)
         val unit = usage.unit.text().takeIf { it != "—" }?.let { " $it" }.orEmpty()
-        println("$indent Объект: ${target.title()} [${target.kind}] ×${usage.quantity.orElse("—")}$unit")
+        val note = usage.attributes[LinkAttributeKey.Note].orElse("—")
+        println("$indent Объект: ${target.title()} [${target.kind}] ×${usage.quantity.orElse("—")}$unit Прим.: $note")
         target.printStructure(level + 1)
     }
 }
