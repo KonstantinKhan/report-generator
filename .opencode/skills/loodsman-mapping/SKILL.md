@@ -30,9 +30,6 @@ loodsman-mapping.yaml            (имя типа/атрибута в PDM -> id 
 3. `report-loodsman/src/main/resources/loodsman-mapping.yaml`, секция `kinds:` — `"Имя в Loodsman": ID`.
 4. Тип обязан существовать в метаданных Loodsman (проверка на старте: `snapshot.hasObjectType`). После изменения
    метаданных стенда — `POST /admin/metadata/refresh` (report-server).
-5. Если тип должен попасть в отчёт спецификации — `reports/specification/.../ProductNodeSpecification.kt`:
-    - `group()`: фильтр решает, попадает ли usage в вывод (документы — только разрешённые виды);
-    - `toItemKind()`: вид -> `ItemKind` (порядок enum = порядок групп по ГОСТ 2.106).
 
 Без шага 3 тип становится `PdmNodeKind.Unmapped` (политика `onUnmapped.kind: KEEP`) и выпадает из отчёта молча.
 
@@ -55,10 +52,7 @@ attributes:
    запрошен. Симптом пропуска: в `attributes` узла нет ключа, ошибок нет. Места запроса:
     - серверный флоу: `reports/specification/.../SpecificationQuery.kt` -> `attributes = setOf(...)`;
     - ручная проверка / DSL: `pdmTree { attributeKeys = setOf(...) }`, `pdmNode { ... }` (report-loodsman `Main.kt`).
-5. Если значение нужно в отчёте — добавить поле в домен вывода (`SpecificationItem`), прочитать в
-   `ProductNodeSpecification` (`Text -> значение, Empty -> null/ошибка, NotLoaded -> ошибка`), объявить в
-   `SpecificationDataContext` (билдер даёт схему и значения), забиндить в шаблоне (`gost-spec.yaml`).
-6. Если атрибут является ключевым атрибутом типа в Loodsman — отдельного чтения не нужно: значение берётся из свойства
+5. Если атрибут является ключевым атрибутом типа в Loodsman — отдельного чтения не нужно: значение берётся из свойства
    `product` и попадает в `NodeKey` автоматически.
 
 ## Правила имён
@@ -73,11 +67,9 @@ attributes:
 
 ```bash
 ./gradlew :report-domain:build :report-loodsman:build
-./gradlew :reports:specification:build   # если трогал отчётную часть
 ```
 
 - Ошибка валидации конфига на старте — первое, что читать: она называет точный ключ, которого нет в реестре.
-- Golden-тесты `reports/specification/src/test/resources/golden` обновляются при изменении шаблона/данных.
 - Вики: дополнить таблицы в `docs/wiki/loodsman-integration.md` (разделы «Виды объектов и связи», «Структура YAML
   конфига маппинга»).
 
