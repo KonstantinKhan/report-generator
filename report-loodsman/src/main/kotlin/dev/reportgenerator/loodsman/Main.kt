@@ -68,15 +68,17 @@ fun main(): Unit = runBlocking {
             pdmClient = client
             depth = 2
             relations = setOf(Relation.Document)
-            attributeKeys = setOf(AttributeKey.Name)
+            attributeKeys = setOf(AttributeKey.Name, AttributeKey.Format)
         }
 
         documents.usages.forEach { usage ->
             when (usage) {
                 is DocumentUsage ->
                     when(usage.target.kind) {
-                        is PdmNodeKind.AssemblyDrawing ->
-                            println(usage.target.kind)
+                        is PdmNodeKind.Specification ->
+                            usage.target.attributes.forEach { (key, value) ->
+                                println("$key: $value")
+                            }
                         else -> {}
                     }
                 else -> {}

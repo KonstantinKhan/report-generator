@@ -16,7 +16,8 @@ object Registries {
             "MATERIAL" to PdmNodeKind.Material,
             "ASSEMBLY_DRAWING" to PdmNodeKind.AssemblyDrawing,
             "COMPLEX" to PdmNodeKind.Complex,
-            "KIT" to PdmNodeKind.Kit
+            "KIT" to PdmNodeKind.Kit,
+            "SPECIFICATION" to PdmNodeKind.Specification,
         )
     )
 
@@ -35,7 +36,8 @@ object Registries {
             "mass" to AttributeKey.Mass,
             "companyName" to AttributeKey.CompanyName,
             "designation" to AttributeKey.Designation,
-            "name" to AttributeKey.Name
+            "name" to AttributeKey.Name,
+            "format" to AttributeKey.Format
         )
     )
 

@@ -7,6 +7,7 @@ kinds:
   Прочее изделие: OTHER
   Материал по КД: MATERIAL
   Комплект: KIT
+  Спецификация: SPECIFICATION
 
 relations:
   - link: "Состоит из ..."
@@ -33,6 +34,9 @@ attributes:
     byKind:
       ASSEMBLY: Наименование предприятия
       PART: Наименование предприятия
+  format:
+    byKind:
+      SPECIFICATION: Формат
 
 properties:
   version: VERSION

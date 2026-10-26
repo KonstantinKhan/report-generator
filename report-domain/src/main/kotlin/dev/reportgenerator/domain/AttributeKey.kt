@@ -9,5 +9,7 @@ sealed interface AttributeKey {
 
     data object Name : AttributeKey
 
+    data object Format: AttributeKey
+
     data class Unmapped(val pdmName: String) : AttributeKey
 }
