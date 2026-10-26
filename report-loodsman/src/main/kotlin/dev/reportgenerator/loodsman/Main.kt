@@ -7,7 +7,6 @@ import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.NodeKey
 import dev.reportgenerator.domain.PdmNode
-import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.orElse
 import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
@@ -63,27 +62,17 @@ fun main(): Unit = runBlocking {
 //        }
 //        println("Узел: ${single.title()} [${single.kind}] ключ: ${single.key.text()}")
 
-        val documents = pdmTree {
-            id = 5697
+        val tree = pdmTree {
+            id = 5693
             pdmClient = client
-            depth = 2
-            relations = setOf(Relation.Document)
-            attributeKeys = setOf(AttributeKey.Name, AttributeKey.Format)
+            // depth = уровни обхода: 3 — у корня и у двух уровней состава будут загружены и документы.
+            depth = 3
+            relations = setOf(Relation.Composition, Relation.Document)
+            attributeKeys = setOf(AttributeKey.Designation, AttributeKey.Name, AttributeKey.Format)
         }
 
-        documents.usages.forEach { usage ->
-            when (usage) {
-                is DocumentUsage ->
-                    when(usage.target.kind) {
-                        is PdmNodeKind.Specification ->
-                            usage.target.attributes.forEach { (key, value) ->
-                                println("$key: $value")
-                            }
-                        else -> {}
-                    }
-                else -> {}
-            }
-        }
+        println("Объект: ${tree.title()} [${tree.kind}]")
+        tree.printStructure(level = 0)
 
     } catch (e: LoodsmanApiException) {
         logger.error(e.message)
@@ -95,6 +84,29 @@ fun main(): Unit = runBlocking {
 
 private fun PdmNode.title(): String =
     "${attributes[AttributeKey.Designation].orElse("—")} / ${attributes[AttributeKey.Name].orElse("—")}"
+
+private fun PdmNode.nameText(): String = attributes[AttributeKey.Name].orElse("—")
+
+private fun PdmNode.formatText(): String = attributes[AttributeKey.Format].orElse("—")
+
+// Объект и его данные: документы по связи DOCUMENT (имя, вид, формат) и входящие объекты по COMPOSITION —
+// рекурсивно в пределах загруженной глубины. У входящих объектов — количество и единица: это поля связи
+// (MIN/MAX_QUANTITY, UNIT из get-linked-objects-for-objects), грузятся со списком связей без отдельных запросов.
+// Формат замаплен только для SPECIFICATION и DETAIL_DRAWING, у остальных видов будет «—».
+private fun PdmNode.printStructure(level: Int) {
+    usages.filterIsInstance<DocumentUsage>().forEach { usage ->
+        val target = usage.target
+        val indent = "  ".repeat(level + 1)
+        println("$indent Документ: ${target.nameText()} [${target.kind}] Формат: ${target.formatText()}")
+    }
+    usages.filterIsInstance<CompositionUsage>().forEach { usage ->
+        val target = usage.target
+        val indent = "  ".repeat(level + 1)
+        val unit = usage.unit.text().takeIf { it != "—" }?.let { " $it" }.orEmpty()
+        println("$indent Объект: ${target.title()} [${target.kind}] ×${usage.quantity.orElse("—")}$unit")
+        target.printStructure(level + 1)
+    }
+}
 
 private fun NodeKey.text(): String = when (this) {
     is NodeKey.Value -> "${attribute}=$text"

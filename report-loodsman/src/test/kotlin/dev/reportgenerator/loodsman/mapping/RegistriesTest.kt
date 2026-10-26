@@ -19,6 +19,8 @@ class RegistriesTest : ShouldSpec({
             Registries.itemKinds.values.shouldContain(PdmNodeKind.AssemblyDrawing)
             Registries.itemKinds.values.shouldContain(PdmNodeKind.Complex)
             Registries.itemKinds.values.shouldContain(PdmNodeKind.Kit)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Specification)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.DetailDrawing)
         }
 
         should("throw error for unknown item kind") {

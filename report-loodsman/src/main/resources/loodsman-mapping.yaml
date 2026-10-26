@@ -8,6 +8,7 @@ kinds:
   Материал по КД: MATERIAL
   Комплект: KIT
   Спецификация: SPECIFICATION
+  Чертеж детали: DETAIL_DRAWING
 
 relations:
   - link: "Состоит из ..."
@@ -37,6 +38,7 @@ attributes:
   format:
     byKind:
       SPECIFICATION: Формат
+      DETAIL_DRAWING: Формат
 
 properties:
   version: VERSION

@@ -191,6 +191,8 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 | Тип Loodsman | `PdmNodeKind` | `ItemKind` (спецификация) |
 |---|---|---|
 | Сборочный чертеж | `AssemblyDrawing` (id `ASSEMBLY_DRAWING`) | DOCUMENTATION |
+| Спецификация | `Specification` (id `SPECIFICATION`) | — (в отчётной части маппинг не задан) |
+| Чертеж детали | `DetailDrawing` (id `DETAIL_DRAWING`) | — (в отчётной части маппинг не задан) |
 | Комплекс | `Complex` | COMPLEX |
 | Сборочная единица | `Assembly` | ASSEMBLY |
 | Деталь | `Part` | PART |
@@ -292,6 +294,8 @@ kinds:                      # имя типа в PDM -> id вида (точно�
   Прочее изделие: OTHER
   Материал по КД: MATERIAL
   Комплект: KIT
+  Спецификация: SPECIFICATION
+  Чертеж детали: DETAIL_DRAWING
 
 relations:                  # правила связей: список (см. «Правила связей»)
   - link: "Состоит из ..."  # прямое имя типа связи в Loodsman
@@ -316,6 +320,10 @@ attributes:                 # атрибуты узла: id ключа моде�
     byKind:
       ASSEMBLY: Наименование предприятия
       PART: Наименование предприятия
+  format:                   # формат есть только у спецификации и чертежа детали: общего name нет
+    byKind:
+      SPECIFICATION: Формат
+      DETAIL_DRAWING: Формат
 
 properties:                 # поля узла из свойств объекта (get-prop-objects): PRODUCT, VERSION, STATE, TYPE
   version: VERSION

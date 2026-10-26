@@ -18,6 +18,7 @@ object Registries {
             "COMPLEX" to PdmNodeKind.Complex,
             "KIT" to PdmNodeKind.Kit,
             "SPECIFICATION" to PdmNodeKind.Specification,
+            "DETAIL_DRAWING" to PdmNodeKind.DetailDrawing,
         )
     )
 

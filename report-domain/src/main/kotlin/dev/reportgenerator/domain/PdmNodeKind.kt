@@ -19,5 +19,7 @@ sealed interface PdmNodeKind {
 
     data object Specification: PdmNodeKind
 
+    data object DetailDrawing: PdmNodeKind
+
     data class Unmapped(val pdmName: String) : PdmNodeKind
 }
