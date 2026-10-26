@@ -335,7 +335,7 @@ link:
     quantityMax: MAX_QUANTITY
     unit: UNIT                  # текстовое: UNIT
   attributes:               # атрибуты связей модели: id ключа модели -> список правил
-    position:               # встроенный ключ: всегда загружается, попадает в Usage.position
+    position:               # встроенный: без запроса из query (COMPOSITION), попадает в CompositionUsage.position
       - relation: COMPOSITION
         name: Позиция
     note:
@@ -363,9 +363,12 @@ onUnmapped:
 - `parent`, `child` — множества id видов родителя/ребёнка (пусто = для всех);
 - `name` — имя атрибута связи в PDM.
 
-Ключ `position` встроенный: он загружается всегда и проецируется в типизированное поле `Usage.position`
-(в `Usage.attributes` не дублируется), поэтому в `StructureQuery.linkAttributes` его указывать нельзя —
-`LoodsmanApiException`. Остальные ключи (`note`) загружаются только по запросу. Правило выбирается по специфичности:
+Ключ `position` встроенный: в `StructureQuery.linkAttributes` его указывать нельзя — `LoodsmanApiException`.
+Он не запрашивается, а вычисляется при сборке дерева: только для COMPOSITION, по правилу пары видов; значение
+ищется среди атрибутов связи и проецируется в типизированное поле `CompositionUsage.position` (в
+`Usage.attributes` не дублируется). Нет правила под пару видов или значения → `Field.Missing`; отдельного запроса
+ради позиции нет — она читается из тех же `get-link-attributes`, что и остальные атрибуты связи.
+Остальные ключи (`note`) загружаются только по запросу. Правило выбирается по специфичности:
 оба селектора (3) > только `child` (2) > только `parent` (1) > без селекторов (0). Пересечение одинаково специфичных
 правил — ошибка валидации.
 
@@ -536,8 +539,9 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 `Value` (значение есть), `Missing` (в PDM пусто), `NotLoaded` (не запрашивалось). `null` в API нет. Доступ —
 `orElse(default)`, значение по умолчанию вызывающий указывает явно: `node.version.orElse("—")`.
 `Missing` даёт `default`, `NotLoaded` бросает `IllegalStateException`: обращение к незапрошенному значению —
-ошибка вызывающего кода, а не пустая ячейка. Адаптер `Field.NotLoaded` не создаёт (версия и состояние заполняются
-всегда), оно остаётся значением по умолчанию у вручную собранных `PdmNode` в тестах.
+ошибка вызывающего кода, а не пустая ячейка. Адаптер `Field.NotLoaded` не создаёт (позиция, единица, версия и
+состояние всегда `Value`/`Missing` — незапрошенными они не бывают), оно остаётся значением по умолчанию у вручную
+собранных `PdmNode` в тестах.
 
 Значения атрибутов (`PdmNode.attributes`, `Usage.attributes`) читаются так же: `attributes[ключ].orElse("—")`.
 Это функция на `AttributeValue?`: `Text` даёт текст, `Number` — число строкой, `Empty` («запрошено, значения нет»)
@@ -551,7 +555,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - **Связанный узел** (`Usage.target`) — поле переименовано из `Usage.child`. Для `FORWARD` это потомок, для `INVERSE` — сосед
   по связи (см. «Правила связей»). `Usage` — `CompositionUsage`, `DocumentUsage`, `TechnologicalPartUsage`, `UnmappedUsage`.
   `TechnologicalPartUsage` в спецификацию не попадает.
-- **Позиция** (`Usage.position`) — выбирается по правилам ключа `position` в `mapping.link.attributes` (`select(relation, parentKind, childKind)`).
+- **Позиция** (`CompositionUsage.position`) — выбирается по правилам ключа `position` в `mapping.link.attributes` (`select(relation, parentKind, childKind)`).
   Если есть правило, ищется атрибут связи с именем из правила в ответе `/get-link-attributes`. Значение преобразуется
   в `Int`: успешно → `Field.Value(число)`, нет → `Field.Missing`.
 - **Атрибуты связи** (`Usage.attributes`) — только ключи из `query.linkAttributes`. Для каждого ключа ищется список
@@ -577,7 +581,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 | Атрибуты узла | атрибуты объекта (`get-info-about-version-mode-3`) | `attributes` (+ `byKind`) | `PdmNode.attributes` |
 | Количество | поля связи `minQuantity`, `maxQuantity` | `link.fields.quantityMin`, `quantityMax` | `Usage.quantity` |
 | Единица | поле связи `unit` | `link.fields.unit` | `Usage.unit` |
-| Позиция | атрибут связи (`get-link-attributes`) | `link.attributes.position` | `Usage.position` |
+| Позиция | атрибут связи (`get-link-attributes`) | `link.attributes.position` | `CompositionUsage.position` |
 | Прочие атрибуты связи | атрибуты связи (`get-link-attributes`) | `link.attributes.<ключ>` | `Usage.attributes` |
 | Тип связи | `idLinkType` + `get-link-list` (имя `link`) | `relations` (`as`, `direction`, `from`) | `Usage.relation` |
 | Связанный узел | `idChild` ответа `get-linked-objects-for-objects` | — | `Usage.target` (для `INVERSE` — сосед, не потомок) |
