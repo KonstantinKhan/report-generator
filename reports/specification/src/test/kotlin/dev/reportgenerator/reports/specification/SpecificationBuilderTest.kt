@@ -118,11 +118,11 @@ class SpecificationBuilderTest {
         val table = doc.elements.filterIsInstance<IrTable>().single()
         val row = table.content.filterIsInstance<IrGroup>().single().rows.single()
 
-        // format, zone, position, designation, name, quantity, note
+        // format, zone, position, designation, name, quantity, note (note is left aligned)
         val expectedAligns = listOf(
             TextAlign.CENTER, TextAlign.CENTER, TextAlign.CENTER,
             TextAlign.LEFT, TextAlign.LEFT,
-            TextAlign.CENTER, TextAlign.CENTER
+            TextAlign.CENTER, TextAlign.LEFT
         )
         assertEquals(expectedAligns, row.cells.map { it.align })
     }

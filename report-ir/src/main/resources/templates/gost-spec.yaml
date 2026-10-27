@@ -221,7 +221,7 @@ blocks:
         - {id: designation, width: 70}
         - {id: name, width: 63}
         - {id: quantity, width: 10, stick: last, align: center}
-        - {id: note, width: 22, stick: last, align: center}
+        - {id: note, width: 22, stick: last, align: left}
       header:
         height: 15
         repeat: true               # on every page
@@ -243,7 +243,8 @@ blocks:
           position: {bind: "${item.position}", optional: true, style: data}
           designation: {bind: "${item.designation}", optional: true, style: data}
           name: {bind: "${item.name}", style: data}
-          # materials: up to 2 decimals, trailing zeros trimmed, decimal comma (1,5; 0,35; 3). Every other section
+          # materials: the number as is, no rounding (up to 60 decimals: the pattern limit), trailing zeros trimmed,
+          # decimal comma (1,5; 0,35; 0,000002; 3). Every other section
           # is a whole count (rounded half up): Loodsman counts them in pieces.
           quantity:
             style: data
@@ -252,7 +253,7 @@ blocks:
                 text: ""
               - where: {field: section, eq: MATERIAL}
                 bind: "${item.quantity}"
-                format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
+                format: {pattern: "0.############################################################", locale: ru, rounding: HALF_UP}
             bind: "${item.quantity}"
             format: {pattern: "0", rounding: HALF_UP}
           # the notes of every section, one per line (a material: the unit first, then the note of the link)
