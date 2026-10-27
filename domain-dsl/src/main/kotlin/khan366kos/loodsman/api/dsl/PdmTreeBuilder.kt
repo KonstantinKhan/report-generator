@@ -13,6 +13,7 @@ class PdmTreeBuilder : Builder<PdmNode> {
     var id: Int = -1
     var depth: Int = 1
     var relations: Set<Relation> = setOf(Relation.Composition)
+    var relationDepth: Map<Relation, Int> = emptyMap()
     var attributeKeys: Set<AttributeKey> = emptySet()
     var linkAttributeKeys: Set<LinkAttributeKey> = emptySet()
 
@@ -22,6 +23,7 @@ class PdmTreeBuilder : Builder<PdmNode> {
                 rootId = PdmNodeId(id),
                 depth = depth,
                 relations = relations,
+                relationDepth = relationDepth,
                 attributes = attributeKeys,
                 linkAttributes = linkAttributeKeys,
             )

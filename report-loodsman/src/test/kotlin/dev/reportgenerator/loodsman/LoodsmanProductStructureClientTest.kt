@@ -283,11 +283,13 @@ private val treeEdges = listOf(
 private fun query(
     depth: Int,
     vararg attributes: AttributeKey,
+    relationDepth: Map<Relation, Int> = emptyMap(),
     linkAttributes: Set<LinkAttributeKey> = emptySet(),
     includeUnmapped: Boolean = false
 ) = StructureQuery(
     rootId = PdmNodeId(1),
     depth = depth,
+    relationDepth = relationDepth,
     attributes = attributes.toSet(),
     linkAttributes = linkAttributes,
     includeUnmappedAttributes = includeUnmapped
@@ -426,6 +428,74 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         fake.propsCalls.size shouldBe 3
         fake.propsCalls[1].toSet() shouldBe setOf(2, 3)
         fake.propsCalls[2] shouldBe listOf(4)
+    }
+
+    should("cut composition by relationDepth and keep loading documents deeper") {
+        // Спецификация подключена документом к валу (уровень 2) и к штифту (уровень 3, за отсечкой состава).
+        val spec = Obj(5, "Спецификация", "АБ.005", mapOf("Наименование" to "Спецификация"))
+        val edges = listOf(
+            Edge(1, 2, min = 2.0, max = 2.0, unit = "шт"),
+            Edge(2, 4),
+            Edge(2, 5, link = "Документы"),
+            Edge(4, 5, link = "Документы"),
+        )
+        val fake = FakeLoodsman(tree + spec, edges)
+
+        val root = fake.client().loadTree(
+            StructureQuery(
+                rootId = PdmNodeId(1),
+                depth = 3,
+                relations = setOf(Relation.Composition, Relation.Document),
+                relationDepth = mapOf(Relation.Composition to 1),
+            )
+        )
+
+        val shaftUsage = root.usages.single() as CompositionUsage
+        shaftUsage.target.id shouldBe PdmNodeId(2)
+
+        val specUsage = shaftUsage.target.usages.single()
+        specUsage.relation shouldBe Relation.Document
+        specUsage.target.id shouldBe PdmNodeId(5)
+        specUsage.target.usages shouldBe emptyList()
+
+        // Штифт (состав уровня 2) не запрошен вовсе; у вала и спецификации запрошены только документы.
+        fake.propsCalls shouldBe listOf(listOf(1), listOf(2), listOf(5))
+        fake.linkRequests.map { it.linkTypeIds } shouldBe listOf(listOf(1, 2), listOf(2), listOf(2))
+    }
+
+    should("cap relationDepth by the query depth") {
+        val fake = FakeLoodsman(tree, treeEdges)
+
+        val root = fake.client().loadTree(query(1, relationDepth = mapOf(Relation.Composition to 5)))
+
+        root.usages.map { it.target.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3))
+        root.usages[0].target.usages shouldBe emptyList()
+        fake.propsCalls shouldBe listOf(listOf(1), listOf(2, 3))
+    }
+
+    should("reject a relationDepth key outside the query relations") {
+        val fake = FakeLoodsman(tree, treeEdges)
+        val q = StructureQuery(
+            rootId = PdmNodeId(1),
+            depth = 1,
+            relations = setOf(Relation.Composition),
+            relationDepth = mapOf(Relation.Document to 1),
+        )
+
+        val error = shouldThrow<LoodsmanApiException> { fake.client().loadTree(q) }
+        error.message shouldBe "relationDepth contains 'Document' which is not in the query relations"
+    }
+
+    should("reject a relationDepth below 1") {
+        val fake = FakeLoodsman(tree, treeEdges)
+        val q = StructureQuery(
+            rootId = PdmNodeId(1),
+            depth = 1,
+            relationDepth = mapOf(Relation.Composition to 0),
+        )
+
+        val error = shouldThrow<LoodsmanApiException> { fake.client().loadTree(q) }
+        error.message shouldBe "relationDepth for 'Composition' must be at least 1, got 0"
     }
 
     should("return empty attributes when not requested") {

@@ -38,18 +38,27 @@ class LoodsmanProductStructureClient internal constructor(
         val linkTypes = resolveLinkTypes(snapshot, query.relations)
         query.attributes.forEach { attributeRequests.ruleOf(it) }
         validateLinkAttributes(query)
+        validateRelationDepths(query)
 
         val state = TraversalState()
         var frontier = listOf(rootId)
         var level = 0
+        // Предел раскрытия по связи: relationDepth режет связь раньше общего depth, пустая запись — depth.
+        val effectiveDepths = query.relations.associateWith { relation ->
+            minOf(query.depth, query.relationDepth[relation] ?: query.depth)
+        }
         while (frontier.isNotEmpty()) {
             nodeLoader.loadNodes(frontier, snapshot, state.nodes, query)
             if (level >= query.depth) break
 
+            // Дети следующего уровня по связи появляются, только если уровень не глубже её предела.
+            val levelLinkTypes = linkTypes.filter { level + 1 <= effectiveDepths.getValue(it.rule.relation) }
+            if (levelLinkTypes.isEmpty()) break
+
             val expandable = frontier.filter { state.nodes.getValue(it).kind != null }
             // Тип узла Loodsman нужен для отбора правил: раскрываемый узел имеет вид, значит тип задан.
             val typeNameById = expandable.associateWith { requireNotNull(state.nodes.getValue(it).prop.type) }
-            state.links.putAll(linkLoader.loadLinks(typeNameById, linkTypes))
+            state.links.putAll(linkLoader.loadLinks(typeNameById, levelLinkTypes))
             frontier = expandable.flatMap { id -> state.links.getValue(id).map { it.dto.idChild } }
                 .distinct()
                 .filter { it !in state.nodes }
@@ -85,6 +94,17 @@ class LoodsmanProductStructureClient internal constructor(
             val linkTypeId = snapshot.linkTypeId(rule.link)
                 ?: throw LoodsmanApiException("Link type '${rule.link}' not found in Loodsman metadata")
             LinkTypeRule(linkTypeId, rule)
+        }
+    }
+
+    private fun validateRelationDepths(query: StructureQuery) {
+        for ((relation, limit) in query.relationDepth) {
+            if (relation !in query.relations) {
+                throw LoodsmanApiException("relationDepth contains '$relation' which is not in the query relations")
+            }
+            if (limit < 1) {
+                throw LoodsmanApiException("relationDepth for '$relation' must be at least 1, got $limit")
+            }
         }
     }
 

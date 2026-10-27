@@ -63,10 +63,12 @@ fun main(): Unit = runBlocking {
 //        println("Узел: ${single.title()} [${single.kind}] ключ: ${single.key.text()}")
 
         val tree = pdmTree {
-            id = 5693
+            id = 5697
             pdmClient = client
-            // depth = уровни обхода: 3 — у корня и у двух уровней состава будут загружены и документы.
-            depth = 3
+            // depth = уровни обхода: 2 — документы у корня и у объектов состава первого уровня.
+            depth = Int.MAX_VALUE
+            // Состав раскрывается только до детей корня (уровень 1), глубже — только документы.
+            relationDepth = mapOf(Relation.Composition to 1)
             relations = setOf(Relation.Composition, Relation.Document)
             attributeKeys = setOf(AttributeKey.Designation, AttributeKey.Name, AttributeKey.Format)
             linkAttributeKeys = setOf(LinkAttributeKey.Note)
@@ -91,8 +93,9 @@ private fun PdmNode.nameText(): String = attributes[AttributeKey.Name].orElse("�
 private fun PdmNode.formatText(): String = attributes[AttributeKey.Format].orElse("—")
 
 // Объект и его данные: документы по связи DOCUMENT (имя, вид, формат) и входящие объекты по COMPOSITION —
-// рекурсивно в пределах загруженной глубины. У входящих объектов — количество и единица: это поля связи
-// (MIN/MAX_QUANTITY, UNIT из get-linked-objects-for-objects), грузятся со списком связей без отдельных запросов.
+// рекурсивно в пределах загруженной глубины. У входящих объектов — позиция, количество и единица: это поля
+// связи (позиция — встроенный ключ, quantity/unit из get-linked-objects-for-objects), грузятся со списком
+// связей без отдельных запросов.
 // Примечание — атрибут связи COMPOSITION (link.attributes.note), грузится при linkAttributeKeys в запросе.
 // Формат замаплен только для SPECIFICATION и DETAIL_DRAWING, у остальных видов будет «—».
 private fun PdmNode.printStructure(level: Int) {
@@ -106,7 +109,7 @@ private fun PdmNode.printStructure(level: Int) {
         val indent = "  ".repeat(level + 1)
         val unit = usage.unit.text().takeIf { it != "—" }?.let { " $it" }.orEmpty()
         val note = usage.attributes[LinkAttributeKey.Note].orElse("—")
-        println("$indent Объект: ${target.title()} [${target.kind}] ×${usage.quantity.orElse("—")}$unit Прим.: $note")
+        println("$indent Объект: Поз.${usage.position.text()} ${target.title()} [${target.kind}] ×${usage.quantity.orElse("—")}$unit Прим.: $note")
         target.printStructure(level + 1)
     }
 }

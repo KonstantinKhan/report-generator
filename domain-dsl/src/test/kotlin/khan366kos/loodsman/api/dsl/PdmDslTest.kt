@@ -50,6 +50,7 @@ class PdmDslTest : ShouldSpec({
             id = 7
             depth = 3
             relations = setOf(Relation.Composition, Relation.Document)
+            relationDepth = mapOf(Relation.Composition to 2)
             attributeKeys = setOf(AttributeKey.Mass)
             linkAttributeKeys = setOf(LinkAttributeKey.Note)
         }
@@ -59,6 +60,7 @@ class PdmDslTest : ShouldSpec({
                 rootId = PdmNodeId(7),
                 depth = 3,
                 relations = setOf(Relation.Composition, Relation.Document),
+                relationDepth = mapOf(Relation.Composition to 2),
                 attributes = setOf(AttributeKey.Mass),
                 linkAttributes = setOf(LinkAttributeKey.Note),
             )
