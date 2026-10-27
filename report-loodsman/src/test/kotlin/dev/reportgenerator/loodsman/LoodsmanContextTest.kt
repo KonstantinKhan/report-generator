@@ -29,9 +29,10 @@ private val confirmedLinkTypes = listOf("Состоит из ...", "Докуме
 private val confirmedObjectTypes = listOf(
     "Деталь", "Сборочная единица", "Сборочный чертеж", "Комплекс",
     "Стандартное изделие", "Прочее изделие", "Материал по КД", "Комплект",
+    "Спецификация", "Чертеж детали",
 )
 private val confirmedAttributes = listOf(
-    "Наименование", "Обозначение", "Масса", "Наименование предприятия", "Позиция", "Примечание",
+    "Наименование", "Обозначение", "Масса", "Наименование предприятия", "Позиция", "Примечание", "Формат",
 )
 
 private fun api(typeListStatus: HttpStatusCode = HttpStatusCode.OK): LoodsmanApi {

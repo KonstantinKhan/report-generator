@@ -242,9 +242,10 @@ class MappingConfigValidatorTest : ShouldSpec({
             objectTypes = listOf(
                 "Деталь", "Сборочная единица", "Сборочный чертеж", "Комплекс",
                 "Стандартное изделие", "Прочее изделие", "Материал по КД", "Комплект",
+                "Спецификация", "Чертеж детали",
             ).mapIndexed { index, name -> ObjectTypeInfo(id = index + 1, typeName = name, keyAttribute = "Обозначение") },
             attributeNames = setOf(
-                "Наименование", "Обозначение", "Масса", "Наименование предприятия", "Позиция", "Примечание",
+                "Наименование", "Обозначение", "Масса", "Наименование предприятия", "Позиция", "Примечание", "Формат",
             ),
             version = 1,
             typeLinks = listOf(TypeLinkInfo(typeId1 = 1, typeId2 = 2, idLinkType = 7, direction = -1)),
