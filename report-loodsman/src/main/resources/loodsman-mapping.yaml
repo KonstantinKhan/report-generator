@@ -13,8 +13,13 @@ kinds:
 relations:
   - link: "Состоит из ..."
     as: COMPOSITION
+    from: [Сборочная единица]
   - link: "Документы"
     as: DOCUMENT
+    from:
+      - Сборочная единица
+      - Деталь
+      - Прочее изделие
   - link: "Технологическая ДСЕ для"
     direction: INVERSE
     from: [Деталь]
@@ -39,6 +44,7 @@ attributes:
     byKind:
       SPECIFICATION: Формат
       DETAIL_DRAWING: Формат
+      ASSEMBLY_DRAWING: Формат
 
 properties:
   version: VERSION
