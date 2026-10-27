@@ -155,6 +155,8 @@ private fun PdmNodeKind.toItemKind(): ItemKind? = when (this) {
     PdmNodeKind.Other -> ItemKind.OTHER
     PdmNodeKind.Material -> ItemKind.MATERIAL
     PdmNodeKind.AssemblyDrawing -> ItemKind.DOCUMENTATION
+    PdmNodeKind.Specification -> ItemKind.DOCUMENTATION
+    PdmNodeKind.DetailDrawing -> ItemKind.DOCUMENTATION
     PdmNodeKind.Complex -> ItemKind.COMPLEX
     PdmNodeKind.Kit -> ItemKind.SET
     is PdmNodeKind.Unmapped -> null
