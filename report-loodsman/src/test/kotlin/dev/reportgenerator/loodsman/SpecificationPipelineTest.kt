@@ -246,6 +246,27 @@ class SpecificationPipelineTest : ShouldSpec({
         )
     }
 
+    should("match standard and other products with the product designation attribute in the designation column") {
+        val actual = loadPipeline(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(4, "Стандартное изделие", "ГОСТ 7798-70", mapOf("Обозначение изделия" to "БОЛТ-1")),
+                ParityObj(5, "Прочее изделие", "ИЗД.5", mapOf("Обозначение изделия" to "ИЗД.5-П")),
+            ),
+            edges = listOf(
+                ParityEdge(1, 4, min = 4.0, max = 4.0, unit = "шт"),
+                ParityEdge(1, 5, min = 1.0, max = 1.0),
+            ),
+        )
+
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            standards = listOf(StandardItem(designation = "БОЛТ-1", name = "ГОСТ 7798-70", quantity = 4.0)),
+            others = listOf(OtherItem(designation = "ИЗД.5-П", name = "ИЗД.5", quantity = 1.0)),
+        )
+    }
+
     should("match material with quantity and unit") {
         val actual = loadPipeline(
             objects = listOf(

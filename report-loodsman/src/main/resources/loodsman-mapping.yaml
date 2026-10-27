@@ -32,6 +32,10 @@ requiredRelations:
 attributes:
   designation:
     name: Обозначение
+  productDesignation:
+    byKind:
+      STANDARD: Обозначение изделия
+      OTHER: Обозначение изделия
   name:
     name: Наименование
   mass:

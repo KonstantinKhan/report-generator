@@ -20,9 +20,9 @@ class SpecificationQueryTest : ShouldSpec({
         specificationQuery(PdmNodeId(1)).relations shouldBe setOf(Relation.Composition, Relation.Document)
     }
 
-    should("request designation, name and format attributes") {
+    should("request designation, product designation, name and format attributes") {
         specificationQuery(PdmNodeId(1)).attributes shouldBe
-            setOf(AttributeKey.Designation, AttributeKey.Name, AttributeKey.Format)
+            setOf(AttributeKey.Designation, AttributeKey.ProductDesignation, AttributeKey.Name, AttributeKey.Format)
     }
 
     should("request the note of the composition link") {

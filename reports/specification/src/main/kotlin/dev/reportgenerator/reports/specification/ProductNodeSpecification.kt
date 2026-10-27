@@ -97,7 +97,7 @@ private fun CompositionUsage.toPartItem(): PartItem {
 
 private fun CompositionUsage.toStandardItem(): StandardItem {
     val fields = fields()
-    val (designation, name) = target.designationAndName()
+    val (designation, name) = target.standardDesignationAndName()
     return StandardItem(
         position = fields.position,
         designation = designation,
@@ -109,7 +109,7 @@ private fun CompositionUsage.toStandardItem(): StandardItem {
 
 private fun CompositionUsage.toOtherItem(): OtherItem {
     val fields = fields()
-    val (designation, name) = target.designationAndName()
+    val (designation, name) = target.standardDesignationAndName()
     return OtherItem(
         position = fields.position,
         designation = designation,
@@ -191,22 +191,6 @@ private fun PdmNode.designationAndName(): Pair<String?, String> {
         }
         return null to materialName
     }
-    if (kind == PdmNodeKind.Standard || kind == PdmNodeKind.Other) {
-        val designationText = when (val value = attributeText(AttributeKey.Designation)) {
-            is TextState.Value -> value.text
-            is TextState.Missing -> null
-            is TextState.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: designation is not loaded")
-        }
-        return when (val value = attributeText(AttributeKey.Name)) {
-            // Old data form: the name is set, the designation column is kept as is.
-            is TextState.Value -> designationText to value.text
-            // New data form: the key value is in the designation, so it moves to the name column.
-            is TextState.Missing -> null to (
-                designationText ?: throw SpecificationDataException("Node ${id.asInt()}: name and designation are both missing")
-            )
-            is TextState.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: name is not loaded")
-        }
-    }
     val designationText = when (val value = attributeText(AttributeKey.Designation)) {
         is TextState.Value -> value.text
         is TextState.Missing -> null
@@ -216,6 +200,22 @@ private fun PdmNode.designationAndName(): Pair<String?, String> {
         is TextState.Value -> value.text
         is TextState.Missing -> designationText
             ?: throw SpecificationDataException("Node ${id.asInt()}: name and designation are both missing")
+        is TextState.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: name is not loaded")
+    }
+    return designationText to nameText
+}
+
+// Standard and other products: the designation column takes the attribute "Обозначение изделия" (missing or not loaded
+// gives an empty cell), the name column takes "Обозначение" (the key of the type, the full name of the product). The name
+// is required, the product has no "Наименование" attribute in Loodsman.
+private fun PdmNode.standardDesignationAndName(): Pair<String?, String> {
+    val designationText = when (val value = attributeText(AttributeKey.ProductDesignation)) {
+        is TextState.Value -> value.text
+        is TextState.Missing, is TextState.NotLoaded -> null
+    }
+    val nameText = when (val value = attributeText(AttributeKey.Designation)) {
+        is TextState.Value -> value.text
+        is TextState.Missing -> throw SpecificationDataException("Node ${id.asInt()}: name is missing for a standard or other product")
         is TextState.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: name is not loaded")
     }
     return designationText to nameText

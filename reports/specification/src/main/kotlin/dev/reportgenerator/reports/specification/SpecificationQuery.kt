@@ -9,12 +9,18 @@ import dev.reportgenerator.domain.StructureQuery
 // Specification needs the root's direct composition and the documents of the root and of its children: the
 // specification (assembly) and the detail drawing (part) of a child give its format. The composition is expanded
 // one level only (relationDepth), so the children of the children stay out; their documents are read (depth 2).
-// Designation, name and format are read from attributes, the note from the link attributes of the composition.
+// Designation, product designation, name and format are read from attributes, the note from the link attributes of the
+// composition. The product designation is set for standard and other products only, for the other kinds it is not read.
 fun specificationQuery(rootId: PdmNodeId): StructureQuery = StructureQuery(
     rootId = rootId,
     depth = 2,
     relations = setOf(Relation.Composition, Relation.Document),
     relationDepth = mapOf(Relation.Composition to 1),
-    attributes = setOf(AttributeKey.Designation, AttributeKey.Name, AttributeKey.Format),
+    attributes = setOf(
+        AttributeKey.Designation,
+        AttributeKey.ProductDesignation,
+        AttributeKey.Name,
+        AttributeKey.Format,
+    ),
     linkAttributes = setOf(LinkAttributeKey.Note),
 )

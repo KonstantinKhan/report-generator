@@ -7,6 +7,8 @@ sealed interface AttributeKey {
 
     data object Designation : AttributeKey
 
+    data object ProductDesignation : AttributeKey
+
     data object Name : AttributeKey
 
     data object Format: AttributeKey

@@ -37,6 +37,7 @@ object Registries {
             "mass" to AttributeKey.Mass,
             "companyName" to AttributeKey.CompanyName,
             "designation" to AttributeKey.Designation,
+            "productDesignation" to AttributeKey.ProductDesignation,
             "name" to AttributeKey.Name,
             "format" to AttributeKey.Format
         )
