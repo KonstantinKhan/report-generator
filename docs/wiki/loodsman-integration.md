@@ -199,12 +199,23 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 | Стандартное изделие | `Standard` | Стандартные изделия (`standards`) |
 | Прочее изделие | `Other` | Прочие изделия (`others`) |
 | Материал по КД | `Material` | Материалы (`materials`) |
+| Форма материала | `MaterialForm` (id `MATERIAL_FORM`) | Материалы (`materials`) через материал по «Изготавливается из ...» (см. ниже) |
 | Комплект | `Kit` | — (раздела нет, пропускается) |
 
 Связи: `relations` в YAML — список правил («Состоит из ...» → `COMPOSITION`, «Документы» → `DOCUMENT`,
 «Технологическая ДСЕ для» → `TECHNOLOGICAL_PART`; правила — в [«Правила связей»](#правила-связей-relations)). Состав идёт по `COMPOSITION`,
 документация (сборочный чертеж) — по `DOCUMENT` (имя связи не проверено на живом стенде; нет связи — группа пуста).
 Количество у документации не нужно. `TECHNOLOGICAL_PART` в спецификацию не попадает (`ProductNodeSpecification` его не выводит).
+
+**Форма материала и «Изготавливается из ...».** Форма (`MaterialForm`) входит в состав сборочной единицы по `COMPOSITION`
+(связь «Состоит из ...», у неё нет атрибутов «Позиция» и «Примечание»). Её материал читается по `MADE_FROM`
+(`Relation.MadeFrom`, `MadeFromUsage`): правило `link: "Изготавливается из ..."`, `direction` FORWARD, `from: [Форма материала]`.
+Правило `from` ограничивает чтение: по другим видам эта связь не раскрывается. `MADE_FROM` не входит в `requiredRelations`,
+поэтому его отсутствие в метаданных ошибкой не считается, но правило с неизвестным именем связи валидатор отклонит.
+В запросе спецификации (`specificationQuery`) `MadeFrom` стоит в `relations`, без своего `relationDepth`: форма на уровне 1
+(предел состава = 1), её связь «Изготавливается из ...» раскрывается до уровня 2 общим `depth = 2`. Материал попадает
+в `MadeFromUsage.target` формы с атрибутами «Обозначение» и «Наименование». Связь материала (положение, количество,
+единица, примечание) берётся с внешней связи «Состоит из ...» формы, а не с «Изготавливается из ...».
 
 Обозначение стандартных и прочих изделий в столбец «Обозначение» берётся из отдельного атрибута Loodsman «Обозначение
 изделия» (правило `productDesignation` с `byKind: {STANDARD, OTHER}`); «Обозначение» (ключевой атрибут, `product`) идёт в
@@ -268,6 +279,11 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 Нормализации (lowercase, `ё` → `е`, схлопывание пробелов) нет. Расхождение имени ловит валидация на старте: ошибка
 перечисляет доступные имена из Loodsman.
 
+**(б3) Материал через форму.** Форма материала (`MaterialForm`) выводится в раздел «Материалы» по материалу из первого
+`MadeFromUsage` формы с видом `Material` (если их несколько, берётся первый). Наименование и обозначение — с узла материала
+(через `designationAndName()`), позиция, количество, единица и примечание — с внешней связи формы. Форма без материала
+(нет `MadeFromUsage` с видом `Material`) — `SpecificationDataException` с id формы. Код: `materialNode()` в `ProductNodeSpecification.kt`.
+
 **(г) Неизвестные виды.** `PdmNodeKind.Unmapped` (политика `onUnmapped.kind: KEEP` сохраняет такой вид в домене) и
 `UnmappedUsage` спецификация пропускает, в отчёт не попадают. Узел с неизвестным видом при `KEEP` раскрывается дальше:
 его связи читаются, потомки попадают в дерево (пример: «Технологическая деталь»). Если неизвестен вид самого корня, загрузка падает
@@ -319,6 +335,7 @@ kinds:                      # имя типа в PDM -> id вида (точно�
   Комплект: KIT
   Спецификация: SPECIFICATION
   Чертеж детали: DETAIL_DRAWING
+  Форма материала: MATERIAL_FORM
 
 relations:                  # правила связей: список (см. «Правила связей»)
   - link: "Состоит из ..."  # прямое имя типа связи в Loodsman
@@ -331,6 +348,9 @@ relations:                  # правила связей: список (см. �
     direction: INVERSE      # по умолчанию FORWARD
     from: [Деталь]          # с каких типов узлов читать; пусто — любые
     as: TECHNOLOGICAL_PART
+  - link: "Изготавливается из ..."
+    as: MADE_FROM
+    from: [Форма материала]
 
 requiredRelations:          # смыслы из relations (поле as), которые должны существовать в метаданных PDM, иначе LoodsmanApiException
   - COMPOSITION
@@ -617,7 +637,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 Текст для пустых значений (прочерк, «отсутствует», пустая строка) выбирает отчёт, модель его не хранит.
 
 - **Связанный узел** (`Usage.target`) — поле переименовано из `Usage.child`. Для `FORWARD` это потомок, для `INVERSE` — сосед
-  по связи (см. «Правила связей»). `Usage` — `CompositionUsage`, `DocumentUsage`, `TechnologicalPartUsage`, `UnmappedUsage`.
+  по связи (см. «Правила связей»). `Usage` — `CompositionUsage`, `DocumentUsage`, `TechnologicalPartUsage`, `MadeFromUsage`, `UnmappedUsage`.
   `TechnologicalPartUsage` в спецификацию не попадает.
 - **Позиция** (`CompositionUsage.position`) — выбирается по правилам ключа `position` в `mapping.link.attributes` (`select(relation, parentKind, childKind)`).
   Если есть правило, ищется атрибут связи с именем из правила в ответе `/get-link-attributes`. Значение преобразуется

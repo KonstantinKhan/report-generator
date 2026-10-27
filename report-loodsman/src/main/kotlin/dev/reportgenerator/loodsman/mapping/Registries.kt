@@ -19,6 +19,7 @@ object Registries {
             "KIT" to PdmNodeKind.Kit,
             "SPECIFICATION" to PdmNodeKind.Specification,
             "DETAIL_DRAWING" to PdmNodeKind.DetailDrawing,
+            "MATERIAL_FORM" to PdmNodeKind.MaterialForm,
         )
     )
 
@@ -27,7 +28,8 @@ object Registries {
         mapOf(
             "COMPOSITION" to Relation.Composition,
             "DOCUMENT" to Relation.Document,
-            "TECHNOLOGICAL_PART" to Relation.TechnologicalPart
+            "TECHNOLOGICAL_PART" to Relation.TechnologicalPart,
+            "MADE_FROM" to Relation.MadeFrom,
         )
     )
 

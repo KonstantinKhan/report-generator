@@ -6,6 +6,7 @@ import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
+import dev.reportgenerator.domain.MadeFromUsage
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Quantity
@@ -36,7 +37,7 @@ fun PdmNode.toSpecificationData(): SpecificationData {
         parts = composition.ofKind(PdmNodeKind.Part).map { it.toPartItem() }.sortedByPosition(),
         standards = composition.ofKind(PdmNodeKind.Standard).map { it.toStandardItem() }.sortedByPosition(),
         others = composition.ofKind(PdmNodeKind.Other).map { it.toOtherItem() }.sortedByPosition(),
-        materials = composition.ofKind(PdmNodeKind.Material).map { it.toMaterialItem() }.sortedByPosition(),
+        materials = composition.filter { it.target.kind in materialKinds }.map { it.toMaterialItem() }.sortedByPosition(),
     )
 }
 
@@ -119,10 +120,14 @@ private fun CompositionUsage.toOtherItem(): OtherItem {
     )
 }
 
-// The unit of a material is the first note, the note of the composition link follows it.
+// Kinds of the materials section: a material itself, or a material form whose material is read from its usages.
+private val materialKinds = setOf(PdmNodeKind.Material, PdmNodeKind.MaterialForm)
+
+// The unit of a material is the first note, the note of the composition link follows it. A material form takes its
+// name and designation from its material, the position, quantity, unit and note come from the composition link.
 private fun CompositionUsage.toMaterialItem(): MaterialItem {
     val fields = fields()
-    val (designation, name) = target.designationAndName()
+    val (designation, name) = target.materialNode().designationAndName()
     return MaterialItem(
         position = fields.position,
         designation = designation,
@@ -130,6 +135,14 @@ private fun CompositionUsage.toMaterialItem(): MaterialItem {
         quantity = fields.quantity,
         notes = listOfNotNull(fields.unit, noteOf()),
     )
+}
+
+// The material of a material form: the first material among its usages (a form may have several, the first one wins).
+private fun PdmNode.materialNode(): PdmNode {
+    if (kind != PdmNodeKind.MaterialForm) return this
+    return usages.filterIsInstance<MadeFromUsage>()
+        .firstOrNull { it.target.kind == PdmNodeKind.Material }?.target
+        ?: throw SpecificationDataException("Node ${id.asInt()}: material form has no material")
 }
 
 // Format of the sheet: the mark "*)" and the value of a complex format (with the letter x), the value itself otherwise.

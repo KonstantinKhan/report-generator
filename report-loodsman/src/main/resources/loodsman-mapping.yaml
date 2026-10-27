@@ -9,6 +9,7 @@ kinds:
   Комплект: KIT
   Спецификация: SPECIFICATION
   Чертеж детали: DETAIL_DRAWING
+  Форма материала: MATERIAL_FORM
 
 relations:
   - link: "Состоит из ..."
@@ -24,6 +25,9 @@ relations:
     direction: INVERSE
     from: [Деталь]
     as: TECHNOLOGICAL_PART
+  - link: "Изготавливается из ..."
+    as: MADE_FROM
+    from: [Форма материала]
 
 requiredRelations:
   - COMPOSITION

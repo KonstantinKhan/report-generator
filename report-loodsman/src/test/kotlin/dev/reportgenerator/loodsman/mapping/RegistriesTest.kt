@@ -21,6 +21,7 @@ class RegistriesTest : ShouldSpec({
             Registries.itemKinds.values.shouldContain(PdmNodeKind.Kit)
             Registries.itemKinds.values.shouldContain(PdmNodeKind.Specification)
             Registries.itemKinds.values.shouldContain(PdmNodeKind.DetailDrawing)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.MaterialForm)
         }
 
         should("throw error for unknown item kind") {
@@ -38,6 +39,7 @@ class RegistriesTest : ShouldSpec({
         should("contain known Relation variants") {
             Registries.relations.values.shouldContain(Relation.Composition)
             Registries.relations.values.shouldContain(Relation.Document)
+            Registries.relations.values.shouldContain(Relation.MadeFrom)
         }
 
         should("throw error for unknown relation") {

@@ -5,6 +5,7 @@ import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
+import dev.reportgenerator.domain.MadeFromUsage
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Quantity
@@ -69,6 +70,7 @@ internal class TreeAssembler(
                     }
 
                     Relation.Document -> DocumentUsage(target = childNode, attributes = attrs)
+                    Relation.MadeFrom -> MadeFromUsage(target = childNode, attributes = attrs)
                     Relation.TechnologicalPart -> TechnologicalPartUsage(target = childNode, attributes = attrs)
                     is Relation.Unmapped -> UnmappedUsage(
                         relation = link.relation,

@@ -16,8 +16,8 @@ class SpecificationQueryTest : ShouldSpec({
         specificationQuery(PdmNodeId(1)).relationDepth shouldBe mapOf(Relation.Composition to 1)
     }
 
-    should("request composition and document relations only") {
-        specificationQuery(PdmNodeId(1)).relations shouldBe setOf(Relation.Composition, Relation.Document)
+    should("request composition, document and made-from relations only") {
+        specificationQuery(PdmNodeId(1)).relations shouldBe setOf(Relation.Composition, Relation.Document, Relation.MadeFrom)
     }
 
     should("request designation, product designation, name and format attributes") {

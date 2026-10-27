@@ -7,5 +7,7 @@ sealed interface Relation {
 
     data object TechnologicalPart : Relation
 
+    data object MadeFrom : Relation
+
     data class Unmapped(val pdmName: String) : Relation
 }

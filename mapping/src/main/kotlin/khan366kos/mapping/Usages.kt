@@ -5,6 +5,7 @@ import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
+import dev.reportgenerator.domain.MadeFromUsage
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.Relation
@@ -35,6 +36,7 @@ fun usagesOf(links: List<ResolvedLink>): List<Usage> = links.map { link ->
         )
 
         Relation.Document -> DocumentUsage(target = link.child, attributes = attrs)
+        Relation.MadeFrom -> MadeFromUsage(target = link.child, attributes = attrs)
         Relation.TechnologicalPart -> TechnologicalPartUsage(target = link.child, attributes = attrs)
         is Relation.Unmapped -> UnmappedUsage(
             relation = link.relation,

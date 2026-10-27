@@ -2,8 +2,10 @@ package dev.reportgenerator.loodsman
 
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
+import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.DocumentUsage
+import dev.reportgenerator.domain.MadeFromUsage
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
@@ -13,11 +15,14 @@ import dev.reportgenerator.reports.specification.MaterialItem
 import dev.reportgenerator.reports.specification.OtherItem
 import dev.reportgenerator.reports.specification.PartItem
 import dev.reportgenerator.reports.specification.SpecificationData
+import dev.reportgenerator.reports.specification.SpecificationDataException
 import dev.reportgenerator.reports.specification.StandardItem
 import dev.reportgenerator.reports.specification.specificationQuery
 import dev.reportgenerator.reports.specification.toSpecificationData
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -40,8 +45,10 @@ import io.github.konstantinkhan.loodsman.installLoodsman
 
 private const val COMPOSITION_LINK = "Состоит из ..."
 private const val DOCUMENT_LINK = "Документы"
+private const val MADE_FROM_LINK = "Изготавливается из ..."
 private const val COMPOSITION_LINK_ID = 1
 private const val DOCUMENT_LINK_ID = 2
+private const val MADE_FROM_LINK_ID = 3
 
 // Ключевой атрибут всех видов: значение лежит в product объекта.
 private const val KEY_ATTRIBUTE = "Обозначение"
@@ -82,7 +89,7 @@ private class ParityLoodsman(
                 "/api/v4/MetaData/cache/version" -> JsonPrimitive(1)
                 "/api/v4/MetaData/get-attribute-list-2" -> buildJsonArray {}
                 "/api/v4/MetaData/get-link-list" -> buildJsonArray {
-                    listOf(COMPOSITION_LINK_ID to COMPOSITION_LINK, DOCUMENT_LINK_ID to DOCUMENT_LINK).forEach { (id, name) ->
+                    listOf(COMPOSITION_LINK_ID to COMPOSITION_LINK, DOCUMENT_LINK_ID to DOCUMENT_LINK, MADE_FROM_LINK_ID to MADE_FROM_LINK).forEach { (id, name) ->
                         add(buildJsonObject {
                             put("id", id)
                             put("name", name)
@@ -154,6 +161,7 @@ private class ParityLoodsman(
     private fun linkTypeId(name: String): Int = when (name) {
         COMPOSITION_LINK -> COMPOSITION_LINK_ID
         DOCUMENT_LINK -> DOCUMENT_LINK_ID
+        MADE_FROM_LINK -> MADE_FROM_LINK_ID
         else -> error("Unknown link $name")
     }
 
@@ -408,6 +416,62 @@ class SpecificationPipelineTest : ShouldSpec({
                 ),
             ),
         )
+    }
+
+    should("match a material form by the material it is made from with the quantity, unit and note of the composition") {
+        val actual = loadPipeline(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(5, "Форма материала", "ФОРМА 001", mapOf("Наименование" to "Форма")),
+                ParityObj(6, "Материал по КД", "Пенополиуретан ППУ 202-1", mapOf("Наименование" to "ППУ")),
+            ),
+            edges = listOf(
+                ParityEdge(1, 5, min = 2.5, max = 2.5, unit = "мл", note = "Вспенить"),
+                ParityEdge(5, 6, link = MADE_FROM_LINK),
+            ),
+        )
+
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            materials = listOf(
+                MaterialItem(name = "Пенополиуретан ППУ 202-1", quantity = 2.5, notes = listOf("мл", "Вспенить")),
+            ),
+        )
+    }
+
+    should("load the material of a material form at depth two with its attributes") {
+        val tree = loadSpecificationTree(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(5, "Форма материала", "ФОРМА 001"),
+                ParityObj(6, "Материал по КД", "Пенополиуретан ППУ 202-1", mapOf("Наименование" to "ППУ")),
+            ),
+            edges = listOf(
+                ParityEdge(1, 5, min = 1.0, max = 1.0, unit = "мл"),
+                ParityEdge(5, 6, link = MADE_FROM_LINK),
+            ),
+        )
+
+        val form = tree.usages.filterIsInstance<CompositionUsage>().single().target
+        form.kind shouldBe PdmNodeKind.MaterialForm
+        val material = form.usages.filterIsInstance<MadeFromUsage>().single().target
+        material.kind shouldBe PdmNodeKind.Material
+        material.attributes[AttributeKey.Designation] shouldBe AttributeValue.Text("Пенополиуретан ППУ 202-1")
+    }
+
+    should("fail on a material form without a material") {
+        val failure = shouldThrow<SpecificationDataException> {
+            loadPipeline(
+                objects = listOf(
+                    ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                    ParityObj(5, "Форма материала", "ФОРМА 001"),
+                ),
+                edges = listOf(ParityEdge(1, 5, min = 1.0, max = 1.0, unit = "мл")),
+            )
+        }
+
+        failure.message shouldContain "5"
     }
 
     should("load the composition of the root only and the documents of its children") {

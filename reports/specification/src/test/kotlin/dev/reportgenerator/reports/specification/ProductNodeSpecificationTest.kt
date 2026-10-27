@@ -6,6 +6,7 @@ import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
+import dev.reportgenerator.domain.MadeFromUsage
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.PdmNode
@@ -73,6 +74,15 @@ private fun composition(
 )
 
 private fun document(child: PdmNode) = DocumentUsage(child)
+
+private fun madeFrom(child: PdmNode) = MadeFromUsage(child)
+
+// A material form with the materials it is made from (the made-from usages of the form).
+private fun materialFormOf(id: Int, vararg materials: PdmNode) = node(
+    id = id,
+    kind = PdmNodeKind.MaterialForm,
+    usages = materials.map { madeFrom(it) },
+)
 
 private fun unmapped(child: PdmNode) = UnmappedUsage(
     relation = Relation.Unmapped("Неведомая связь"),
@@ -525,6 +535,61 @@ class ProductNodeSpecificationTest : ShouldSpec({
         ).toSpecificationData()
 
         data.materials.single().notes shouldBe listOf("кг", "Лист")
+    }
+
+    should("show the material of a material form with the position, quantity, unit and note of the composition link") {
+        val material = node(7, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Пенополиуретан ППУ 202-1"))
+        val form = materialFormOf(5, material)
+        val data = root(
+            composition(form, Quantity.Exact(2.5), Field.Value("мл"), position = Field.Value(3), note = AttributeValue.Text("Вспенить")),
+        ).toSpecificationData()
+
+        data.materials.single() shouldBe MaterialItem(
+            position = 3,
+            designation = null,
+            name = "Пенополиуретан ППУ 202-1",
+            quantity = 2.5,
+            notes = listOf("мл", "Вспенить"),
+        )
+    }
+
+    should("take the name of a material form from its material, not from the form itself") {
+        val material = node(7, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Пенополиуретан"))
+        val form = node(5, kind = PdmNodeKind.MaterialForm, designation = AttributeValue.Text("ФОРМА 001"), name = AttributeValue.Text("Форма"), usages = listOf(madeFrom(material)))
+        val data = root(composition(form)).toSpecificationData()
+
+        data.materials.single().name shouldBe "Пенополиуретан"
+    }
+
+    should("fail on a material form without a material") {
+        val form = node(5, kind = PdmNodeKind.MaterialForm)
+
+        shouldThrow<SpecificationDataException> { root(composition(form)).toSpecificationData() }.message shouldContain "5"
+    }
+
+    should("fail on a material form whose usages have no material") {
+        val form = node(5, kind = PdmNodeKind.MaterialForm, usages = listOf(madeFrom(node(6, kind = PdmNodeKind.Part))))
+
+        shouldThrow<SpecificationDataException> { root(composition(form)).toSpecificationData() }.message shouldContain "5"
+    }
+
+    should("take the first material of a material form that has several") {
+        val first = node(7, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Первый"))
+        val second = node(8, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Второй"))
+        val data = root(composition(materialFormOf(5, first, second))).toSpecificationData()
+
+        data.materials.map { it.name } shouldBe listOf("Первый")
+    }
+
+    should("sort material forms and plain materials together by position, then by name") {
+        val data = root(
+            composition(materialFormOf(5, node(15, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Вата"))), position = Field.Value(2)),
+            composition(node(2, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Сталь")), position = Field.Value(1)),
+            composition(materialFormOf(6, node(16, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Ааа"))), position = Field.Missing),
+            composition(node(3, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Лак")), position = Field.Missing),
+        ).toSpecificationData()
+
+        data.materials.map { it.name } shouldBe listOf("Сталь", "Вата", "Ааа", "Лак")
     }
 
     should("skip an empty or missing note and a not loaded one") {
