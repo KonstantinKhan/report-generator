@@ -5,6 +5,7 @@ import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
+import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.PdmNode
@@ -51,12 +52,20 @@ private fun rootNode(
 
 private fun root(vararg usages: Usage) = rootNode(usages = usages.toList())
 
+// The note is the link attribute; null: the note is not requested (not loaded).
 private fun composition(
     child: PdmNode,
     quantity: Quantity = Quantity.Exact(1.0),
     unit: Field<String> = Field.Missing,
     position: Field<Int> = Field.Missing,
-) = CompositionUsage(target = child, position = position, quantity = quantity, unit = unit)
+    note: AttributeValue? = null,
+) = CompositionUsage(
+    target = child,
+    position = position,
+    quantity = quantity,
+    unit = unit,
+    attributes = buildMap { note?.let { put(LinkAttributeKey.Note, it) } },
+)
 
 private fun document(child: PdmNode) = DocumentUsage(child)
 
@@ -168,7 +177,7 @@ class ProductNodeSpecificationTest : ShouldSpec({
         )
         val data = root(composition(child, Quantity.Exact(2.5), Field.Value("кг"))).toSpecificationData()
 
-        data.materials.single() shouldBe MaterialItem(designation = null, name = "Сталь 09Г2С", quantity = 2.5, unit = "кг")
+        data.materials.single() shouldBe MaterialItem(designation = null, name = "Сталь 09Г2С", quantity = 2.5, notes = listOf("кг"))
     }
 
     should("fail on a material with a missing designation") {
@@ -239,11 +248,11 @@ class ProductNodeSpecificationTest : ShouldSpec({
         }
     }
 
-    should("map missing usage unit of a material to null") {
+    should("leave the notes of a material empty when its usage has no unit") {
         val data = root(composition(node(2, kind = PdmNodeKind.Material), Quantity.Exact(1.0), Field.Missing))
             .toSpecificationData()
 
-        data.materials.single().unit shouldBe null
+        data.materials.single().notes shouldBe emptyList()
     }
 
     should("fail on a quantity range because it is not supported") {
@@ -406,4 +415,142 @@ class ProductNodeSpecificationTest : ShouldSpec({
 
         (exception is IllegalStateException) shouldBe false
     }
+
+    should("take the format of an assembly from its first specification that has a format") {
+        val assembly = node(2, kind = PdmNodeKind.Assembly)
+        val data = root(
+            composition(withDocuments(assembly, specificationOf(format = AttributeValue.Empty), specificationOf("A4"), specificationOf("A3"))),
+        ).toSpecificationData()
+
+        data.assemblies.single().format shouldBe "A4"
+    }
+
+    should("take the format of a part from its detail drawing, not from a specification") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val data = root(
+            composition(withDocuments(part, specificationOf("A3"), detailDrawingOf("A4"))),
+        ).toSpecificationData()
+
+        data.parts.single().format shouldBe "A4"
+    }
+
+    should("give a simple format as is, without notes") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val data = root(composition(withDocuments(part, detailDrawingOf("A4")))).toSpecificationData()
+
+        data.parts.single() shouldBe PartItem(designation = "АБ.2", name = "Имя 2", quantity = 1.0, format = "A4")
+    }
+
+    should("mark a complex format with the mark and put its value into the first note") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val assembly = node(3, kind = PdmNodeKind.Assembly)
+        val data = root(
+            composition(withDocuments(part, detailDrawingOf("А3х3"))),
+            composition(withDocuments(assembly, specificationOf("A3x3"))),
+        ).toSpecificationData()
+
+        data.parts.single() shouldBe PartItem(
+            designation = "АБ.2", name = "Имя 2", quantity = 1.0, format = "*)", notes = listOf("*) А3х3"),
+        )
+        data.assemblies.single() shouldBe AssemblyItem(
+            designation = "АБ.3", name = "Имя 3", quantity = 1.0, format = "*)", notes = listOf("*) A3x3"),
+        )
+    }
+
+    should("treat the capital and the Latin x as a complex format too") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val data = root(composition(withDocuments(part, detailDrawingOf("A3X3")))).toSpecificationData()
+
+        data.parts.single().format shouldBe "*)"
+        data.parts.single().notes shouldBe listOf("*) A3X3")
+    }
+
+    should("give no format when the item has no document of its kind") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val data = root(composition(withDocuments(part, specificationOf("A4")))).toSpecificationData()
+
+        data.parts.single().format shouldBe null
+    }
+
+    should("give no format when the document has no format or the format is not loaded") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val assembly = node(3, kind = PdmNodeKind.Assembly)
+        val data = root(
+            composition(withDocuments(part, detailDrawingOf(AttributeValue.Empty))),
+            composition(withDocuments(assembly, specificationOf(format = null))),
+        ).toSpecificationData()
+
+        data.parts.single().format shouldBe null
+        data.assemblies.single().format shouldBe null
+    }
+
+    should("put the note of the composition link into the notes of every section") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Assembly), note = AttributeValue.Text("Сварка")),
+            composition(node(3, kind = PdmNodeKind.Part), note = AttributeValue.Text("Закалить")),
+            composition(node(4, kind = PdmNodeKind.Standard), note = AttributeValue.Text("Окрасить")),
+            composition(node(5, kind = PdmNodeKind.Other), note = AttributeValue.Text("Проверить")),
+            composition(node(6, kind = PdmNodeKind.Material), note = AttributeValue.Text("Лист")),
+        ).toSpecificationData()
+
+        data.assemblies.single().notes shouldBe listOf("Сварка")
+        data.parts.single().notes shouldBe listOf("Закалить")
+        data.standards.single().notes shouldBe listOf("Окрасить")
+        data.others.single().notes shouldBe listOf("Проверить")
+        data.materials.single().notes shouldBe listOf("Лист")
+    }
+
+    should("put the complex format before the note of the link") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val data = root(
+            composition(withDocuments(part, detailDrawingOf("А3х3")), note = AttributeValue.Text("Прим.")),
+        ).toSpecificationData()
+
+        data.parts.single().notes shouldBe listOf("*) А3х3", "Прим.")
+    }
+
+    should("put the unit of a material first and the note of the link second") {
+        val child = node(2, kind = PdmNodeKind.Material)
+        val data = root(
+            composition(child, Quantity.Exact(2.5), Field.Value("кг"), note = AttributeValue.Text("Лист")),
+        ).toSpecificationData()
+
+        data.materials.single().notes shouldBe listOf("кг", "Лист")
+    }
+
+    should("skip an empty or missing note and a not loaded one") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Standard), note = AttributeValue.Empty),
+            composition(node(3, kind = PdmNodeKind.Standard), note = null),
+            composition(node(4, kind = PdmNodeKind.Standard), note = AttributeValue.Text("   ")),
+        ).toSpecificationData()
+
+        data.standards.forEach { it.notes shouldBe emptyList() }
+    }
 })
+
+// A document usage of the item with the format attribute (null: the format key is not requested).
+private fun documentWith(kind: PdmNodeKind, format: AttributeValue?): DocumentUsage = DocumentUsage(
+    target = PdmNode(
+        id = PdmNodeId(100),
+        kind = kind,
+        attributes = buildMap {
+            put(AttributeKey.Designation, AttributeValue.Text("ДОК"))
+            put(AttributeKey.Name, AttributeValue.Text("Документ"))
+            format?.let { put(AttributeKey.Format, it) }
+        },
+    ),
+)
+
+private fun specificationOf(format: String) = documentWith(PdmNodeKind.Specification, AttributeValue.Text(format))
+
+private fun specificationOf(format: AttributeValue?) = documentWith(PdmNodeKind.Specification, format)
+
+private fun detailDrawingOf(format: String) = documentWith(PdmNodeKind.DetailDrawing, AttributeValue.Text(format))
+
+private fun detailDrawingOf(format: AttributeValue?) = documentWith(PdmNodeKind.DetailDrawing, format)
+
+// Adds the documents to the item: the item keeps its usages, the documents are the usages of the child.
+private fun withDocuments(child: PdmNode, vararg documents: DocumentUsage): PdmNode =
+    child.copy(usages = documents.toList())
+

@@ -43,7 +43,7 @@ class StaticBlocksGoldenTest {
             PartItem(position = 3, designation = "AAA.02.003", name = "Втулка распределительная консольная весовая", quantity = 5.0),
         ),
         standards = List(items) { StandardItem(position = 4 + it, name = "Болт М6 ГОСТ 7798-70", quantity = 8.0) },
-        materials = listOf(MaterialItem(position = 4 + items, name = "Сталь 45", quantity = 0.35, unit = "кг")),
+        materials = listOf(MaterialItem(position = 4 + items, name = "Сталь 45", quantity = 0.35, notes = listOf("кг"))),
     )
 
     // 1 assembly + 13 parts + 3 standard bolts: on A4 the first page holds exactly 26 flow rows, so
@@ -69,7 +69,7 @@ class StaticBlocksGoldenTest {
         ),
         standards = listOf(StandardItem(position = 4, name = "Болт М6 ГОСТ 7798-70", quantity = 8.0)),
         others = listOf(OtherItem(position = 5, name = "Пломба", quantity = 1.0)),
-        materials = listOf(MaterialItem(position = 6, name = "Сталь 45", quantity = 0.35, unit = "кг")),
+        materials = listOf(MaterialItem(position = 6, name = "Сталь 45", quantity = 0.35, notes = listOf("кг"))),
     )
 
     private fun customStamp(width: Int) = FrameSpec(

@@ -35,7 +35,6 @@ private class ItemRow(
     val designation: String? = null,
     val name: String,
     val quantity: Double? = null,
-    val unit: String? = null,
     val format: String? = null,
     val notes: List<String> = emptyList(),
 )
@@ -52,7 +51,7 @@ private fun SpecificationData.rows(): List<ItemRow> =
     } + others.map {
         ItemRow(SpecificationSection.OTHER, it.position, it.designation, it.name, it.quantity, notes = it.notes)
     } + materials.map {
-        ItemRow(SpecificationSection.MATERIAL, it.position, it.designation, it.name, it.quantity, unit = it.unit, notes = it.notes)
+        ItemRow(SpecificationSection.MATERIAL, it.position, it.designation, it.name, it.quantity, notes = it.notes)
     }
 
 private fun RecordBuilder.itemFields(row: ItemRow?) {
@@ -62,7 +61,6 @@ private fun RecordBuilder.itemFields(row: ItemRow?) {
     enum("section", SpecificationSection.entries.map { it.name }, row?.section?.name)
     // BigDecimal.valueOf(double): the shortest decimal text of the double, as the legacy formatter used it
     decimal("quantity", row?.quantity?.let { BigDecimal.valueOf(it) })
-    string("unit", row?.unit)
     string("format", row?.format)
     // The template has no list binds: the notes of a row are one text, one note per line.
     string("notes", row?.notes?.takeIf { it.isNotEmpty() }?.joinToString("\n"))

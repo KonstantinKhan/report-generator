@@ -47,7 +47,7 @@ class SpecificationQuantityFormatTest {
         parts = if (section == Section.PART) listOf(PartItem(name = "Тест", quantity = quantity)) else emptyList(),
         standards = if (section == Section.STANDARD) listOf(StandardItem(name = "Тест", quantity = quantity)) else emptyList(),
         others = if (section == Section.OTHER) listOf(OtherItem(name = "Тест", quantity = quantity)) else emptyList(),
-        materials = if (section == Section.MATERIAL) listOf(MaterialItem(name = "Тест", quantity = quantity, unit = unit)) else emptyList(),
+        materials = if (section == Section.MATERIAL) listOf(MaterialItem(name = "Тест", quantity = quantity, notes = listOfNotNull(unit))) else emptyList(),
     )
 
     private fun cells(data: SpecificationData): List<String> {

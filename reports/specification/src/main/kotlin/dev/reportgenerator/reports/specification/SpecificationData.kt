@@ -1,7 +1,7 @@
 package dev.reportgenerator.reports.specification
 
 // Data of the specification sheet, one list per section. Each section has its own item type: the fields a section
-// shows differ (documentation has no position and no quantity, materials have a unit).
+// shows differ (documentation has no position and no quantity, assemblies and parts have a format).
 data class SpecificationData(
     val documentDesignation: String,
     val documentName: String,
@@ -25,14 +25,14 @@ data class DocumentationItem(
     val name: String,
 )
 
+// `format` = null when the item has no format. A complex format (with the letter x) is the mark "*)" here and its
+// value is the first of `notes`. `notes` = one line per note, the unit of a material is the first of them.
 data class AssemblyItem(
     override val position: Int? = null,
     override val designation: String? = null,
     override val name: String,
     val quantity: Double,
-    // Not filled yet: the format column is empty until the rules are set.
     val format: String? = null,
-    // Not filled yet: the notes column is empty until the rules are set.
     val notes: List<String> = emptyList(),
 ) : PositionedItem
 
@@ -41,9 +41,7 @@ data class PartItem(
     override val designation: String? = null,
     override val name: String,
     val quantity: Double,
-    // Not filled yet: the format column is empty until the rules are set.
     val format: String? = null,
-    // Not filled yet: the notes column is empty until the rules are set.
     val notes: List<String> = emptyList(),
 ) : PositionedItem
 
@@ -52,7 +50,6 @@ data class StandardItem(
     override val designation: String? = null,
     override val name: String,
     val quantity: Double,
-    // Not filled yet: the notes column is empty until the rules are set.
     val notes: List<String> = emptyList(),
 ) : PositionedItem
 
@@ -61,7 +58,6 @@ data class OtherItem(
     override val designation: String? = null,
     override val name: String,
     val quantity: Double,
-    // Not filled yet: the notes column is empty until the rules are set.
     val notes: List<String> = emptyList(),
 ) : PositionedItem
 
@@ -70,7 +66,5 @@ data class MaterialItem(
     override val designation: String? = null,
     override val name: String,
     val quantity: Double,
-    val unit: String? = null,
-    // Not filled yet: the notes column shows the unit for materials, the notes are kept for the rules to come.
     val notes: List<String> = emptyList(),
 ) : PositionedItem

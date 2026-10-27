@@ -97,7 +97,7 @@ private fun PdmNode.formatText(): String = attributes[AttributeKey.Format].orEls
 // связи (позиция — встроенный ключ, quantity/unit из get-linked-objects-for-objects), грузятся со списком
 // связей без отдельных запросов.
 // Примечание — атрибут связи COMPOSITION (link.attributes.note), грузится при linkAttributeKeys в запросе.
-// Формат замаплен только для SPECIFICATION и DETAIL_DRAWING, у остальных видов будет «—».
+// Формат замаплен для SPECIFICATION, DETAIL_DRAWING и ASSEMBLY_DRAWING, у остальных видов будет «—».
 private fun PdmNode.printStructure(level: Int) {
     usages.filterIsInstance<DocumentUsage>().forEach { usage ->
         val target = usage.target

@@ -34,7 +34,7 @@ fun main(args: Array<String>) {
         },
         others = emptyList(),
         materials = listOf(
-            MaterialItem(position = 23, name = "Сталь 45", quantity = 0.35, unit = "кг"),
+            MaterialItem(position = 23, name = "Сталь 45", quantity = 0.35, notes = listOf("кг")),
         ),
     )
 

@@ -1,5 +1,10 @@
 package dev.reportgenerator.loodsman
 
+import dev.reportgenerator.domain.AttributeKey
+import dev.reportgenerator.domain.AttributeValue
+import dev.reportgenerator.domain.CompositionUsage
+import dev.reportgenerator.domain.DocumentUsage
+import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
 import dev.reportgenerator.reports.specification.AssemblyItem
@@ -55,7 +60,11 @@ private data class ParityEdge(
     val min: Double? = null,
     val max: Double? = null,
     val unit: String? = null,
+    val note: String? = null,
 )
+
+// Link attribute of the composition: the note (Примечание) of the link.
+private const val NOTE_ATTRIBUTE = "Примечание"
 
 private class ParityLoodsman(
     private val objects: List<ParityObj>,
@@ -115,8 +124,22 @@ private class ParityLoodsman(
                         })
                     }
                 }
-                // Link attributes (position, note) are not in the mock: the position stays Missing, the note is not read.
-                "/api/v4/ObjectInfo/get-link-attributes" -> buildJsonArray {}
+                // Link attributes: the note of the edge (linkId = index of the edge + 1). The position is not in the mock,
+                // it stays Missing.
+                "/api/v4/ObjectInfo/get-link-attributes" -> {
+                    val edge = edges[params["linkId"]!!.toInt() - 1]
+                    buildJsonArray {
+                        edge.note?.let { note ->
+                            add(buildJsonObject {
+                                put("id", 1)
+                                put("name", NOTE_ATTRIBUTE)
+                                put("value", note)
+                                put("type", 0)
+                                put("accessLevel", 0)
+                            })
+                        }
+                    }
+                }
                 else -> error("Unexpected request ${request.url}")
             }
             respond(
@@ -162,18 +185,23 @@ private class ParityLoodsman(
     }
 }
 
-private suspend fun loadPipeline(
+// The tree of the specification query of the root 1, as the production pipeline loads it.
+private suspend fun loadSpecificationTree(
     objects: List<ParityObj>,
     edges: List<ParityEdge>,
-): SpecificationData {
+): PdmNode {
     val config = LoodsmanConfig("http://localhost", "db", "user", "pass")
     val httpClient = ParityLoodsman(objects, edges).httpClient()
     val api = LoodsmanApi(config, httpClient)
     val metadata = MetadataCache(api, validate = { emptyList() }).also { it.initialize() }
     return LoodsmanProductStructureClient(api, MappingConfigLoader.load(emptyMap()), metadata = metadata)
         .loadTree(specificationQuery(PdmNodeId(1)))
-        .toSpecificationData()
 }
+
+private suspend fun loadPipeline(
+    objects: List<ParityObj>,
+    edges: List<ParityEdge>,
+): SpecificationData = loadSpecificationTree(objects, edges).toSpecificationData()
 
 class SpecificationPipelineTest : ShouldSpec({
     should("match assembly with a part and an assembly unit") {
@@ -224,13 +252,13 @@ class SpecificationPipelineTest : ShouldSpec({
                 ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
                 ParityObj(6, "Материал по КД", "Сталь 09Г2С", mapOf("Наименование" to "Лист")),
             ),
-            edges = listOf(ParityEdge(1, 6, min = 1.5, max = 1.5, unit = "кг")),
+            edges = listOf(ParityEdge(1, 6, min = 1.5, max = 1.5, unit = "кг", note = "Лист")),
         )
 
         actual shouldBe SpecificationData(
             documentDesignation = "АБ.001",
             documentName = "Корпус",
-            materials = listOf(MaterialItem(name = "Сталь 09Г2С", quantity = 1.5, unit = "кг")),
+            materials = listOf(MaterialItem(name = "Сталь 09Г2С", quantity = 1.5, notes = listOf("кг", "Лист"))),
         )
     }
 
@@ -326,5 +354,60 @@ class SpecificationPipelineTest : ShouldSpec({
             documentName = "Корпус",
             parts = listOf(PartItem(designation = "АБ.002", name = "Вал", quantity = 1.0)),
         )
+    }
+
+    should("take the format of an assembly from its specification and of a part from its detail drawing") {
+        val actual = loadPipeline(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
+                ParityObj(3, "Сборочная единица", "АБ.003", mapOf("Наименование" to "Крышка")),
+                ParityObj(20, "Чертеж детали", "АБ.002 ЧЕРТ", mapOf("Наименование" to "Вал. Чертеж", "Формат" to "А3х3")),
+                ParityObj(21, "Спецификация", "АБ.003 СП", mapOf("Наименование" to "Крышка. Спецификация", "Формат" to "A4")),
+            ),
+            edges = listOf(
+                ParityEdge(1, 2, min = 1.0, max = 1.0, note = "Закалить"),
+                ParityEdge(1, 3, min = 1.0, max = 1.0),
+                ParityEdge(2, 20, link = DOCUMENT_LINK),
+                ParityEdge(3, 21, link = DOCUMENT_LINK),
+            ),
+        )
+
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            assemblies = listOf(AssemblyItem(designation = "АБ.003", name = "Крышка", quantity = 1.0, format = "A4")),
+            parts = listOf(
+                PartItem(
+                    designation = "АБ.002",
+                    name = "Вал",
+                    quantity = 1.0,
+                    format = "*)",
+                    notes = listOf("*) А3х3", "Закалить"),
+                ),
+            ),
+        )
+    }
+
+    should("load the composition of the root only and the documents of its children") {
+        val tree = loadSpecificationTree(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(3, "Сборочная единица", "АБ.003", mapOf("Наименование" to "Крышка")),
+                ParityObj(5, "Деталь", "АБ.005", mapOf("Наименование" to "Шайба")),
+                ParityObj(21, "Спецификация", "АБ.003 СП", mapOf("Наименование" to "Крышка. Спецификация", "Формат" to "A4")),
+            ),
+            edges = listOf(
+                ParityEdge(1, 3, min = 1.0, max = 1.0),
+                ParityEdge(3, 5, min = 2.0, max = 2.0),
+                ParityEdge(3, 21, link = DOCUMENT_LINK),
+            ),
+        )
+
+        val child = tree.usages.filterIsInstance<CompositionUsage>().single().target
+        // The composition of the child (level 2) is not expanded, its document (level 2) is read.
+        child.usages.filterIsInstance<CompositionUsage>() shouldBe emptyList()
+        child.usages.filterIsInstance<DocumentUsage>().single().target.attributes[AttributeKey.Format] shouldBe
+            AttributeValue.Text("A4")
     }
 })

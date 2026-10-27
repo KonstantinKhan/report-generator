@@ -7,6 +7,7 @@ import dev.reportgenerator.ir.TextAlign
 import dev.reportgenerator.ir.TextOrientation
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class SpecificationBuilderTest {
 
@@ -132,7 +133,7 @@ class SpecificationBuilderTest {
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
             parts = listOf(PartItem(position = 1, designation = "AAA.02.001", name = "Вал", quantity = 1.0)),
-            materials = listOf(MaterialItem(position = 2, name = "Сталь 45", quantity = 0.35, unit = "кг")),
+            materials = listOf(MaterialItem(position = 2, name = "Сталь 45", quantity = 0.35, notes = listOf("кг"))),
         )
 
         val doc = specification(data)
@@ -148,7 +149,7 @@ class SpecificationBuilderTest {
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
             parts = listOf(PartItem(position = 1, designation = "AAA.02.001", name = "Вал", quantity = 1.0)),
-            materials = listOf(MaterialItem(position = 2, name = "Сталь 45", quantity = 0.35, unit = "кг")),
+            materials = listOf(MaterialItem(position = 2, name = "Сталь 45", quantity = 0.35, notes = listOf("кг"))),
         )
 
         val doc = specification(data)
@@ -156,6 +157,43 @@ class SpecificationBuilderTest {
         val rows = table.content.filterIsInstance<IrGroup>().flatMap { it.rows }
 
         assertEquals(listOf("", "кг"), rows.map { it.cells[6].text })
+    }
+
+    @Test
+    fun `format goes into the format column and notes into the note column of assemblies and parts`() {
+        val data = SpecificationData(
+            documentDesignation = "AAA.00.000",
+            documentName = "Тестовое изделие",
+            assemblies = listOf(
+                AssemblyItem(position = 1, designation = "AAA.01.000", name = "Корпус", quantity = 1.0, format = "*)", notes = listOf("*) А3х3")),
+            ),
+            parts = listOf(
+                PartItem(position = 2, designation = "AAA.02.001", name = "Вал", quantity = 2.0, format = "A4", notes = listOf("Закалить")),
+            ),
+        )
+
+        val doc = specification(data)
+        val table = doc.elements.filterIsInstance<IrTable>().single()
+        val rows = table.content.filterIsInstance<IrGroup>().flatMap { it.rows }
+
+        assertEquals(listOf("*)", "A4"), rows.map { it.cells[0].text })
+        assertEquals(listOf("*) А3х3", "Закалить"), rows.map { it.cells[6].text })
+    }
+
+    @Test
+    fun `two notes of one item both reach the note cell`() {
+        val data = SpecificationData(
+            documentDesignation = "AAA.00.000",
+            documentName = "Тестовое изделие",
+            standards = listOf(StandardItem(position = 1, name = "Болт М6", quantity = 8.0, notes = listOf("Оцинковать", "Хромать"))),
+        )
+
+        val doc = specification(data)
+        val table = doc.elements.filterIsInstance<IrTable>().single()
+        val rows = table.content.filterIsInstance<IrGroup>().flatMap { it.rows }
+        val note = rows.single().cells[6].text
+
+        assertTrue(note.contains("Оцинковать") && note.contains("Хромать"), "note cell: $note")
     }
 
     @Test

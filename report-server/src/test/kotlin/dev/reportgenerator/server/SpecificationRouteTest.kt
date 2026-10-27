@@ -42,7 +42,7 @@ class SpecificationRouteTest {
         assertTrue(response.bodyAsText().contains("\"path\""))
         assertEquals(1, tempDir.listFiles()!!.count { it.extension == "pdf" })
         assertEquals(7, structure.queries.single().rootId.asInt())
-        assertEquals(1, structure.queries.single().depth)
+        assertEquals(2, structure.queries.single().depth)
     }
 
     @Test
