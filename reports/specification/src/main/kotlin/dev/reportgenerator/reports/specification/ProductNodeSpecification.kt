@@ -5,19 +5,13 @@ import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
-import dev.reportgenerator.domain.ItemKind
-import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.PdmNode
+import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Quantity
-import dev.reportgenerator.domain.SpecificationData
-import dev.reportgenerator.domain.SpecificationItem
-import dev.reportgenerator.domain.TechnologicalPartUsage
-import dev.reportgenerator.domain.Usage
-import dev.reportgenerator.domain.UnmappedUsage
 
-// Converts the product structure of the root node into the specification data.
-// Composition items go first (in usage order), then documents (usages with the AssemblyDrawing target).
-// Usages of unknown kind are skipped.
+// Converts the product structure of the root node into the specification data. Each section takes the usages whose
+// target has the kind of the section; usages of other kinds (complex, kit, unmapped, drawings other than the assembly
+// drawing) do not get into the sheet. Items with a position are sorted by it, items without one go after them.
 fun PdmNode.toSpecificationData(): SpecificationData {
     val documentDesignation = when (val value = attributeText(AttributeKey.Designation)) {
         is TextState.Value -> value.text
@@ -29,29 +23,90 @@ fun PdmNode.toSpecificationData(): SpecificationData {
         is TextState.Missing -> documentDesignation
         is TextState.NotLoaded -> throw SpecificationDataException("Root node ${id.asInt()}: name is not loaded")
     }
-    val composition = usages.filter { it.group() == UsageGroup.COMPOSITION }.map { it.toItem() }
-    val documents = usages.filter { it.group() == UsageGroup.DOCUMENT }.map { it.toItem() }
-    return SpecificationData(documentDesignation, documentName, composition + documents)
-}
-
-private enum class UsageGroup { COMPOSITION, DOCUMENT }
-
-private fun Usage.group(): UsageGroup? = when (this) {
-    is CompositionUsage -> UsageGroup.COMPOSITION.takeIf {
-        target.kind != PdmNodeKind.AssemblyDrawing && target.kind !is PdmNodeKind.Unmapped
-    }
-    is DocumentUsage -> UsageGroup.DOCUMENT.takeIf { target.kind == PdmNodeKind.AssemblyDrawing }
-    is TechnologicalPartUsage -> null
-    is UnmappedUsage -> null
-}
-
-private fun Usage.toItem(): SpecificationItem = when (this) {
-    is CompositionUsage -> target.toItem(quantity = quantityOf(), unit = unitOf())
-    is DocumentUsage -> target.toItem(quantity = 0.0, unit = null)
-    is TechnologicalPartUsage -> error(
-        "Node ${target.id.asInt()}: technological part usage must be filtered out before conversion"
+    val composition = usages.filterIsInstance<CompositionUsage>()
+    return SpecificationData(
+        documentDesignation = documentDesignation,
+        documentName = documentName,
+        documentation = usages.filterIsInstance<DocumentUsage>()
+            .filter { it.isSpecificationDocument() }
+            .map { it.target.toDocumentationItem() }
+            .sortedWith(documentationOrder),
+        assemblies = composition.ofKind(PdmNodeKind.Assembly).map { it.toAssemblyItem() }.sortedByPosition(),
+        parts = composition.ofKind(PdmNodeKind.Part).map { it.toPartItem() }.sortedByPosition(),
+        standards = composition.ofKind(PdmNodeKind.Standard).map { it.toStandardItem() }.sortedByPosition(),
+        others = composition.ofKind(PdmNodeKind.Other).map { it.toOtherItem() }.sortedByPosition(),
+        materials = composition.ofKind(PdmNodeKind.Material).map { it.toMaterialItem() }.sortedByPosition(),
     )
-    is UnmappedUsage -> error("Node ${target.id.asInt()}: unmapped usage must be filtered out before conversion")
+}
+
+// Which documents get into the documentation section. Kept as a named function: the rule will be refined later.
+private fun DocumentUsage.isSpecificationDocument(): Boolean = target.kind == PdmNodeKind.AssemblyDrawing
+
+// Order of the documentation section: by designation, without one by name.
+private val documentationOrder: Comparator<DocumentationItem> = compareBy { it.designation ?: it.name }
+
+// Items with a position go first in position order (equal positions keep the usage order); items without one go
+// after them, by designation or, without a designation, by name.
+private fun <T : PositionedItem> List<T>.sortedByPosition(): List<T> {
+    val (positioned, unpositioned) = partition { it.position != null }
+    return positioned.sortedBy { it.position } + unpositioned.sortedBy { it.designation ?: it.name }
+}
+
+private fun List<CompositionUsage>.ofKind(kind: PdmNodeKind): List<CompositionUsage> =
+    filter { it.target.kind == kind }
+
+private fun PdmNode.toDocumentationItem(): DocumentationItem {
+    val (designation, name) = designationAndName()
+    return DocumentationItem(designation = designation, name = name)
+}
+
+// Values every composition item reads. The unit is read for all sections (its absence is a data error), but only
+// materials show it.
+private class CompositionFields(val position: Int?, val quantity: Double, val unit: String?)
+
+private fun CompositionUsage.fields(): CompositionFields =
+    CompositionFields(position = positionOf(), quantity = quantityOf(), unit = unitOf())
+
+private fun CompositionUsage.toAssemblyItem(): AssemblyItem {
+    val fields = fields()
+    val (designation, name) = target.designationAndName()
+    return AssemblyItem(position = fields.position, designation = designation, name = name, quantity = fields.quantity)
+}
+
+private fun CompositionUsage.toPartItem(): PartItem {
+    val fields = fields()
+    val (designation, name) = target.designationAndName()
+    return PartItem(position = fields.position, designation = designation, name = name, quantity = fields.quantity)
+}
+
+private fun CompositionUsage.toStandardItem(): StandardItem {
+    val fields = fields()
+    val (designation, name) = target.designationAndName()
+    return StandardItem(position = fields.position, designation = designation, name = name, quantity = fields.quantity)
+}
+
+private fun CompositionUsage.toOtherItem(): OtherItem {
+    val fields = fields()
+    val (designation, name) = target.designationAndName()
+    return OtherItem(position = fields.position, designation = designation, name = name, quantity = fields.quantity)
+}
+
+private fun CompositionUsage.toMaterialItem(): MaterialItem {
+    val fields = fields()
+    val (designation, name) = target.designationAndName()
+    return MaterialItem(
+        position = fields.position,
+        designation = designation,
+        name = name,
+        quantity = fields.quantity,
+        unit = fields.unit,
+    )
+}
+
+private fun CompositionUsage.positionOf(): Int? = when (val value = position) {
+    is Field.Value -> value.value
+    is Field.Missing -> null
+    is Field.NotLoaded -> throw SpecificationDataException("Node ${target.id.asInt()}: position is not loaded")
 }
 
 private fun CompositionUsage.quantityOf(): Double = when (val value = quantity) {
@@ -69,8 +124,8 @@ private fun CompositionUsage.unitOf(): String? = when (val value = unit) {
     is Field.NotLoaded -> throw SpecificationDataException("Node ${target.id.asInt()}: unit is not loaded")
 }
 
-private fun PdmNode.toItem(quantity: Double, unit: String?): SpecificationItem {
-    val itemKind = kind.toItemKind() ?: error("Node ${id.asInt()}: product kind $kind has no specification kind")
+// Designation and name of an item of the sheet (the rules of the name column).
+private fun PdmNode.designationAndName(): Pair<String?, String> {
     if (kind == PdmNodeKind.Material) {
         // In the specification the material designation is shown in the name column, the designation column stays empty.
         val materialName = when (val value = attributeText(AttributeKey.Designation)) {
@@ -78,13 +133,7 @@ private fun PdmNode.toItem(quantity: Double, unit: String?): SpecificationItem {
             is TextState.Missing -> throw SpecificationDataException("Node ${id.asInt()}: designation is missing for a material")
             is TextState.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: designation is not loaded")
         }
-        return SpecificationItem(
-            designation = null,
-            name = materialName,
-            kind = itemKind,
-            quantity = quantity,
-            unit = unit
-        )
+        return null to materialName
     }
     if (kind == PdmNodeKind.Standard || kind == PdmNodeKind.Other) {
         val designationText = when (val value = attributeText(AttributeKey.Designation)) {
@@ -94,21 +143,10 @@ private fun PdmNode.toItem(quantity: Double, unit: String?): SpecificationItem {
         }
         return when (val value = attributeText(AttributeKey.Name)) {
             // Old data form: the name is set, the designation column is kept as is.
-            is TextState.Value -> SpecificationItem(
-                designation = designationText,
-                name = value.text,
-                kind = itemKind,
-                quantity = quantity,
-                unit = unit
-            )
+            is TextState.Value -> designationText to value.text
             // New data form: the key value is in the designation, so it moves to the name column.
-            is TextState.Missing -> SpecificationItem(
-                designation = null,
-                name = designationText
-                    ?: throw SpecificationDataException("Node ${id.asInt()}: name and designation are both missing"),
-                kind = itemKind,
-                quantity = quantity,
-                unit = unit
+            is TextState.Missing -> null to (
+                designationText ?: throw SpecificationDataException("Node ${id.asInt()}: name and designation are both missing")
             )
             is TextState.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: name is not loaded")
         }
@@ -124,13 +162,7 @@ private fun PdmNode.toItem(quantity: Double, unit: String?): SpecificationItem {
             ?: throw SpecificationDataException("Node ${id.asInt()}: name and designation are both missing")
         is TextState.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: name is not loaded")
     }
-    return SpecificationItem(
-        designation = designationText,
-        name = nameText,
-        kind = itemKind,
-        quantity = quantity,
-        unit = unit
-    )
+    return designationText to nameText
 }
 
 // Intermediate state of a text attribute: file-private, used only while building the specification.
@@ -146,18 +178,4 @@ private fun PdmNode.attributeText(key: AttributeKey): TextState = when (val valu
     is AttributeValue.Text -> TextState.Value(value.value)
     is AttributeValue.Number -> TextState.Value(value.value.toString())
     AttributeValue.Empty -> TextState.Missing
-}
-
-private fun PdmNodeKind.toItemKind(): ItemKind? = when (this) {
-    PdmNodeKind.Assembly -> ItemKind.ASSEMBLY
-    PdmNodeKind.Part -> ItemKind.PART
-    PdmNodeKind.Standard -> ItemKind.STANDARD
-    PdmNodeKind.Other -> ItemKind.OTHER
-    PdmNodeKind.Material -> ItemKind.MATERIAL
-    PdmNodeKind.AssemblyDrawing -> ItemKind.DOCUMENTATION
-    PdmNodeKind.Specification -> ItemKind.DOCUMENTATION
-    PdmNodeKind.DetailDrawing -> ItemKind.DOCUMENTATION
-    PdmNodeKind.Complex -> ItemKind.COMPLEX
-    PdmNodeKind.Kit -> ItemKind.SET
-    is PdmNodeKind.Unmapped -> null
 }

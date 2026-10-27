@@ -5,14 +5,11 @@ import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
-import dev.reportgenerator.domain.ItemKind
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.Relation
-import dev.reportgenerator.domain.SpecificationData
-import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.domain.Usage
 import dev.reportgenerator.domain.UnmappedUsage
 import io.kotest.assertions.throwables.shouldThrow
@@ -58,7 +55,8 @@ private fun composition(
     child: PdmNode,
     quantity: Quantity = Quantity.Exact(1.0),
     unit: Field<String> = Field.Missing,
-) = CompositionUsage(target = child, position = Field.Missing, quantity = quantity, unit = unit)
+    position: Field<Int> = Field.Missing,
+) = CompositionUsage(target = child, position = position, quantity = quantity, unit = unit)
 
 private fun document(child: PdmNode) = DocumentUsage(child)
 
@@ -67,13 +65,24 @@ private fun unmapped(child: PdmNode) = UnmappedUsage(
     target = child,
 )
 
-private fun SpecificationData.single(): SpecificationItem = items.single()
+// The item of the section of a standard or other product (the two share the shape, not the type).
+private fun itemOf(kind: PdmNodeKind, designation: String?, name: String, quantity: Double): PositionedItem = when (kind) {
+    PdmNodeKind.Standard -> StandardItem(designation = designation, name = name, quantity = quantity)
+    PdmNodeKind.Other -> OtherItem(designation = designation, name = name, quantity = quantity)
+    else -> error("no standard or other section for $kind")
+}
+
+private fun SpecificationData.onlyOf(kind: PdmNodeKind): PositionedItem = when (kind) {
+    PdmNodeKind.Standard -> standards.single()
+    PdmNodeKind.Other -> others.single()
+    else -> error("no standard or other section for $kind")
+}
 
 class ProductNodeSpecificationTest : ShouldSpec({
     should("map the header from the root designation and name") {
         val data = root().toSpecificationData()
 
-        data shouldBe SpecificationData("ИЗД.001", "Изделие", emptyList())
+        data shouldBe SpecificationData("ИЗД.001", "Изделие")
     }
 
     should("use the root designation as document name when the name is missing") {
@@ -96,29 +105,58 @@ class ProductNodeSpecificationTest : ShouldSpec({
         shouldThrow<SpecificationDataException> { node.toSpecificationData() }.message shouldContain "1"
     }
 
-    should("map each product kind to its item kind") {
-        val expected = listOf(
-            PdmNodeKind.Assembly to ItemKind.ASSEMBLY,
-            PdmNodeKind.Part to ItemKind.PART,
-            PdmNodeKind.Standard to ItemKind.STANDARD,
-            PdmNodeKind.Other to ItemKind.OTHER,
-            PdmNodeKind.Material to ItemKind.MATERIAL,
-            PdmNodeKind.Complex to ItemKind.COMPLEX,
-            PdmNodeKind.Kit to ItemKind.SET,
-        )
+    should("route each product kind to its own section") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Assembly)),
+            composition(node(3, kind = PdmNodeKind.Part)),
+            composition(node(4, kind = PdmNodeKind.Standard)),
+            composition(node(5, kind = PdmNodeKind.Other)),
+            composition(node(6, kind = PdmNodeKind.Material)),
+        ).toSpecificationData()
 
-        expected.forEach { (productKind, itemKind) ->
-            val data = root(composition(node(2, kind = productKind))).toSpecificationData()
-
-            data.single().kind shouldBe itemKind
-        }
+        data.assemblies.map { it.designation } shouldBe listOf("АБ.2")
+        data.parts.map { it.designation } shouldBe listOf("АБ.3")
+        data.standards.map { it.designation } shouldBe listOf("АБ.4")
+        data.others.map { it.designation } shouldBe listOf("АБ.5")
+        data.materials.map { it.name } shouldBe listOf("АБ.6")
     }
 
-    should("map exact quantity amount and usage unit to the item") {
-        val child = node(2, kind = PdmNodeKind.Part)
-        val data = root(composition(child, Quantity.Exact(2.5), Field.Value("кг"))).toSpecificationData()
+    should("skip complex and kit usages without failing") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Complex)),
+            composition(node(3, kind = PdmNodeKind.Kit)),
+            composition(node(4)),
+        ).toSpecificationData()
 
-        data.single() shouldBe SpecificationItem("АБ.2", "Имя 2", ItemKind.PART, 2.5, "кг")
+        data shouldBe SpecificationData(
+            "ИЗД.001",
+            "Изделие",
+            parts = listOf(PartItem(designation = "АБ.4", name = "Имя 4", quantity = 1.0)),
+        )
+    }
+
+    should("drop specification and detail drawings from the composition and from the documents") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Specification)),
+            composition(node(3, kind = PdmNodeKind.DetailDrawing)),
+            document(node(4, kind = PdmNodeKind.Specification)),
+        ).toSpecificationData()
+
+        data shouldBe SpecificationData("ИЗД.001", "Изделие")
+    }
+
+    should("map exact quantity amount to the item") {
+        val child = node(2, kind = PdmNodeKind.Part)
+        val data = root(composition(child, Quantity.Exact(2.5))).toSpecificationData()
+
+        data.parts.single() shouldBe PartItem(designation = "АБ.2", name = "Имя 2", quantity = 2.5)
+    }
+
+    should("map the position of a composition usage to the item") {
+        val child = node(2, kind = PdmNodeKind.Part)
+        val data = root(composition(child, position = Field.Value(7))).toSpecificationData()
+
+        data.parts.single().position shouldBe 7
     }
 
     should("show a material designation in the name column and leave the designation empty") {
@@ -130,7 +168,7 @@ class ProductNodeSpecificationTest : ShouldSpec({
         )
         val data = root(composition(child, Quantity.Exact(2.5), Field.Value("кг"))).toSpecificationData()
 
-        data.single() shouldBe SpecificationItem(null, "Сталь 09Г2С", ItemKind.MATERIAL, 2.5, "кг")
+        data.materials.single() shouldBe MaterialItem(designation = null, name = "Сталь 09Г2С", quantity = 2.5, unit = "кг")
     }
 
     should("fail on a material with a missing designation") {
@@ -145,10 +183,7 @@ class ProductNodeSpecificationTest : ShouldSpec({
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
-    listOf(
-        PdmNodeKind.Standard to ItemKind.STANDARD,
-        PdmNodeKind.Other to ItemKind.OTHER,
-    ).forEach { (productKind, itemKind) ->
+    listOf(PdmNodeKind.Standard, PdmNodeKind.Other).forEach { productKind ->
         should("keep the designation column and take the name from the name for a $productKind when both are set") {
             val child = node(
                 2,
@@ -158,7 +193,7 @@ class ProductNodeSpecificationTest : ShouldSpec({
             )
             val data = root(composition(child, Quantity.Exact(2.0), Field.Value("шт"))).toSpecificationData()
 
-            data.single() shouldBe SpecificationItem("ГОСТ 7798-70", "Болт", itemKind, 2.0, "шт")
+            data.onlyOf(productKind) shouldBe itemOf(productKind, "ГОСТ 7798-70", "Болт", 2.0)
         }
 
         should("use the designation as name for a $productKind when the name is missing") {
@@ -170,7 +205,7 @@ class ProductNodeSpecificationTest : ShouldSpec({
             )
             val data = root(composition(child)).toSpecificationData()
 
-            data.single() shouldBe SpecificationItem(null, "ГОСТ 7798-70", itemKind, 1.0, null)
+            data.onlyOf(productKind) shouldBe itemOf(productKind, null, "ГОСТ 7798-70", 1.0)
         }
 
         should("use the name for a $productKind when the designation is missing") {
@@ -182,7 +217,7 @@ class ProductNodeSpecificationTest : ShouldSpec({
             )
             val data = root(composition(child)).toSpecificationData()
 
-            data.single() shouldBe SpecificationItem(null, "Болт", itemKind, 1.0, null)
+            data.onlyOf(productKind) shouldBe itemOf(productKind, null, "Болт", 1.0)
         }
 
         should("fail on a $productKind when the name and designation are both missing") {
@@ -204,10 +239,11 @@ class ProductNodeSpecificationTest : ShouldSpec({
         }
     }
 
-    should("map missing usage unit to null") {
-        val data = root(composition(node(2), Quantity.Exact(1.0), Field.Missing)).toSpecificationData()
+    should("map missing usage unit of a material to null") {
+        val data = root(composition(node(2, kind = PdmNodeKind.Material), Quantity.Exact(1.0), Field.Missing))
+            .toSpecificationData()
 
-        data.single().unit shouldBe null
+        data.materials.single().unit shouldBe null
     }
 
     should("fail on a quantity range because it is not supported") {
@@ -230,34 +266,71 @@ class ProductNodeSpecificationTest : ShouldSpec({
         shouldThrow<SpecificationDataException> { root(usage).toSpecificationData() }.message shouldContain "2"
     }
 
-    should("map a document usage to zero quantity and no unit") {
+    should("fail on a not loaded usage position") {
+        val usage = composition(node(2), position = Field.NotLoaded)
+
+        shouldThrow<SpecificationDataException> { root(usage).toSpecificationData() }.message shouldContain "position"
+    }
+
+    should("map a missing usage position to null") {
+        val data = root(composition(node(2))).toSpecificationData()
+
+        data.parts.single().position shouldBe null
+    }
+
+    should("map a document usage to the documentation section without quantity") {
         val data = root(document(node(2, kind = PdmNodeKind.AssemblyDrawing))).toSpecificationData()
 
-        data.single() shouldBe SpecificationItem("АБ.2", "Имя 2", ItemKind.DOCUMENTATION, 0.0, null)
+        data.documentation.single() shouldBe DocumentationItem("АБ.2", "Имя 2")
     }
 
     should("drop assembly drawings from the composition") {
         val drawing = node(2, kind = PdmNodeKind.AssemblyDrawing)
         val data = root(composition(drawing), composition(node(3))).toSpecificationData()
 
-        data.items.map { it.designation } shouldBe listOf("АБ.3")
+        data.parts.map { it.designation } shouldBe listOf("АБ.3")
+        data.documentation shouldBe emptyList()
     }
 
     should("drop documents that are not assembly drawings") {
         val data = root(document(node(2, kind = PdmNodeKind.Part))).toSpecificationData()
 
-        data.items shouldBe emptyList()
+        data.documentation shouldBe emptyList()
     }
 
-    should("put composition items first and documents after them in usage order") {
+    should("sort documentation by designation and by name when there is no designation") {
         val data = root(
-            document(node(10, kind = PdmNodeKind.AssemblyDrawing)),
-            composition(node(2)),
-            document(node(11, kind = PdmNodeKind.AssemblyDrawing)),
-            composition(node(3)),
+            document(node(12, kind = PdmNodeKind.AssemblyDrawing, designation = AttributeValue.Text("АБ.20"))),
+            document(node(13, kind = PdmNodeKind.AssemblyDrawing, designation = AttributeValue.Text("АБ.03"))),
+            document(node(14, kind = PdmNodeKind.AssemblyDrawing, designation = AttributeValue.Empty, name = AttributeValue.Text("Аа"))),
         ).toSpecificationData()
 
-        data.items.map { it.designation } shouldBe listOf("АБ.2", "АБ.3", "АБ.10", "АБ.11")
+        data.documentation shouldBe listOf(
+            DocumentationItem("АБ.03", "Имя 13"),
+            DocumentationItem("АБ.20", "Имя 12"),
+            DocumentationItem(null, "Аа"),
+        )
+    }
+
+    should("sort the items of a section by position and put the items without position last") {
+        val data = root(
+            composition(node(2), position = Field.Value(2)),
+            composition(node(3), position = Field.Missing),
+            composition(node(4), position = Field.Value(1)),
+            composition(node(5, designation = AttributeValue.Empty, name = AttributeValue.Text("Аа")), position = Field.Missing),
+            composition(node(6), position = Field.Missing),
+        ).toSpecificationData()
+
+        data.parts.map { it.designation } shouldBe listOf("АБ.4", "АБ.2", "АБ.3", "АБ.6", null)
+    }
+
+    should("keep the usage order of items with the same position") {
+        val data = root(
+            composition(node(8), position = Field.Value(1)),
+            composition(node(7), position = Field.Value(1)),
+        ).toSpecificationData()
+
+        data.parts.map { it.designation } shouldBe listOf("АБ.8", "АБ.7")
     }
 
     should("skip usages whose kind is unmapped") {
@@ -266,20 +339,20 @@ class ProductNodeSpecificationTest : ShouldSpec({
             composition(node(3)),
         ).toSpecificationData()
 
-        data.items.map { it.designation } shouldBe listOf("АБ.3")
+        data.parts.map { it.designation } shouldBe listOf("АБ.3")
     }
 
     should("skip unmapped usages") {
         val data = root(unmapped(node(2)), composition(node(3))).toSpecificationData()
 
-        data.items.map { it.designation } shouldBe listOf("АБ.3")
+        data.parts.map { it.designation } shouldBe listOf("АБ.3")
     }
 
     should("map a missing designation to null") {
         val child = node(2, designation = AttributeValue.Empty)
         val data = root(composition(child)).toSpecificationData()
 
-        data.single().designation shouldBe null
+        data.parts.single().designation shouldBe null
     }
 
     should("fail on a not loaded designation") {
@@ -292,7 +365,7 @@ class ProductNodeSpecificationTest : ShouldSpec({
         val child = node(2, designation = AttributeValue.Text("ГОСТ 7798-70"), name = AttributeValue.Empty)
         val data = root(composition(child)).toSpecificationData()
 
-        data.single().name shouldBe "ГОСТ 7798-70"
+        data.parts.single().name shouldBe "ГОСТ 7798-70"
     }
 
     should("fail when the name and designation of an item are both missing") {
@@ -311,14 +384,14 @@ class ProductNodeSpecificationTest : ShouldSpec({
         val child = node(2, designation = AttributeValue.Text("АБ.7"), name = AttributeValue.Text("Вал"))
         val data = root(composition(child)).toSpecificationData()
 
-        data.single() shouldBe SpecificationItem("АБ.7", "Вал", ItemKind.PART, 1.0, null)
+        data.parts.single() shouldBe PartItem(designation = "АБ.7", name = "Вал", quantity = 1.0)
     }
 
     should("read an empty attribute as missing") {
         val child = node(2, designation = AttributeValue.Empty, name = AttributeValue.Text("Вал"))
         val data = root(composition(child)).toSpecificationData()
 
-        data.single() shouldBe SpecificationItem(null, "Вал", ItemKind.PART, 1.0, null)
+        data.parts.single() shouldBe PartItem(designation = null, name = "Вал", quantity = 1.0)
     }
 
     should("fail as not loaded when the attribute key was not requested") {

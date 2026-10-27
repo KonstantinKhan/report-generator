@@ -1,8 +1,5 @@
 package dev.reportgenerator.reports.specification
 
-import dev.reportgenerator.domain.ItemKind
-import dev.reportgenerator.domain.SpecificationData
-import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.geometry.mm
 import dev.reportgenerator.ir.IrGroup
 import dev.reportgenerator.ir.IrTable
@@ -14,16 +11,16 @@ import kotlin.test.assertEquals
 class SpecificationBuilderTest {
 
     @Test
-    fun `specification groups items by kind with continuous position numbering`() {
+    fun `specification groups items by section and takes the position from each item`() {
         val data = SpecificationData(
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
-            items = listOf(
-                SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0),
-                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 2.0),
-                SpecificationItem("AAA.02.002", "Втулка", ItemKind.PART, 4.0),
-                SpecificationItem("ГОСТ 7798-70", "Болт М6", ItemKind.STANDARD, 8.0)
-            )
+            assemblies = listOf(AssemblyItem(position = 1, designation = "AAA.01.000", name = "Корпус", quantity = 1.0)),
+            parts = listOf(
+                PartItem(position = 2, designation = "AAA.02.001", name = "Вал", quantity = 2.0),
+                PartItem(position = 3, designation = "AAA.02.002", name = "Втулка", quantity = 4.0),
+            ),
+            standards = listOf(StandardItem(position = 4, designation = "ГОСТ 7798-70", name = "Болт М6", quantity = 8.0)),
         )
 
         val doc = specification(data)
@@ -40,17 +37,15 @@ class SpecificationBuilderTest {
     }
 
     @Test
-    fun `five blocks appear in fixed ESKD order with continuous numbering including materials`() {
+    fun `sections appear in the fixed ESKD order with the positions of their items, materials included`() {
         val data = SpecificationData(
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
-            items = listOf(
-                SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0),
-                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 2.0),
-                SpecificationItem("ГОСТ 7798-70", "Болт М6", ItemKind.STANDARD, 8.0),
-                SpecificationItem("AAA.03.000", "Пломба", ItemKind.OTHER, 1.0),
-                SpecificationItem("", "Сталь 45", ItemKind.MATERIAL, 1.0)
-            )
+            assemblies = listOf(AssemblyItem(position = 1, designation = "AAA.01.000", name = "Корпус", quantity = 1.0)),
+            parts = listOf(PartItem(position = 2, designation = "AAA.02.001", name = "Вал", quantity = 2.0)),
+            standards = listOf(StandardItem(position = 3, designation = "ГОСТ 7798-70", name = "Болт М6", quantity = 8.0)),
+            others = listOf(OtherItem(position = 4, designation = "AAA.03.000", name = "Пломба", quantity = 1.0)),
+            materials = listOf(MaterialItem(position = 5, name = "Сталь 45", quantity = 1.0)),
         )
 
         val doc = specification(data)
@@ -67,11 +62,11 @@ class SpecificationBuilderTest {
     }
 
     @Test
-    fun `a block with no matching items is omitted entirely, not printed empty`() {
+    fun `a section with no items is omitted entirely, not printed empty`() {
         val data = SpecificationData(
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
-            items = listOf(SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0))
+            assemblies = listOf(AssemblyItem(position = 1, designation = "AAA.01.000", name = "Корпус", quantity = 1.0)),
         )
 
         val doc = specification(data)
@@ -82,11 +77,40 @@ class SpecificationBuilderTest {
     }
 
     @Test
+    fun `an item without position leaves the position cell empty`() {
+        val data = SpecificationData(
+            documentDesignation = "AAA.00.000",
+            documentName = "Тестовое изделие",
+            parts = listOf(PartItem(position = null, designation = "AAA.02.001", name = "Вал", quantity = 1.0)),
+        )
+
+        val doc = specification(data)
+        val row = doc.elements.filterIsInstance<IrTable>().single().content.filterIsInstance<IrGroup>().single().rows.single()
+
+        assertEquals("", row.cells[2].text)
+    }
+
+    @Test
+    fun `documentation has an empty position and an empty quantity`() {
+        val data = SpecificationData(
+            documentDesignation = "AAA.00.000",
+            documentName = "Тестовое изделие",
+            documentation = listOf(DocumentationItem(designation = "AAA.00.000 СБ", name = "Сборочный чертёж")),
+        )
+
+        val doc = specification(data)
+        val row = doc.elements.filterIsInstance<IrTable>().single().content.filterIsInstance<IrGroup>().single().rows.single()
+
+        assertEquals("", row.cells[2].text)
+        assertEquals("", row.cells[5].text)
+    }
+
+    @Test
     fun `row cells use left align for designation and name, center for the rest`() {
         val data = SpecificationData(
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
-            items = listOf(SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0))
+            assemblies = listOf(AssemblyItem(position = 1, designation = "AAA.01.000", name = "Корпус", quantity = 1.0)),
         )
 
         val doc = specification(data)
@@ -107,10 +131,8 @@ class SpecificationBuilderTest {
         val data = SpecificationData(
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
-            items = listOf(
-                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 1.0),
-                SpecificationItem("", "Сталь 45", ItemKind.MATERIAL, 0.35, "кг")
-            )
+            parts = listOf(PartItem(position = 1, designation = "AAA.02.001", name = "Вал", quantity = 1.0)),
+            materials = listOf(MaterialItem(position = 2, name = "Сталь 45", quantity = 0.35, unit = "кг")),
         )
 
         val doc = specification(data)
@@ -121,14 +143,12 @@ class SpecificationBuilderTest {
     }
 
     @Test
-    fun `material unit goes into the note column, blank for non-material kinds`() {
+    fun `material unit goes into the note column, blank for the other sections`() {
         val data = SpecificationData(
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
-            items = listOf(
-                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 1.0),
-                SpecificationItem("", "Сталь 45", ItemKind.MATERIAL, 0.35, "кг")
-            )
+            parts = listOf(PartItem(position = 1, designation = "AAA.02.001", name = "Вал", quantity = 1.0)),
+            materials = listOf(MaterialItem(position = 2, name = "Сталь 45", quantity = 0.35, unit = "кг")),
         )
 
         val doc = specification(data)
@@ -139,29 +159,8 @@ class SpecificationBuilderTest {
     }
 
     @Test
-    fun `unit is dropped for non-material kinds even when the source provides one`() {
-        val data = SpecificationData(
-            documentDesignation = "AAA.00.000",
-            documentName = "Тестовое изделие",
-            items = listOf(
-                SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0, "шт"),
-                SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 1.0, "шт"),
-                SpecificationItem("", "Болт", ItemKind.STANDARD, 1.0, "шт"),
-                SpecificationItem("", "Пломба", ItemKind.OTHER, 1.0, "шт"),
-                SpecificationItem("", "Сталь 45", ItemKind.MATERIAL, 0.35, "кг")
-            )
-        )
-
-        val doc = specification(data)
-        val table = doc.elements.filterIsInstance<IrTable>().single()
-        val rows = table.content.filterIsInstance<IrGroup>().flatMap { it.rows }
-
-        assertEquals(listOf("", "", "", "", "кг"), rows.map { it.cells[6].text })
-    }
-
-    @Test
     fun `header has seven ESKD columns with correct orientation and manual note break`() {
-        val data = SpecificationData(documentDesignation = "AAA.00.000", documentName = "Тест", items = emptyList())
+        val data = SpecificationData(documentDesignation = "AAA.00.000", documentName = "Тест")
 
         val doc = specification(data)
         val table = doc.elements.filterIsInstance<IrTable>().single()

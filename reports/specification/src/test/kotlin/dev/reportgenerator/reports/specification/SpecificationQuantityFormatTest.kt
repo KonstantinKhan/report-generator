@@ -1,8 +1,5 @@
 package dev.reportgenerator.reports.specification
 
-import dev.reportgenerator.domain.ItemKind
-import dev.reportgenerator.domain.SpecificationData
-import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.ir.IrGroup
 import dev.reportgenerator.ir.IrTable
 import kotlin.test.Test
@@ -10,7 +7,7 @@ import kotlin.test.assertEquals
 
 // The `quantity` / `note` cells of the `body` table (format + cases in gost-spec.yaml).
 // Expected texts are literals: MATERIAL keeps up to 2 decimals (HALF_UP, trailing zeros trimmed, comma separator),
-// every other kind is a whole count (HALF_UP, no fractional part).
+// every other section is a whole count (HALF_UP, no fractional part).
 //
 // Known, intentional differences from the pre-YAML code (none is reachable with Loodsman data: quantities are positive, finite):
 //   * negative values: the old non-MATERIAL code used roundToLong (half toward +inf: -2.5 -> -2), the YAML
@@ -37,67 +34,79 @@ class SpecificationQuantityFormatTest {
         1.0E15 to "1000000000000000", 0.1 + 0.2 to "0", 1.0 / 3.0 to "0", 2.0 / 3.0 to "1",
     )
 
-    private fun item(kind: ItemKind, quantity: Double, unit: String? = null) = SpecificationItem("A.1", "Тест", kind, quantity, unit)
+    // The sections with a whole-count quantity (documentation has no quantity, materials have their own format).
+    private val wholeSections = listOf(Section.ASSEMBLY, Section.PART, Section.STANDARD, Section.OTHER)
 
-    private fun cells(item: SpecificationItem): List<String> {
-        val table = specification(SpecificationData("X", "Y", listOf(item))).elements.filterIsInstance<IrTable>().single()
+    private enum class Section { DOCUMENTATION, ASSEMBLY, PART, STANDARD, OTHER, MATERIAL }
+
+    private fun dataOf(section: Section, quantity: Double = 1.0, unit: String? = null) = SpecificationData(
+        documentDesignation = "X",
+        documentName = "Y",
+        documentation = if (section == Section.DOCUMENTATION) listOf(DocumentationItem(null, "Тест")) else emptyList(),
+        assemblies = if (section == Section.ASSEMBLY) listOf(AssemblyItem(name = "Тест", quantity = quantity)) else emptyList(),
+        parts = if (section == Section.PART) listOf(PartItem(name = "Тест", quantity = quantity)) else emptyList(),
+        standards = if (section == Section.STANDARD) listOf(StandardItem(name = "Тест", quantity = quantity)) else emptyList(),
+        others = if (section == Section.OTHER) listOf(OtherItem(name = "Тест", quantity = quantity)) else emptyList(),
+        materials = if (section == Section.MATERIAL) listOf(MaterialItem(name = "Тест", quantity = quantity, unit = unit)) else emptyList(),
+    )
+
+    private fun cells(data: SpecificationData): List<String> {
+        val table = specification(data).elements.filterIsInstance<IrTable>().single()
         return (table.content.single() as IrGroup).rows.single().cells.map { it.text }
     }
 
-    private fun quantity(item: SpecificationItem) = cells(item)[5]
+    private fun quantity(section: Section, value: Double) = cells(dataOf(section, value))[5]
 
     @Test
     fun `material quantity keeps up to two decimals`() {
-        for ((value, expected) in materialCases) assertEquals(expected, quantity(item(ItemKind.MATERIAL, value)), "MATERIAL $value")
+        for ((value, expected) in materialCases) assertEquals(expected, quantity(Section.MATERIAL, value), "MATERIAL $value")
     }
 
     @Test
-    fun `every other kind is a whole count`() {
-        for (kind in ItemKind.entries - ItemKind.DOCUMENTATION - ItemKind.MATERIAL) for ((value, expected) in wholeCases) {
-            assertEquals(expected, quantity(item(kind, value)), "$kind $value")
+    fun `every other section is a whole count`() {
+        for (section in wholeSections) for ((value, expected) in wholeCases) {
+            assertEquals(expected, quantity(section, value), "$section $value")
         }
     }
 
     @Test
-    fun `documentation has empty quantity and the new whole-count kinds round like parts`() {
-        assertEquals("", quantity(item(ItemKind.DOCUMENTATION, 1.0)))
-        assertEquals("", quantity(item(ItemKind.DOCUMENTATION, 0.0)))
-        assertEquals("2", quantity(item(ItemKind.COMPLEX, 1.5)))
-        assertEquals("3", quantity(item(ItemKind.SET, 3.0)))
+    fun `documentation has empty quantity`() {
+        assertEquals("", quantity(Section.DOCUMENTATION, 1.0))
+        assertEquals("", quantity(Section.DOCUMENTATION, 0.0))
     }
 
     @Test
-    fun `legacy expectations of the old unit test`() {
-        assertEquals("1,5", quantity(item(ItemKind.MATERIAL, 1.5)))
-        assertEquals("1,25", quantity(item(ItemKind.MATERIAL, 1.254)))
-        assertEquals("1,26", quantity(item(ItemKind.MATERIAL, 1.255)))
-        assertEquals("3", quantity(item(ItemKind.MATERIAL, 3.0)))
-        assertEquals("0", quantity(item(ItemKind.MATERIAL, 0.004)))
-        assertEquals("0,01", quantity(item(ItemKind.MATERIAL, 0.005)))
-        assertEquals("10,26", quantity(item(ItemKind.MATERIAL, 10.255)))
-        assertEquals("1000", quantity(item(ItemKind.MATERIAL, 1000.0)))
-        assertEquals("2", quantity(item(ItemKind.PART, 1.5)))
-        assertEquals("5", quantity(item(ItemKind.ASSEMBLY, 5.0)))
-        assertEquals("6", quantity(item(ItemKind.STANDARD, 6.4)))
-        assertEquals("6", quantity(item(ItemKind.OTHER, 6.4)))
-        assertEquals("0", quantity(item(ItemKind.PART, 0.4999)))
-        assertEquals("1", quantity(item(ItemKind.PART, 0.5)))
+    fun `expectations of the typical values per section`() {
+        assertEquals("1,5", quantity(Section.MATERIAL, 1.5))
+        assertEquals("1,25", quantity(Section.MATERIAL, 1.254))
+        assertEquals("1,26", quantity(Section.MATERIAL, 1.255))
+        assertEquals("3", quantity(Section.MATERIAL, 3.0))
+        assertEquals("0", quantity(Section.MATERIAL, 0.004))
+        assertEquals("0,01", quantity(Section.MATERIAL, 0.005))
+        assertEquals("10,26", quantity(Section.MATERIAL, 10.255))
+        assertEquals("1000", quantity(Section.MATERIAL, 1000.0))
+        assertEquals("2", quantity(Section.PART, 1.5))
+        assertEquals("5", quantity(Section.ASSEMBLY, 5.0))
+        assertEquals("6", quantity(Section.STANDARD, 6.4))
+        assertEquals("6", quantity(Section.OTHER, 6.4))
+        assertEquals("0", quantity(Section.PART, 0.4999))
+        assertEquals("1", quantity(Section.PART, 0.5))
     }
 
     @Test
     fun `intentional differences are limited to negative values`() {
         // negative non-material: HALF_UP away from zero (-2.5 -> -3), the old roundToLong gave -2
-        assertEquals("-3", quantity(item(ItemKind.PART, -2.5)))
+        assertEquals("-3", quantity(Section.PART, -2.5))
         // tiny negative material: "-0", the old code gave "0"
-        assertEquals("-0", quantity(item(ItemKind.MATERIAL, -0.004)))
+        assertEquals("-0", quantity(Section.MATERIAL, -0.004))
         // other negative finite values keep the material format
-        assertEquals("-1,5", quantity(item(ItemKind.MATERIAL, -1.5)))
+        assertEquals("-1,5", quantity(Section.MATERIAL, -1.5))
     }
 
     @Test
     fun `the unit is shown for materials only`() {
-        assertEquals("кг", cells(item(ItemKind.MATERIAL, 1.0, "кг"))[6])
-        assertEquals("", cells(item(ItemKind.MATERIAL, 1.0, null))[6])
-        for (kind in ItemKind.entries - ItemKind.MATERIAL) assertEquals("", cells(item(kind, 1.0, "шт"))[6], "$kind")
+        assertEquals("кг", cells(dataOf(Section.MATERIAL, 1.0, "кг"))[6])
+        assertEquals("", cells(dataOf(Section.MATERIAL, 1.0, null))[6])
+        for (section in wholeSections) assertEquals("", cells(dataOf(section, 1.0))[6], "$section")
     }
 }

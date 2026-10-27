@@ -186,20 +186,20 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 ## Виды объектов и связи
 
 Маппинг названия вида Loodsman → `PdmNodeKind` задаёт секция `kinds` в YAML. Сравнение названий — строгое, правило (в) ниже.
-Затем `PdmNodeKind` → `ItemKind` отчёта выполняет `toItemKind()` в `ProductNodeSpecification.kt`:
+Затем `PdmNodeKind` → раздел спецификации раскладывает `PdmNode.toSpecificationData()` (`ProductNodeSpecification.kt`):
 
-| Тип Loodsman | `PdmNodeKind` | `ItemKind` (спецификация) |
+| Тип Loodsman | `PdmNodeKind` | Раздел спецификации |
 |---|---|---|
-| Сборочный чертеж | `AssemblyDrawing` (id `ASSEMBLY_DRAWING`) | DOCUMENTATION |
-| Спецификация | `Specification` (id `SPECIFICATION`) | — (в отчётной части маппинг не задан) |
-| Чертеж детали | `DetailDrawing` (id `DETAIL_DRAWING`) | — (в отчётной части маппинг не задан) |
-| Комплекс | `Complex` | COMPLEX |
-| Сборочная единица | `Assembly` | ASSEMBLY |
-| Деталь | `Part` | PART |
-| Стандартное изделие | `Standard` | STANDARD |
-| Прочее изделие | `Other` | OTHER |
-| Материал по КД | `Material` | MATERIAL |
-| Комплект | `Kit` | SET |
+| Сборочный чертеж | `AssemblyDrawing` (id `ASSEMBLY_DRAWING`) | Документация (только по «Документы») |
+| Спецификация | `Specification` (id `SPECIFICATION`) | — (не попадает в отчёт) |
+| Чертеж детали | `DetailDrawing` (id `DETAIL_DRAWING`) | — (не попадает в отчёт) |
+| Комплекс | `Complex` | — (раздела нет, пропускается) |
+| Сборочная единица | `Assembly` | Сборочные единицы (`assemblies`) |
+| Деталь | `Part` | Детали (`parts`) |
+| Стандартное изделие | `Standard` | Стандартные изделия (`standards`) |
+| Прочее изделие | `Other` | Прочие изделия (`others`) |
+| Материал по КД | `Material` | Материалы (`materials`) |
+| Комплект | `Kit` | — (раздела нет, пропускается) |
 
 Связи: `relations` в YAML — список правил («Состоит из ...» → `COMPOSITION`, «Документы» → `DOCUMENT`,
 «Технологическая ДСЕ для» → `TECHNOLOGICAL_PART`; правила — в [«Правила связей»](#правила-связей-relations)). Состав идёт по `COMPOSITION`,
@@ -233,11 +233,16 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 - иначе `Quantity.Range`.
 
 В спецификации `Exact` даёт число, `Range` и `Missing` — `SpecificationDataException` (диапазон в спецификации не
-выводится). У документации количество не читается: в спецификации 0.0 и пустая ячейка.
+выводится). У документации количества нет: в разделе документации поля количества нет, ячейка пустая.
+
+**(а2) Позиция.** Источник — атрибут связи «Позиция» по правилу `link.attributes.position`. Правило есть, а значения
+нет — `Field.Missing` → позиция пустая. Значение в `Field.NotLoaded` в пайплайне не попадает (отсутствие правила или
+значения — не ошибка загрузки). Сортировка по позиции внутри раздела и место элементов без позиции — в
+[specification-table-format.md](specification-table-format.md).
 
 **(б) Материал.** У материала обозначение (`AttributeKey.Designation`, ключевой атрибут) берётся из `product` (свойство `PRODUCT`),
 наименование (`AttributeKey.Name`) — из атрибута «Наименование» (`byKind` для материала нет). В спецификации обозначение **выводится в столбец «Наименование»**,
-столбец обозначения пуст. Правило отчёта живёт в конвертере `PdmNode.toItem()`, а не в маппинге: маппинг отдаёт
+столбец обозначения пуст. Правило отчёта живёт в конвертере `PdmNode.toSpecificationData()`, а не в маппинге: маппинг отдаёт
 доменную модель как есть. Без обозначения у материала — `SpecificationDataException`. Единица измерения только у
 материалов — [specification-table-format.md](specification-table-format.md).
 

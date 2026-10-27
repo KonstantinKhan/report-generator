@@ -1,10 +1,14 @@
 package dev.reportgenerator.loodsman
 
-import dev.reportgenerator.domain.ItemKind
 import dev.reportgenerator.domain.PdmNodeId
-import dev.reportgenerator.domain.SpecificationData
-import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
+import dev.reportgenerator.reports.specification.AssemblyItem
+import dev.reportgenerator.reports.specification.DocumentationItem
+import dev.reportgenerator.reports.specification.MaterialItem
+import dev.reportgenerator.reports.specification.OtherItem
+import dev.reportgenerator.reports.specification.PartItem
+import dev.reportgenerator.reports.specification.SpecificationData
+import dev.reportgenerator.reports.specification.StandardItem
 import dev.reportgenerator.reports.specification.specificationQuery
 import dev.reportgenerator.reports.specification.toSpecificationData
 import io.kotest.core.spec.style.ShouldSpec
@@ -111,7 +115,7 @@ private class ParityLoodsman(
                         })
                     }
                 }
-                // Link attributes (position, note) are not part of SpecificationItem: no values needed.
+                // Link attributes (position, note) are not in the mock: the position stays Missing, the note is not read.
                 "/api/v4/ObjectInfo/get-link-attributes" -> buildJsonArray {}
                 else -> error("Unexpected request ${request.url}")
             }
@@ -188,10 +192,8 @@ class SpecificationPipelineTest : ShouldSpec({
         actual shouldBe SpecificationData(
             documentDesignation = "АБ.001",
             documentName = "Корпус",
-            items = listOf(
-                SpecificationItem("АБ.002", "Вал", ItemKind.PART, 2.0, "шт"),
-                SpecificationItem("АБ.003", "Крышка", ItemKind.ASSEMBLY, 1.0, "шт"),
-            ),
+            assemblies = listOf(AssemblyItem(designation = "АБ.003", name = "Крышка", quantity = 1.0)),
+            parts = listOf(PartItem(designation = "АБ.002", name = "Вал", quantity = 2.0)),
         )
     }
 
@@ -211,10 +213,8 @@ class SpecificationPipelineTest : ShouldSpec({
         actual shouldBe SpecificationData(
             documentDesignation = "АБ.001",
             documentName = "Корпус",
-            items = listOf(
-                SpecificationItem(null, "ГОСТ 7798-70", ItemKind.STANDARD, 4.0, "шт"),
-                SpecificationItem(null, "ИЗД.5", ItemKind.OTHER, 1.0, null),
-            ),
+            standards = listOf(StandardItem(name = "ГОСТ 7798-70", quantity = 4.0)),
+            others = listOf(OtherItem(name = "ИЗД.5", quantity = 1.0)),
         )
     }
 
@@ -230,9 +230,7 @@ class SpecificationPipelineTest : ShouldSpec({
         actual shouldBe SpecificationData(
             documentDesignation = "АБ.001",
             documentName = "Корпус",
-            items = listOf(
-                SpecificationItem(null, "Сталь 09Г2С", ItemKind.MATERIAL, 1.5, "кг"),
-            ),
+            materials = listOf(MaterialItem(name = "Сталь 09Г2С", quantity = 1.5, unit = "кг")),
         )
     }
 
@@ -248,9 +246,7 @@ class SpecificationPipelineTest : ShouldSpec({
         actual shouldBe SpecificationData(
             documentDesignation = "АБ.001",
             documentName = "Корпус",
-            items = listOf(
-                SpecificationItem("АБ.001 СБ", "Корпус. Сборочный чертеж", ItemKind.DOCUMENTATION, 0.0, null),
-            ),
+            documentation = listOf(DocumentationItem("АБ.001 СБ", "Корпус. Сборочный чертеж")),
         )
     }
 
@@ -266,9 +262,7 @@ class SpecificationPipelineTest : ShouldSpec({
         actual shouldBe SpecificationData(
             documentDesignation = "АБ.001",
             documentName = "Корпус",
-            items = listOf(
-                SpecificationItem("АБ.010 СБ", "Корпус. Сборочный чертёж", ItemKind.DOCUMENTATION, 0.0, null),
-            ),
+            documentation = listOf(DocumentationItem("АБ.010 СБ", "Корпус. Сборочный чертёж")),
         )
     }
 
@@ -288,12 +282,10 @@ class SpecificationPipelineTest : ShouldSpec({
         actual shouldBe SpecificationData(
             documentDesignation = "АБ.001",
             documentName = "Корпус",
-            items = listOf(
-                SpecificationItem("АБ.002", "Вал", ItemKind.PART, 1.0, null),
-            ),
+            parts = listOf(PartItem(designation = "АБ.002", name = "Вал", quantity = 1.0)),
         )
-        // Observable exclusion: only the part stays in items, the assembly drawing is dropped.
-        actual.items.map { it.name } shouldBe listOf("Вал")
+        // Observable exclusion: only the part stays in the parts, the assembly drawing is dropped.
+        actual.documentation shouldBe emptyList()
     }
 
     should("exclude an assembly drawing from the composition") {
@@ -312,9 +304,7 @@ class SpecificationPipelineTest : ShouldSpec({
         actual shouldBe SpecificationData(
             documentDesignation = "АБ.001",
             documentName = "Корпус",
-            items = listOf(
-                SpecificationItem("АБ.002", "Вал", ItemKind.PART, 1.0, null),
-            ),
+            parts = listOf(PartItem(designation = "АБ.002", name = "Вал", quantity = 1.0)),
         )
     }
 
@@ -334,9 +324,7 @@ class SpecificationPipelineTest : ShouldSpec({
         actual shouldBe SpecificationData(
             documentDesignation = "АБ.001",
             documentName = "Корпус",
-            items = listOf(
-                SpecificationItem("АБ.002", "Вал", ItemKind.PART, 1.0, null),
-            ),
+            parts = listOf(PartItem(designation = "АБ.002", name = "Вал", quantity = 1.0)),
         )
     }
 })

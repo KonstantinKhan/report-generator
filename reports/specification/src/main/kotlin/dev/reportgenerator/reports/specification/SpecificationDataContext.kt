@@ -1,8 +1,5 @@
 package dev.reportgenerator.reports.specification
 
-import dev.reportgenerator.domain.ItemKind
-import dev.reportgenerator.domain.SpecificationData
-import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.template.DataContext
 import dev.reportgenerator.template.DataValue
 import dev.reportgenerator.template.RecordBuilder
@@ -21,18 +18,52 @@ fun SpecificationData.toDataContext(): DataContext = dataContext {
     item { itemFields(null) }
 }
 
-// One record per item, in source order. Fields without a value (designation of a standard item, unit of a
-// part) are left out: the template marks their cells `optional`.
-fun SpecificationData.itemRecords(): List<DataValue.Record> = items.map { itemRecord(it) }
-
-private fun RecordBuilder.itemFields(item: SpecificationItem?) {
-    string("designation", item?.designation)
-    string("name", item?.name)
-    enum("kind", ItemKind.entries.map { it.name }, item?.kind?.name)
-    // BigDecimal.valueOf(double): the shortest decimal text of the double, as the legacy formatter used it
-    decimal("quantity", item?.let { BigDecimal.valueOf(it.quantity) })
-    string("unit", item?.unit)
+// One record per item, the sections in the order of the sheet and the items of a section in their data order.
+// Fields without a value (position of documentation, quantity of documentation, unit of a non-material) are left out:
+// the template marks their cells `optional` or does not bind them.
+fun SpecificationData.itemRecords(): List<DataValue.Record> = rows().map { row ->
+    dataContext { item { itemFields(row) } }.get("item") as DataValue.Record
 }
 
-private fun itemRecord(item: SpecificationItem): DataValue.Record =
-    dataContext { item { itemFields(item) } }.get("item") as DataValue.Record
+// Section of a row: the template groups the rows by it, in the order of GOST R 2.106-2019 p.1.
+private enum class SpecificationSection { DOCUMENTATION, ASSEMBLY, PART, STANDARD, OTHER, MATERIAL }
+
+// One row of the sheet, the fields of all sections in one shape (the section tells which of them are set).
+private class ItemRow(
+    val section: SpecificationSection,
+    val position: Int? = null,
+    val designation: String? = null,
+    val name: String,
+    val quantity: Double? = null,
+    val unit: String? = null,
+    val format: String? = null,
+    val notes: List<String> = emptyList(),
+)
+
+private fun SpecificationData.rows(): List<ItemRow> =
+    documentation.map {
+        ItemRow(SpecificationSection.DOCUMENTATION, designation = it.designation, name = it.name)
+    } + assemblies.map {
+        ItemRow(SpecificationSection.ASSEMBLY, it.position, it.designation, it.name, it.quantity, format = it.format, notes = it.notes)
+    } + parts.map {
+        ItemRow(SpecificationSection.PART, it.position, it.designation, it.name, it.quantity, format = it.format, notes = it.notes)
+    } + standards.map {
+        ItemRow(SpecificationSection.STANDARD, it.position, it.designation, it.name, it.quantity, notes = it.notes)
+    } + others.map {
+        ItemRow(SpecificationSection.OTHER, it.position, it.designation, it.name, it.quantity, notes = it.notes)
+    } + materials.map {
+        ItemRow(SpecificationSection.MATERIAL, it.position, it.designation, it.name, it.quantity, unit = it.unit, notes = it.notes)
+    }
+
+private fun RecordBuilder.itemFields(row: ItemRow?) {
+    integer("position", row?.position?.toLong())
+    string("designation", row?.designation)
+    string("name", row?.name)
+    enum("section", SpecificationSection.entries.map { it.name }, row?.section?.name)
+    // BigDecimal.valueOf(double): the shortest decimal text of the double, as the legacy formatter used it
+    decimal("quantity", row?.quantity?.let { BigDecimal.valueOf(it) })
+    string("unit", row?.unit)
+    string("format", row?.format)
+    // The template has no list binds: the notes of a row are one text, one note per line.
+    string("notes", row?.notes?.takeIf { it.isNotEmpty() }?.joinToString("\n"))
+}

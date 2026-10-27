@@ -186,8 +186,10 @@ blocks:
   # drawn (columns, header, row cells, group title, spacers, styles) and WHICH data goes where (group order and
   # titles, numbering, how a value is shown); how it is measured, wrapped and paginated is the layout engine's
   # job. The code (reports/specification) only supplies the typed row record `item` (raw values):
-  #   item.designation String (absent = empty), item.name String, item.kind Enum(DOCUMENTATION|COMPLEX|ASSEMBLY|PART|SOFTWARE|STANDARD|OTHER|MATERIAL|SET),
-  #   item.quantity Decimal, item.unit String (absent = empty); item.position is `computed` below.
+  #   item.position Integer (absent = empty), item.designation String (absent = empty), item.name String,
+  #   item.section Enum(DOCUMENTATION|ASSEMBLY|PART|STANDARD|OTHER|MATERIAL) = the section of the row,
+  #   item.quantity Decimal (absent for documentation), item.unit String (absent = empty),
+  #   item.format String (absent = empty), item.notes String (absent = empty, one note per line).
   # Columns: 6+6+8+70+63+10+22 = 185 mm = the sheet's content width (checked, no tolerance).
   # `stick`: first / last = a single-line value sits on the first / last physical line of a wrapped row.
   - id: body
@@ -198,24 +200,20 @@ blocks:
       remainder: {first: gap, rest: stretch}
       keep: {titleChain: true}     # spacers + title + first data line are never split by a page break
       styles: {head: tableHeader, data: tableText, groupTitle: groupHeader}
-      # GOST R 2.106-2019 p.1 order. A kind without items makes no group (skipEmpty), no sortBy = source order.
+      # Sections in GOST R 2.106-2019 p.1 order. A section without items makes no group (skipEmpty). The rows come
+      # in the order the code gives them: sorted by position inside each section, no sortBy here.
+      # Complex, software and kit sections are not in the model yet, so they have no title here.
       groupBy:
-        field: kind
-        order: [DOCUMENTATION, COMPLEX, ASSEMBLY, PART, SOFTWARE, STANDARD, OTHER, MATERIAL, SET]
+        field: section
+        order: [DOCUMENTATION, ASSEMBLY, PART, STANDARD, OTHER, MATERIAL]
         titles:
           DOCUMENTATION: "Документация"
-          COMPLEX: "Комплексы"
           ASSEMBLY: "Сборочные единицы"
           PART: "Детали"
-          SOFTWARE: "Программные изделия и базы данных"
           STANDARD: "Стандартные изделия"
           OTHER: "Прочие изделия"
           MATERIAL: "Материалы"
-          SET: "Комплекты"
         skipEmpty: true
-      # one running number over all groups (scope: table), 1, 2, 3, ...
-      computed:
-        position: {sequence: {scope: table, start: 1, step: 1}}
       columns:
         - {id: format, width: 6, stick: first, align: center}
         - {id: zone, width: 6, stick: first, align: center}
@@ -240,25 +238,28 @@ blocks:
         cells:
           format: ~
           zone: ~
-          position: {bind: "${item.position}", style: data}
+          # the position is the one of the item (documentation has none: the cell is empty)
+          position: {bind: "${item.position}", optional: true, style: data}
           designation: {bind: "${item.designation}", optional: true, style: data}
           name: {bind: "${item.name}", style: data}
-          # materials: up to 2 decimals, trailing zeros trimmed, decimal comma (1,5; 0,35; 3). Every other kind
+          # materials: up to 2 decimals, trailing zeros trimmed, decimal comma (1,5; 0,35; 3). Every other section
           # is a whole count (rounded half up): Loodsman counts them in pieces.
           quantity:
             style: data
             cases:
-              - where: {field: kind, eq: DOCUMENTATION}   # документация: "Кол." пусто
+              - where: {field: section, eq: DOCUMENTATION}   # документация: "Кол." пусто
                 text: ""
-              - where: {field: kind, eq: MATERIAL}
+              - where: {field: section, eq: MATERIAL}
                 bind: "${item.quantity}"
                 format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
             bind: "${item.quantity}"
             format: {pattern: "0", rounding: HALF_UP}
-          # the unit is shown for materials only (other kinds are pieces and get no unit)
+          # materials show the unit, the other sections show their notes (empty until the rules are set)
           note:
             style: data
             cases:
-              - where: {field: kind, eq: MATERIAL}
+              - where: {field: section, eq: MATERIAL}
                 bind: "${item.unit}"
                 optional: true
+            bind: "${item.notes}"
+            optional: true
