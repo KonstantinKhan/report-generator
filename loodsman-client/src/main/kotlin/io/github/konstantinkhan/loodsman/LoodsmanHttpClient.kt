@@ -3,6 +3,7 @@ package io.github.konstantinkhan.loodsman
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.ResponseException
@@ -12,19 +13,26 @@ import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import java.net.ConnectException
 import java.nio.channels.UnresolvedAddressException
 
 fun loodsmanHttpClient(): HttpClient = HttpClient(CIO) { installLoodsman() }
 
-fun HttpClientConfig<*>.installLoodsman() {
+/**
+ * [retryDelay] — пауза между повторами; по умолчанию `kotlinx.coroutines.delay`, в тестах подменяется.
+ *
+ * Порядок установки важен: `HttpResponseValidator` ставится раньше `HttpRequestRetry`, поэтому retry видит
+ * сырой 5xx-ответ (`retryIf`), а не уже сконвертированный `ResponseException`. `HttpTimeout` ставится после
+ * retry, поэтому таймаут отсчитывается заново на каждую попытку.
+ */
+fun HttpClientConfig<*>.installLoodsman(retryDelay: suspend (Long) -> Unit = { delay(it) }) {
     expectSuccess = true
     install(ContentNegotiation) {
         json(Json { ignoreUnknownKeys = true })
     }
     install(HttpCookies)
-    install(HttpTimeout)
     install(Logging) {
         level = LogLevel.INFO
     }
@@ -50,4 +58,15 @@ fun HttpClientConfig<*>.installLoodsman() {
             )
         }
     }
+    install(HttpRequestRetry) {
+        maxRetries = LoodsmanRetryPolicy.MAX_RETRIES
+        retryIf { request, response -> LoodsmanRetryPolicy.isRetryableStatus(request.method, response.status) }
+        retryOnExceptionIf { request, cause -> LoodsmanRetryPolicy.isRetryableException(request.method, cause) }
+        delayMillis(respectRetryAfterHeader = false) { retry ->
+            LoodsmanRetryPolicy.logRetry(this, retry)
+            LoodsmanRetryPolicy.delayMillis(retry)
+        }
+        delay(retryDelay)
+    }
+    install(HttpTimeout)
 }
