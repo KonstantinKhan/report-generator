@@ -59,7 +59,8 @@ private fun List<CompositionUsage>.ofKind(kind: PdmNodeKind): List<CompositionUs
 
 private fun PdmNode.toDocumentationItem(): DocumentationItem {
     val (designation, name) = designationAndName()
-    return DocumentationItem(designation = designation, name = name)
+    val format = formatCell(attributes[AttributeKey.Format].textOrNull())
+    return DocumentationItem(designation = designation, name = name, format = format.column, notes = format.notes)
 }
 
 // Values every composition item reads. The unit is read for all sections, but only materials show it (in the notes).

@@ -316,6 +316,18 @@ class ProductNodeSpecificationTest : ShouldSpec({
         data.documentation.single() shouldBe DocumentationItem("АБ.2", "Имя 2")
     }
 
+    should("take the format of an assembly drawing and mark a complex one with a note") {
+        val data = root(
+            documentWith(PdmNodeKind.AssemblyDrawing, AttributeValue.Text("2хА0")),
+            documentWith(PdmNodeKind.AssemblyDrawing, AttributeValue.Text("А1")),
+        ).toSpecificationData()
+
+        data.documentation.map { it.format to it.notes } shouldBe listOf(
+            "*)" to listOf("*)2хА0"),
+            "А1" to emptyList(),
+        )
+    }
+
     should("drop assembly drawings from the composition") {
         val drawing = node(2, kind = PdmNodeKind.AssemblyDrawing)
         val data = root(composition(drawing), composition(node(3))).toSpecificationData()

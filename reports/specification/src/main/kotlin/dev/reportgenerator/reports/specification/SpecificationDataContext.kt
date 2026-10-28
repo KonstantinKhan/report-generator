@@ -42,7 +42,7 @@ private class ItemRow(
 
 private fun SpecificationData.rows(): List<ItemRow> =
     documentation.map {
-        ItemRow(SpecificationSection.DOCUMENTATION, designation = it.designation, name = it.name)
+        ItemRow(SpecificationSection.DOCUMENTATION, designation = it.designation, name = it.name, format = it.format, notes = it.notes)
     } + assemblies.map {
         ItemRow(SpecificationSection.ASSEMBLY, it.position, it.designation, it.name, it.quantity, zone = it.zone, format = it.format, notes = it.notes)
     } + parts.map {

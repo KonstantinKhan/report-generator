@@ -23,6 +23,8 @@ sealed interface PositionedItem {
 data class DocumentationItem(
     val designation: String?,
     val name: String,
+    val format: String? = null,
+    val notes: List<String> = emptyList(),
 )
 
 // `format` / `zone` = null when the item has none. A complex format (with the letter x) and a complex zone (several
