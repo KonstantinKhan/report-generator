@@ -5,6 +5,7 @@ import dev.reportgenerator.geometry.mm
 import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrColumn
 import dev.reportgenerator.ir.IrGroup
+import dev.reportgenerator.ir.IrSpanRow
 import dev.reportgenerator.ir.IrLineNumbers
 import dev.reportgenerator.ir.IrRow
 import dev.reportgenerator.ir.IrTable
@@ -259,6 +260,8 @@ private fun buildLegacyBlocks(
                 val rowPath = "$tablePath/Row[$elementIndex]"
                 blocks += DataRowBlock(measureRow(element, table.columns, offsets, textMeasurer), element.constraints, rowPath)
             }
+
+            is IrSpanRow -> throw IllegalArgumentException("span rows (IrSpanRow) need a fixed IrTable.rowHeight")
         }
     }
 
@@ -364,6 +367,8 @@ private fun buildBorderedBlocks(
             is IrRow -> {
                 blocks += physicalRowBlocks(element, "$tablePath/Row[$elementIndex]", numbered = true)
             }
+
+            is IrSpanRow -> blocks += spanRowBlocks(element, table.columns, offsets, rowHeight, textMeasurer, "$tablePath/Span[$elementIndex]")
         }
     }
 
@@ -374,6 +379,30 @@ private fun buildBorderedBlocks(
     }
 
     return blocks
+}
+
+// A spanning row: its text wraps over the width of the columns from..to, every physical line is a bordered row. The
+// span is one merged column of the row; the other columns of the table stay their own bordered cells (their vertical
+// lines are drawn in the span row too), and no border is drawn inside the span. The span is contiguous and in column
+// order; an unknown column is a template bug.
+private fun spanRowBlocks(
+    row: IrSpanRow,
+    columns: List<IrColumn>,
+    offsets: List<Length>,
+    rowHeight: Length,
+    textMeasurer: TextMeasurer,
+    path: String
+): List<BorderedRowBlock> {
+    val from = columns.indexOfFirst { it.id == row.from }
+    val to = columns.indexOfFirst { it.id == row.to }
+    require(from >= 0 && to >= from) { "span row $path: columns '${row.from}'..'${row.to}' are not a column range of the table" }
+    val merged = IrColumn(row.from, columns.subList(from, to + 1).map { it.width }.reduce { a, b -> a + b })
+    val spanColumns = columns.take(from) + merged + columns.drop(to + 1)
+    val spanOffsets = columnOffsets(spanColumns, offsets.first())
+    val spanCells = spanColumns.indices.map { if (it == from) row.cell else IrCell("") }
+    return splitRowIntoPhysicalRows(IrRow(spanCells), spanColumns, textMeasurer).mapIndexed { lineIndex, cells ->
+        BorderedRowBlock(cells, spanColumns, spanOffsets, rowHeight, row.constraints, "$path/Line[$lineIndex]")
+    }
 }
 
 fun groupIntoUnits(blocks: List<LayoutBlock>): List<List<LayoutBlock>> {

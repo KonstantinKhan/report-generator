@@ -13,11 +13,23 @@ import dev.reportgenerator.loodsman.mapping.RelationMapper
 import org.slf4j.LoggerFactory
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
+/**
+ * Клиент структуры изделия поверх Loodsman. Кэш и лимит запросов живут в [LoadSession]: вне сессии каждый вызов
+ * [loadTree] / [loadTrees] открывает свою, внутри [loadSession] вызовы делят одну.
+ */
 class LoodsmanProductStructureClient internal constructor(
     api: LoodsmanApi,
     private val mapping: MappingConfig,
-    concurrency: Int = 8,
+    private val concurrency: Int = 8,
     private val metadata: MetadataSource
 ) : PdmNodeStructureClient {
 
@@ -25,15 +37,36 @@ class LoodsmanProductStructureClient internal constructor(
 
     private val kindMapper = KindMapper(mapping, log)
     private val relationMapper = RelationMapper(mapping, log)
-    private val limiter = Limiter(concurrency)
     private val attributeRequests = AttributeRequests(mapping)
-    private val nodeLoader = NodeLoader(api, mapping, kindMapper, attributeRequests, limiter)
-    private val linkLoader = LinkLoader(api, limiter)
-    private val linkAttributeLoader = LinkAttributeLoader(api, mapping, limiter)
-    private val replacementLoader = ReplacementLoader(api, limiter)
+    private val nodeLoader = NodeLoader(api, mapping, kindMapper, attributeRequests)
+    private val linkLoader = LinkLoader(api)
+    private val linkAttributeLoader = LinkAttributeLoader(api, mapping)
+    private val replacementLoader = ReplacementLoader(api)
     private val treeAssembler = TreeAssembler(mapping, nodeLoader, linkAttributeLoader)
 
-    override suspend fun loadTree(query: StructureQuery): PdmNode {
+    override suspend fun <T> loadSession(block: suspend () -> T): T {
+        if (coroutineContext[LoadSession] != null) return block()
+        return coroutineScope {
+            val scope = CoroutineScope(coroutineContext.minusKey(Job) + SupervisorJob(coroutineContext[Job]))
+            val session = LoadSession(concurrency, scope)
+            try {
+                withContext(session) { block() }
+            } finally {
+                session.close()
+            }
+        }
+    }
+
+    override suspend fun loadTree(query: StructureQuery): PdmNode = loadTrees(listOf(query)).single()
+
+    override suspend fun loadTrees(queries: List<StructureQuery>): List<PdmNode> = loadSession {
+        val session = checkNotNull(coroutineContext[LoadSession]) { "loadSession must open the load session" }
+        coroutineScope {
+            queries.map { query -> async { loadTreeIn(session, query) } }.awaitAll()
+        }
+    }
+
+    private suspend fun loadTreeIn(session: LoadSession, query: StructureQuery): PdmNode {
         val rootId = query.rootId.asInt()
         val snapshot = metadata.snapshot()
         val linkTypes = resolveLinkTypes(snapshot, query.relations)
@@ -50,7 +83,7 @@ class LoodsmanProductStructureClient internal constructor(
             minOf(query.depth, query.relationDepth[relation] ?: query.depth)
         }
         while (frontier.isNotEmpty()) {
-            nodeLoader.loadNodes(frontier, snapshot, state.nodes, query)
+            nodeLoader.loadNodes(session, frontier, snapshot, state.nodes, query)
             if (level >= query.depth) break
 
             // Дети следующего уровня по связи появляются, только если уровень не глубже её предела.
@@ -60,7 +93,7 @@ class LoodsmanProductStructureClient internal constructor(
             val expandable = frontier.filter { state.nodes.getValue(it).kind != null }
             // Тип узла Loodsman нужен для отбора правил: раскрываемый узел имеет вид, значит тип задан.
             val typeNameById = expandable.associateWith { requireNotNull(state.nodes.getValue(it).prop.type) }
-            state.links.putAll(linkLoader.loadLinks(typeNameById, levelLinkTypes))
+            state.links.putAll(linkLoader.loadLinks(session, typeNameById, levelLinkTypes))
             frontier = expandable.flatMap { id -> state.links.getValue(id).map { it.dto.idChild } }
                 .distinct()
                 .filter { it !in state.nodes }
@@ -72,8 +105,8 @@ class LoodsmanProductStructureClient internal constructor(
             throw LoodsmanApiException("Root object $rootId has unmapped type '${root.prop.type}'")
         }
 
-        val linkAttributes = linkAttributeLoader.loadLinkAttributes(query, state.nodes, state.links)
-        val replacements = replacementLoader.loadReplacements(query, rootId, state.nodes, state.links)
+        val linkAttributes = linkAttributeLoader.loadLinkAttributes(session, query, state.nodes, state.links)
+        val replacements = replacementLoader.loadReplacements(session, query, rootId, state.nodes, state.links)
         return treeAssembler.buildNode(
             rootId, query.depth, query, state.nodes, state.links, linkAttributes, replacements, emptyList()
         )

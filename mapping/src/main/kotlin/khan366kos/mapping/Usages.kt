@@ -12,6 +12,7 @@ import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.TechnologicalPartUsage
 import dev.reportgenerator.domain.UnmappedUsage
 import dev.reportgenerator.domain.Usage
+import dev.reportgenerator.domain.VariantUsage
 
 data class ResolvedLink(
     val relation: Relation,
@@ -38,6 +39,7 @@ fun usagesOf(links: List<ResolvedLink>): List<Usage> = links.map { link ->
         Relation.Document -> DocumentUsage(target = link.child, attributes = attrs)
         Relation.MadeFrom -> MadeFromUsage(target = link.child, attributes = attrs)
         Relation.TechnologicalPart -> TechnologicalPartUsage(target = link.child, attributes = attrs)
+        Relation.Variant -> VariantUsage(target = link.child, attributes = attrs)
         is Relation.Unmapped -> UnmappedUsage(
             relation = link.relation,
             target = link.child,

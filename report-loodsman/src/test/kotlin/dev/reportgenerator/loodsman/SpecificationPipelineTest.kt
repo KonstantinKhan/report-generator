@@ -16,8 +16,9 @@ import dev.reportgenerator.reports.specification.OtherItem
 import dev.reportgenerator.reports.specification.PartItem
 import dev.reportgenerator.reports.specification.SpecificationData
 import dev.reportgenerator.reports.specification.SpecificationDataException
+import dev.reportgenerator.reports.specification.SpecificationVariant
 import dev.reportgenerator.reports.specification.StandardItem
-import dev.reportgenerator.reports.specification.specificationQuery
+import dev.reportgenerator.reports.specification.loadSpecificationStructure
 import dev.reportgenerator.reports.specification.toSpecificationData
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.ShouldSpec
@@ -49,6 +50,8 @@ private const val MADE_FROM_LINK = "Изготавливается из ..."
 private const val COMPOSITION_LINK_ID = 1
 private const val DOCUMENT_LINK_ID = 2
 private const val MADE_FROM_LINK_ID = 3
+private const val VARIANT_LINK = "Исполнения"
+private const val VARIANT_LINK_ID = 7
 
 // Ключевой атрибут всех видов: значение лежит в product объекта.
 private const val KEY_ATTRIBUTE = "Обозначение"
@@ -89,7 +92,10 @@ private class ParityLoodsman(
                 "/api/v4/MetaData/cache/version" -> JsonPrimitive(1)
                 "/api/v4/MetaData/get-attribute-list-2" -> buildJsonArray {}
                 "/api/v4/MetaData/get-link-list" -> buildJsonArray {
-                    listOf(COMPOSITION_LINK_ID to COMPOSITION_LINK, DOCUMENT_LINK_ID to DOCUMENT_LINK, MADE_FROM_LINK_ID to MADE_FROM_LINK).forEach { (id, name) ->
+                    listOf(
+                        COMPOSITION_LINK_ID to COMPOSITION_LINK, DOCUMENT_LINK_ID to DOCUMENT_LINK,
+                        MADE_FROM_LINK_ID to MADE_FROM_LINK, VARIANT_LINK_ID to VARIANT_LINK,
+                    ).forEach { (id, name) ->
                         add(buildJsonObject {
                             put("id", id)
                             put("name", name)
@@ -114,11 +120,13 @@ private class ParityLoodsman(
                     }
                 }
                 "/api/v4/ObjectInfo/get-linked-objects-for-objects" -> {
-                    val parent = params["objectsIds"]!!.toInt()
+                    val parents = params["objectsIds"]!!.split(",").map { it.toInt() }
                     val linkTypes = params["linksTypesIds"]!!.split(",").map { it.toInt() }.toSet()
-                    JsonArray(edges.withIndex()
-                        .filter { (_, edge) -> edge.parent == parent && linkTypeId(edge.link) in linkTypes }
-                        .map { (index, edge) -> linkOf(edge, index + 1) })
+                    JsonArray(parents.flatMap { parent ->
+                        edges.withIndex()
+                            .filter { (_, edge) -> edge.parent == parent && linkTypeId(edge.link) in linkTypes }
+                            .map { (index, edge) -> linkOf(edge, index + 1) }
+                    })
                 }
                 // Replacement groups of the root (the specification asks for them): none in these fixtures.
                 "/api/v4/ObjectInfo/get-info-about-version-mode-20" -> buildJsonArray {}
@@ -164,6 +172,7 @@ private class ParityLoodsman(
         COMPOSITION_LINK -> COMPOSITION_LINK_ID
         DOCUMENT_LINK -> DOCUMENT_LINK_ID
         MADE_FROM_LINK -> MADE_FROM_LINK_ID
+        VARIANT_LINK -> VARIANT_LINK_ID
         else -> error("Unknown link $name")
     }
 
@@ -195,7 +204,7 @@ private class ParityLoodsman(
     }
 }
 
-// The tree of the specification query of the root 1, as the production pipeline loads it.
+// The specification tree of the root 1 (with its variants), as the production pipeline loads it.
 private suspend fun loadSpecificationTree(
     objects: List<ParityObj>,
     edges: List<ParityEdge>,
@@ -205,7 +214,7 @@ private suspend fun loadSpecificationTree(
     val api = LoodsmanApi(config, httpClient)
     val metadata = MetadataCache(api, validate = { emptyList() }).also { it.initialize() }
     return LoodsmanProductStructureClient(api, MappingConfigLoader.load(emptyMap()), metadata = metadata)
-        .loadTree(specificationQuery(PdmNodeId(1)))
+        .loadSpecificationStructure(PdmNodeId(1))
 }
 
 private suspend fun loadPipeline(
@@ -496,5 +505,56 @@ class SpecificationPipelineTest : ShouldSpec({
         child.usages.filterIsInstance<CompositionUsage>() shouldBe emptyList()
         child.usages.filterIsInstance<DocumentUsage>().single().target.attributes[AttributeKey.Format] shouldBe
             AttributeValue.Text("A4")
+    }
+})
+
+// Variants (связь «Исполнения», id 7) of the root through the production pipeline: the variant's composition is read by
+// its own query, the common items (same object and quantity in every execution) stay in the main part.
+class SpecificationVariantsPipelineTest : ShouldSpec({
+    should("print the items that are not common to the executions in the variant blocks") {
+        val actual = loadPipeline(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
+                ParityObj(3, "Деталь", "АБ.003", mapOf("Наименование" to "Крышка")),
+                ParityObj(4, "Сборочная единица", "АБ.001-02", mapOf("Наименование" to "Корпус 2")),
+                ParityObj(5, "Деталь", "АБ.005", mapOf("Наименование" to "Фланец")),
+            ),
+            edges = listOf(
+                ParityEdge(1, 2, min = 2.0, max = 2.0, unit = "шт"),
+                ParityEdge(1, 3, min = 1.0, max = 1.0, unit = "шт"),
+                ParityEdge(1, 4, link = VARIANT_LINK),
+                ParityEdge(4, 2, min = 2.0, max = 2.0, unit = "шт"),
+                ParityEdge(4, 5, min = 1.0, max = 1.0, unit = "шт"),
+            ),
+        )
+
+        actual shouldBe SpecificationData(
+            documentDesignation = "АБ.001",
+            documentName = "Корпус",
+            parts = listOf(PartItem(designation = "АБ.002", name = "Вал", quantity = 2.0)),
+            variants = listOf(
+                SpecificationVariant("АБ.001", parts = listOf(PartItem(designation = "АБ.003", name = "Крышка", quantity = 1.0))),
+                SpecificationVariant("АБ.001-02", parts = listOf(PartItem(designation = "АБ.005", name = "Фланец", quantity = 1.0))),
+            ),
+        )
+    }
+
+    should("have no variant block when every item is common to the executions") {
+        val actual = loadPipeline(
+            objects = listOf(
+                ParityObj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус")),
+                ParityObj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
+                ParityObj(4, "Сборочная единица", "АБ.001-02", mapOf("Наименование" to "Корпус 2")),
+            ),
+            edges = listOf(
+                ParityEdge(1, 2, min = 2.0, max = 2.0, unit = "шт"),
+                ParityEdge(1, 4, link = VARIANT_LINK),
+                ParityEdge(4, 2, min = 2.0, max = 2.0, unit = "шт"),
+            ),
+        )
+
+        actual.variants shouldBe emptyList<SpecificationVariant>()
+        actual.parts shouldBe listOf(PartItem(designation = "АБ.002", name = "Вал", quantity = 2.0))
     }
 })

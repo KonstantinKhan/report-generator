@@ -11,7 +11,25 @@ data class SpecificationData(
     val standards: List<StandardItem> = emptyList(),
     val others: List<OtherItem> = emptyList(),
     val materials: List<MaterialItem> = emptyList(),
+    // Переменные данные исполнений: блоки в порядке связи, основное исполнение первым. Пусто, если исполнений нет
+    // или ни в одном исполнении нет уникальных элементов.
+    val variants: List<SpecificationVariant> = emptyList(),
 )
+
+// One execution (исполнение) of the product in the "Переменные данные для исполнений" section: its designation and the
+// items that are not common to all executions (the same sections as the main part).
+data class SpecificationVariant(
+    val designation: String,
+    val documentation: List<DocumentationItem> = emptyList(),
+    val assemblies: List<AssemblyItem> = emptyList(),
+    val parts: List<PartItem> = emptyList(),
+    val standards: List<StandardItem> = emptyList(),
+    val others: List<OtherItem> = emptyList(),
+    val materials: List<MaterialItem> = emptyList(),
+) {
+    fun isEmpty(): Boolean = documentation.isEmpty() && assemblies.isEmpty() && parts.isEmpty() &&
+        standards.isEmpty() && others.isEmpty() && materials.isEmpty()
+}
 
 // Common part of the items that take a row of a section. `position` = null when the item has no position.
 sealed interface PositionedItem {

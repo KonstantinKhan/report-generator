@@ -18,7 +18,6 @@ import io.github.konstantinkhan.loodsman.LoodsmanApiException
 internal class LinkAttributeLoader(
     private val api: LoodsmanApi,
     private val mapping: MappingConfig,
-    private val limiter: Limiter,
 ) {
 
     /** Идентификатор ключа связи в реестре; ключ проверяется в клиенте до чтения связей. */
@@ -31,6 +30,7 @@ internal class LinkAttributeLoader(
         mapping.link.positionRules.select(relation, parentKind, childKind)
 
     suspend fun loadLinkAttributes(
+        session: LoadSession,
         query: StructureQuery,
         nodes: Map<Int, LoadedNode>,
         links: Map<Int, List<Link>>
@@ -51,23 +51,24 @@ internal class LinkAttributeLoader(
             mapping.link.attributes.getValue(linkAttributeIdOf(key))
         }
 
-        val attributesByLinkId = limiter.withPermits(linksByLinkId.keys.toList()) { linkId ->
-            val link = linksByLinkId.getValue(linkId)
+        val needed = linksByLinkId.values.filter { link ->
             val parentKind = nodes.getValue(link.dto.idParent).kind!!
             val childKind = nodes.getValue(link.dto.idChild).kind!!
-            val needsAttributeRequest =
-                positionRuleOf(link.relation, parentKind, childKind) != null ||
-                        requestedRules.any { it.select(link.relation, parentKind, childKind) != null }
+            positionRuleOf(link.relation, parentKind, childKind) != null ||
+                    requestedRules.any { it.select(link.relation, parentKind, childKind) != null }
+        }.map { it.linkId }
 
-            if (!needsAttributeRequest) {
-                return@withPermits emptyMap<String, String>()
-            }
-
-            api.objectInfo.linkAttributes(linkId)
-                .associate { it.name.orEmpty() to it.value.orEmpty() }
-                .filterKeys { it.isNotEmpty() }
+        val loaded = session.linkAttributes.getAll(needed) { missing ->
+            val results = session.limiter.mapPermitted(missing) { linkId -> api.objectInfo.linkAttributes(linkId) }
+            missing.zip(results).toMap()
         }
 
-        return attributesByLinkId.mapValues { (_, attributes) -> LinkAttributesData(attributes) }
+        return linksByLinkId.keys.associateWith { linkId ->
+            LinkAttributesData(
+                loaded[linkId].orEmpty()
+                    .associate { it.name.orEmpty() to it.value.orEmpty() }
+                    .filterKeys { it.isNotEmpty() }
+            )
+        }
     }
 }

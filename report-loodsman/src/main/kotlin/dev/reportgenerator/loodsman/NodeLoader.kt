@@ -14,6 +14,7 @@ import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
 import khan366kos.mapping.AttributeRequest
 import khan366kos.mapping.toDomain
 
+/** Размер пачки свойств (get-prop-objects) на один запрос. */
 private const val PROPS_BATCH_SIZE = 100
 
 /** Загрузка объектов Loodsman: пачками для обхода дерева и по одному для [loadNode]. */
@@ -22,7 +23,6 @@ internal class NodeLoader(
     private val mapping: MappingConfig,
     private val kindMapper: KindMapper,
     private val attributeRequests: AttributeRequests,
-    private val limiter: Limiter,
 ) {
 
     /** Загрузка одного узла; предпроверка типа и запроса атрибутов та же, что в [loadNodes]. */
@@ -41,22 +41,25 @@ internal class NodeLoader(
             attributeKeys,
             includeUnmapped,
         )
-        return toPdmNode(props, kind, objectAttributesOf(id.asInt(), request), request)
+        val attributes = if (request.needsObjectAttributes()) api.objectInfo.infoAboutVersion(id.asInt()) else emptyList()
+        return toPdmNode(props, kind, attributes, request)
     }
 
-    /** Загружает узлы [ids] в [nodes]; свойства читаются пачками по [PROPS_BATCH_SIZE]. */
+    /**
+     * Загружает узлы [ids] в [nodes] в рамках сессии: свойства читаются пачками по [PROPS_BATCH_SIZE], уже прочитанные
+     * в этой загрузке — из кэша сессии.
+     */
     suspend fun loadNodes(
+        session: LoadSession,
         ids: List<Int>,
         snapshot: MetadataSnapshot,
         nodes: MutableMap<Int, LoadedNode>,
         query: StructureQuery,
     ) {
-        val props = ids.chunked(PROPS_BATCH_SIZE).flatMap { chunk ->
-            api.objectInfo.propObjects(chunk)
-        }.associateBy { it.idVersion }
+        val props = session.props.getAll(ids) { missing -> loadProps(session, missing) }
 
         val prepared = ids.map { id ->
-            val prop = props[id] ?: throw LoodsmanApiException("Object not found in Loodsman: id=$id")
+            val prop = props.getValue(id)
             id to Pair(prop, kindMapper.map(prop.type))
         }
 
@@ -69,19 +72,36 @@ internal class NodeLoader(
                 kind, keyAttributes[id], query.attributes, query.includeUnmappedAttributes
             )
         }.toMap()
-        val attributes = limiter.withPermits(requests.keys.toList()) { id ->
-            objectAttributesOf(id, requests.getValue(id))
+        val attributeKeys = requests.filterValues { it.needsObjectAttributes() }.map { (id, request) ->
+            AttributesKey(id, request)
+        }
+        val loadedAttributes = session.attributes.getAll(attributeKeys) { missing ->
+            val results = session.limiter.mapPermitted(missing) { key -> api.objectInfo.infoAboutVersion(key.id) }
+            missing.zip(results).toMap()
         }
 
         prepared.forEach { (id, pair) ->
             val (prop, kind) = pair
-            nodes[id] = LoadedNode(prop, kind, attributes[id].orEmpty(), keyAttributes[id], requests[id])
+            val request = requests[id]
+            val attributes = if (request != null && request.needsObjectAttributes()) {
+                loadedAttributes.getValue(AttributesKey(id, request))
+            } else {
+                emptyList()
+            }
+            nodes[id] = LoadedNode(prop, kind, attributes, keyAttributes[id], request)
         }
     }
 
-    /** Атрибуты объекта читаются, только если запрос требует не ключевые атрибуты. */
-    private suspend fun objectAttributesOf(id: Int, request: AttributeRequest): List<ObjectAttributeOutputDto> =
-        if (request.needsObjectAttributes()) api.objectInfo.infoAboutVersion(id) else emptyList()
+    /** Свойства пачками по [PROPS_BATCH_SIZE]; объект, которого нет в Loodsman, — ошибка. */
+    private suspend fun loadProps(session: LoadSession, missing: List<Int>): Map<Int, PropObjectOutputDto> {
+        // Пачки идут по одной: порядок запросов к Loodsman тот же, что был до кэша.
+        val loaded = missing.chunked(PROPS_BATCH_SIZE).flatMap { chunk ->
+            session.limiter.permit { api.objectInfo.propObjects(chunk) }
+        }.associateBy { it.idVersion }
+        return missing.associateWith { id ->
+            loaded[id] ?: throw LoodsmanApiException("Object not found in Loodsman: id=$id")
+        }
+    }
 
     fun toPdmNode(
         prop: PropObjectOutputDto,

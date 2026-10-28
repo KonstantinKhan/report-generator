@@ -10,12 +10,18 @@ import dev.reportgenerator.domain.MadeFromUsage
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Quantity
+import dev.reportgenerator.domain.VariantUsage
 import java.math.BigDecimal
 import java.math.RoundingMode
 
 // Converts the product structure of the root node into the specification data. Each section takes the usages whose
 // target has the kind of the section; usages of other kinds (complex, kit, unmapped, drawings other than the assembly
 // drawing) do not get into the sheet. Items with a position are sorted by it, items without one go after them.
+//
+// Variants (исполнения, связь VariantUsage от корня): an item is common when every execution (the root and each
+// variant) has it with the same object id and the same quantity. Common items stay in the main part; every other item
+// goes to the block of each execution it is in (the root's block first, then the variants in link order). An execution
+// without such items has no block.
 fun PdmNode.toSpecificationData(): SpecificationData {
     val documentDesignation = when (val value = attributeText(AttributeKey.Designation)) {
         is TextState.Value -> value.text
@@ -27,14 +33,60 @@ fun PdmNode.toSpecificationData(): SpecificationData {
         is TextState.Missing -> documentDesignation
         is TextState.NotLoaded -> throw SpecificationDataException("Root node ${id.asInt()}: name is not loaded")
     }
-    val composition = usages.filterIsInstance<CompositionUsage>()
-    // The replacement notes of the root's items (permissible groups only), computed once for the whole sheet.
-    val replacements = ReplacementNotes.of(this)
+    val executions = listOf(this) + usages.filterIsInstance<VariantUsage>().map { it.target }
+    val keysOf = executions.map { it.specificationKeys() }
+    val common = keysOf.reduce { acc, keys -> acc intersect keys }
+    val isCommon: (ItemKey) -> Boolean = { it in common }
+    // The replacement notes of an execution's items (permissible groups only), computed once per execution.
+    val replacementsOf = executions.map { ReplacementNotes.of(it) }
+
+    val main = sectionsOf(replacementsOf.first()) { isCommon(it) }
+    val designations = executions.map { it.designationLabel() }
+    // The root execution first, the others by designation (natural order); the sort is stable, so equal designations keep the link order.
+    val order = executions.indices.sortedWith(
+        compareBy<Int> { it != 0 }.thenComparator { a, b -> NaturalOrder.compare(designations[a], designations[b]) }
+    )
+    val variants = order.map { index ->
+        val sections = executions[index].sectionsOf(replacementsOf[index]) { !isCommon(it) }
+        SpecificationVariant(
+            designation = designations[index],
+            documentation = sections.documentation,
+            assemblies = sections.assemblies,
+            parts = sections.parts,
+            standards = sections.standards,
+            others = sections.others,
+            materials = sections.materials,
+        )
+    }.filterNot { it.isEmpty() }
+
     return SpecificationData(
         documentDesignation = documentDesignation,
         documentName = documentName,
+        documentation = main.documentation,
+        assemblies = main.assemblies,
+        parts = main.parts,
+        standards = main.standards,
+        others = main.others,
+        materials = main.materials,
+        variants = variants,
+    )
+}
+
+// The items of one execution in the sections of the sheet; `keep` selects the items by their key.
+private class Sections(
+    val documentation: List<DocumentationItem>,
+    val assemblies: List<AssemblyItem>,
+    val parts: List<PartItem>,
+    val standards: List<StandardItem>,
+    val others: List<OtherItem>,
+    val materials: List<MaterialItem>,
+)
+
+private fun PdmNode.sectionsOf(replacements: Map<Int, ReplacementNote>, keep: (ItemKey) -> Boolean): Sections {
+    val composition = usages.filterIsInstance<CompositionUsage>().filter { keep(it.itemKey()) }
+    return Sections(
         documentation = usages.filterIsInstance<DocumentUsage>()
-            .filter { it.isSpecificationDocument() }
+            .filter { it.isSpecificationDocument() && keep(ItemKey(it.target.id.asInt(), null)) }
             .map { it.target.toDocumentationItem() }
             .sortedWith(documentationOrder),
         assemblies = composition.ofKind(PdmNodeKind.Assembly).map { it.toAssemblyItem(replacements) }.sortedByPosition(),
@@ -46,11 +98,65 @@ fun PdmNode.toSpecificationData(): SpecificationData {
     )
 }
 
+// Identity of an item for the comparison of the executions: the object id and the quantity (null for a document).
+private data class ItemKey(val targetId: Int, val quantity: Quantity?)
+
+private fun CompositionUsage.itemKey(): ItemKey = ItemKey(target.id.asInt(), quantity)
+
+// The keys of every item of the execution: its composition and its specification documents.
+private fun PdmNode.specificationKeys(): Set<ItemKey> =
+    usages.filterIsInstance<CompositionUsage>().mapTo(HashSet()) { it.itemKey() } +
+        usages.filterIsInstance<DocumentUsage>().filter { it.isSpecificationDocument() }
+            .mapTo(HashSet()) { ItemKey(it.target.id.asInt(), null) }
+
+// Designation of an execution: the label of its block in the variants section.
+private fun PdmNode.designationLabel(): String = when (val value = attributeText(AttributeKey.Designation)) {
+    is TextState.Value -> value.text
+    is TextState.Missing -> throw SpecificationDataException("Node ${id.asInt()}: designation is missing for an execution")
+    is TextState.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: designation is not loaded")
+}
+
 // Which documents get into the documentation section. Kept as a named function: the rule will be refined later.
 private fun DocumentUsage.isSpecificationDocument(): Boolean = target.kind == PdmNodeKind.AssemblyDrawing
 
 // Order of the documentation section: by designation, without one by name.
 private val documentationOrder: Comparator<DocumentationItem> = compareBy { it.designation ?: it.name }
+
+// Natural order of designations: a run of digits compares as a number ("-2" < "-10"), the rest of the text compares
+// ignoring case. Texts equal in this order compare as 0 (the caller's stable sort keeps their order).
+internal object NaturalOrder : Comparator<String> {
+    override fun compare(a: String, b: String): Int {
+        var i = 0
+        var j = 0
+        while (i < a.length && j < b.length) {
+            if (a[i].isDigit() && b[j].isDigit()) {
+                val startA = i
+                val startB = j
+                while (i < a.length && a[i].isDigit()) i++
+                while (j < b.length && b[j].isDigit()) j++
+                val byNumber = compareNumbers(a.substring(startA, i), b.substring(startB, j))
+                if (byNumber != 0) return byNumber
+            } else {
+                val byChar = a[i].lowercaseChar().compareTo(b[j].lowercaseChar())
+                if (byChar != 0) return byChar
+                i++
+                j++
+            }
+        }
+        return when {
+            i < a.length -> 1
+            j < b.length -> -1
+            else -> 0
+        }
+    }
+
+    // Digit runs as numbers without leading zeros: a longer run is the bigger number, equal lengths compare as text.
+    private fun compareNumbers(a: String, b: String): Int {
+        val x = a.trimStart('0')
+        val y = b.trimStart('0')
+        return if (x.length != y.length) x.length.compareTo(y.length) else x.compareTo(y)
+    }
+}
 
 // Items with a position go first in position order (equal positions keep the usage order); items without one go
 // after them, by designation or, without a designation, by name.

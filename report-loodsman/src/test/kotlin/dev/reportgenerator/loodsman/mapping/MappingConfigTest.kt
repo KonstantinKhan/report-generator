@@ -80,7 +80,7 @@ class MappingConfigTest : ShouldSpec({
         should("load and validate default loodsman-mapping.yaml from classpath") {
             val config = MappingConfigLoader.load(emptyMap())
             config.kinds.shouldContainKey("Деталь")
-            config.relations.map { it.link } shouldBe listOf("Состоит из ...", "Документы", "Технологическая ДСЕ для", "Изготавливается из ...")
+            config.relations.map { it.link } shouldBe listOf("Состоит из ...", "Документы", "Технологическая ДСЕ для", "Изготавливается из ...", "Исполнения")
             config.requiredRelations.contains("COMPOSITION") shouldBe true
         }
 

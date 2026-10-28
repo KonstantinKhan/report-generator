@@ -39,6 +39,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -50,7 +51,7 @@ import io.github.konstantinkhan.loodsman.installLoodsman
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
-private const val COMPOSITION = "Состоит из ..."
+internal const val COMPOSITION = "Состоит из ..."
 private const val TECHNOLOGICAL_PART = "Технологическая ДСЕ для"
 
 // Размер пачки получения свойств объектов, как в клиенте.
@@ -62,14 +63,14 @@ private const val INVERSE_LINK_ID_BASE = 100_000
 // Ключевой атрибут всех видов в фейке: его значение лежит в product объекта.
 private const val KEY_ATTRIBUTE = "Обозначение"
 
-private data class Obj(
+internal data class Obj(
     val id: Int,
     val type: String,
     val product: String,
     val attrs: Map<String, String> = emptyMap()
 )
 
-private data class Edge(
+internal data class Edge(
     val parent: Int,
     val child: Int,
     val link: String = COMPOSITION,
@@ -80,22 +81,31 @@ private data class Edge(
 )
 
 // Запросы, которые клиент распараллеливает через семафор: по ним считается число одновременных запросов.
-private val CONCURRENT_PATHS = setOf(
+internal val CONCURRENT_PATHS = setOf(
     "/api/v4/ObjectInfo/get-linked-objects-for-objects",
     "/api/v4/ObjectInfo/get-link-attributes",
     "/api/v4/ObjectInfo/get-info-about-version-mode-3",
 )
 
 /** Запрос связей фейку: объект, id типов связей и признак inverse. */
-private data class LinkRequest(val objectId: Int, val linkTypeIds: List<Int>, val inverse: Boolean)
+internal data class LinkRequest(val objectId: Int, val linkTypeIds: List<Int>, val inverse: Boolean)
 
-private class FakeLoodsman(
+internal class FakeLoodsman(
     private val objects: List<Obj>,
     private val edges: List<Edge>,
     private val linkNames: List<String> = listOf(COMPOSITION, "Документы"),
     private val requestDelay: Duration = Duration.ZERO,
     private val replacementRows: Map<Int, List<JsonElement>> = emptyMap(),
+    /** Ожидание перед ответом на запрос связей, по первому запрошенному объекту: для проверки порядка ответов. */
+    private val linkGates: Map<Int, CompletableDeferred<Unit>> = emptyMap(),
+    /** Ожидание перед ответом на любой запрос из [CONCURRENT_PATHS]: держит запросы в полёте. */
+    private val trackedGate: CompletableDeferred<Unit>? = null,
+    /** Число запросов в полёте, при котором завершается [inFlightReached]. */
+    private val signalInFlightAt: Int = Int.MAX_VALUE,
 ) {
+    val inFlightReached = CompletableDeferred<Unit>()
+    /** Пачки объектов каждого запроса связей, в порядке прихода. */
+    val linkBatches: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val replacementCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val propsCalls: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val linkCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
@@ -144,9 +154,14 @@ private class FakeLoodsman(
             if (tracked) {
                 val now = inFlight.incrementAndGet()
                 maxInFlight.accumulateAndGet(now) { a, b -> maxOf(a, b) }
+                if (now >= signalInFlightAt) inFlightReached.complete(Unit)
+                trackedGate?.await()
                 if (requestDelay > Duration.ZERO) delay(requestDelay)
             }
             val params = request.url.parameters
+            if (request.url.encodedPath == "/api/v4/ObjectInfo/get-linked-objects-for-objects") {
+                linkGates[params["objectsIds"]!!.split(",").first().toInt()]?.await()
+            }
             val body: JsonElement = when (request.url.encodedPath) {
                 "/api/v4/Auth/login" -> buildJsonObject {
                     put("sessionId", "s1")
@@ -194,22 +209,26 @@ private class FakeLoodsman(
                     }
                 }
                 "/api/v4/ObjectInfo/get-linked-objects-for-objects" -> {
-                    val requested = params["objectsIds"]!!.toInt()
+                    val requestedIds = params["objectsIds"]!!.split(",").map { it.toInt() }
                     val linkTypeIds = params["linksTypesIds"]!!.split(",").map { it.toInt() }
                     val inverse = params["inverse"]!!.toBoolean()
-                    linkCalls.add(requested)
-                    linkRequests.add(LinkRequest(requested, linkTypeIds, inverse))
-                    // Как у Loodsman: inverse смотрит с точки запрошенного объекта, idParent = запрошенный.
-                    val matched = edges.filter { edge ->
-                        (if (inverse) edge.child else edge.parent) == requested &&
-                                linkTypeIdOf(edge.link) in linkTypeIds
-                    }
-                    JsonArray(matched.mapIndexed { index, edge ->
-                        val neighbor = if (inverse) edge.parent else edge.child
-                        // Id связи уникален в фейке: прямые связи — parent*100+порядок, обратные — за пределами.
-                        val linkId = if (inverse) INVERSE_LINK_ID_BASE + edges.indexOf(edge) else edge.parent * 100 + index
-                        linkIdToEdge[linkId] = edge
-                        linkOf(linkId, requested, neighbor, edge.link)
+                    linkBatches.add(requestedIds)
+                    // Пачка объектов: ответ по каждому запрошенному объекту, как у Loodsman; для каждого учитывается запрос.
+                    JsonArray(requestedIds.flatMap { requested ->
+                        linkCalls.add(requested)
+                        linkRequests.add(LinkRequest(requested, linkTypeIds, inverse))
+                        // Как у Loodsman: inverse смотрит с точки запрошенного объекта, idParent = запрошенный.
+                        val matched = edges.filter { edge ->
+                            (if (inverse) edge.child else edge.parent) == requested &&
+                                    linkTypeIdOf(edge.link) in linkTypeIds
+                        }
+                        matched.mapIndexed { index, edge ->
+                            val neighbor = if (inverse) edge.parent else edge.child
+                            // Id связи уникален в фейке: прямые связи — parent*100+порядок, обратные — за пределами.
+                            val linkId = if (inverse) INVERSE_LINK_ID_BASE + edges.indexOf(edge) else edge.parent * 100 + index
+                            linkIdToEdge[linkId] = edge
+                            linkOf(linkId, requested, neighbor, edge.link)
+                        }
                     })
                 }
                 "/api/v4/ObjectInfo/get-info-about-version-mode-20" -> {
@@ -275,30 +294,30 @@ private class FakeLoodsman(
     }
 }
 
-private val assembly = Obj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус"))
-private val shaft = Obj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал", "Позиция" to "1", "Масса" to "1.5"))
-private val bolt = Obj(
+internal val assembly = Obj(1, "Сборочная единица", "АБ.001", mapOf("Наименование" to "Корпус"))
+internal val shaft = Obj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал", "Позиция" to "1", "Масса" to "1.5"))
+internal val bolt = Obj(
     3, "Стандартное изделие", "ГОСТ 7798-70",
     mapOf("Позиция" to "2")
 )
-private val pin = Obj(4, "Деталь", "АБ.003", mapOf("Наименование" to "Штифт"))
+internal val pin = Obj(4, "Деталь", "АБ.003", mapOf("Наименование" to "Штифт"))
 
-private val tree = listOf(assembly, shaft, bolt, pin)
+internal val tree = listOf(assembly, shaft, bolt, pin)
 
 // Сборка 2 со связью состава на штифт 4: для проверки обхода замен, где промежуточный узел раскрывается по составу.
-private val subAssembly = Obj(2, "Сборочная единица", "АБ.002", mapOf("Наименование" to "Узел"))
-private val subAssemblyEdges = listOf(
+internal val subAssembly = Obj(2, "Сборочная единица", "АБ.002", mapOf("Наименование" to "Узел"))
+internal val subAssemblyEdges = listOf(
     Edge(1, 2),
     Edge(1, 3, min = 4.0, max = 6.0),
     Edge(2, 4),
 )
-private val treeEdges = listOf(
+internal val treeEdges = listOf(
     Edge(1, 2, min = 2.0, max = 2.0, unit = "шт"),
     Edge(1, 3, min = 4.0, max = 6.0),
     Edge(2, 4)
 )
 
-private fun query(
+internal fun query(
     depth: Int,
     vararg attributes: AttributeKey,
     relationDepth: Map<Relation, Int> = emptyMap(),

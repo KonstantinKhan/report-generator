@@ -25,6 +25,11 @@ fun specification(data: SpecificationData, customerRepresentative: Boolean = tru
             belowFrame = FrameSpecs.belowFrameNotes
         )
 
-        table(FlowTables.build(GostSpecTemplate.flowTable, dataContext.schema, data.itemRecords(), GostSpecTemplate.flowTablePath))
+        table(
+            FlowTables.build(
+                GostSpecTemplate.flowTable, dataContext.schema, data.itemRecords(), GostSpecTemplate.flowTablePath,
+                appendix = data.variantAppendix()
+            )
+        )
     }
 }

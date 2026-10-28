@@ -11,7 +11,7 @@ import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import dev.reportgenerator.renderpdf.renderToPdf
 import dev.reportgenerator.reports.specification.specification
 import dev.reportgenerator.reports.specification.SpecificationDataException
-import dev.reportgenerator.reports.specification.specificationQuery
+import dev.reportgenerator.reports.specification.loadSpecificationStructure
 import dev.reportgenerator.reports.specification.toSpecificationData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -130,7 +130,7 @@ fun Application.reportServerModule(
             val customerRepresentative = call.parameters["customerRepresentative"]?.toBooleanStrictOrNull() ?: true
 
             val id = UUID.randomUUID().toString()
-            val structure = structureClient.loadTree(specificationQuery(PdmNodeId(versionId)))
+            val structure = structureClient.loadSpecificationStructure(PdmNodeId(versionId))
             val file = withContext(Dispatchers.IO) {
                 val data = structure.toSpecificationData()
 

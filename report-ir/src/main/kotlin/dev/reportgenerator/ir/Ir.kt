@@ -113,6 +113,15 @@ data class IrRow(
     val constraints: LayoutConstraints = LayoutConstraints.Default
 ) : IrTableElement
 
+// One cell over the columns from `from` to `to` (column ids, both included), e.g. a section title over two columns.
+// Needs a fixed IrTable.rowHeight; it is drawn as one bordered rectangle over the widths of those columns.
+data class IrSpanRow(
+    val cell: IrCell,
+    val from: String,
+    val to: String,
+    val constraints: LayoutConstraints = LayoutConstraints.Default
+) : IrTableElement
+
 // Total row of a fixed-rowHeight table: one cell per column (the label and the value in their columns, the others
 // empty), always drawn as a bordered row like any data row. In IrGroup.footer / IrTable.footer. The layout keeps
 // the footer rows together with the line before them (the last data line of the group / table), so a total is

@@ -23,7 +23,6 @@ class TreeAssemblerTest : ShouldSpec({
         LoodsmanConfig("http://localhost", "db", "user", "pass"),
         HttpClient(MockEngine { error("Loodsman is not expected in this test") }) { installLoodsman() },
     )
-    val limiter = Limiter(1)
     val assembler = TreeAssembler(
         mapping,
         NodeLoader(
@@ -31,9 +30,8 @@ class TreeAssemblerTest : ShouldSpec({
             mapping,
             KindMapper(mapping, LoggerFactory.getLogger("TreeAssemblerTest")),
             AttributeRequests(mapping),
-            limiter,
         ),
-        LinkAttributeLoader(api, mapping, limiter),
+        LinkAttributeLoader(api, mapping),
     )
 
     should("return Missing when both quantity bounds are empty") {

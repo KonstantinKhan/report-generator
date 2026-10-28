@@ -22,6 +22,8 @@ private class RecordingClient : PdmNodeStructureClient {
         return node
     }
 
+    override suspend fun loadTrees(queries: List<StructureQuery>): List<PdmNode> = queries.map { loadTree(it) }
+
     override suspend fun loadNode(
         id: PdmNodeId,
         attributeKeys: Set<AttributeKey>,

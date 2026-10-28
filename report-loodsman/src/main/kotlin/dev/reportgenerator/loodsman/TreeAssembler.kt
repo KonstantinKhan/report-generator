@@ -14,6 +14,7 @@ import dev.reportgenerator.domain.ReplacementGroup
 import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.domain.TechnologicalPartUsage
 import dev.reportgenerator.domain.UnmappedUsage
+import dev.reportgenerator.domain.VariantUsage
 import dev.reportgenerator.loodsman.mapping.LinkField
 import dev.reportgenerator.loodsman.mapping.MappingConfig
 import dev.reportgenerator.loodsman.mapping.select
@@ -75,6 +76,7 @@ internal class TreeAssembler(
                     Relation.Document -> DocumentUsage(target = childNode, attributes = attrs)
                     Relation.MadeFrom -> MadeFromUsage(target = childNode, attributes = attrs)
                     Relation.TechnologicalPart -> TechnologicalPartUsage(target = childNode, attributes = attrs)
+                    Relation.Variant -> VariantUsage(target = childNode, attributes = attrs)
                     is Relation.Unmapped -> UnmappedUsage(
                         relation = link.relation,
                         target = childNode,

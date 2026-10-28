@@ -12,12 +12,20 @@ class SpecificationQueryTest : ShouldSpec({
         specificationQuery(PdmNodeId(1)).depth shouldBe 2
     }
 
-    should("expand the composition one level only, the documents go deeper") {
-        specificationQuery(PdmNodeId(1)).relationDepth shouldBe mapOf(Relation.Composition to 1)
+    should("expand the composition and the variants one level only, the documents go deeper") {
+        specificationQuery(PdmNodeId(1)).relationDepth shouldBe mapOf(Relation.Composition to 1, Relation.Variant to 1)
     }
 
-    should("request composition, document and made-from relations only") {
-        specificationQuery(PdmNodeId(1)).relations shouldBe setOf(Relation.Composition, Relation.Document, Relation.MadeFrom)
+    should("request composition, document, made-from and variant relations") {
+        specificationQuery(PdmNodeId(1)).relations shouldBe
+            setOf(Relation.Composition, Relation.Document, Relation.MadeFrom, Relation.Variant)
+    }
+
+    should("not request the variant link for a variant of the root: its composition only") {
+        val query = specificationQuery(PdmNodeId(2), variants = false)
+
+        query.relations shouldBe setOf(Relation.Composition, Relation.Document, Relation.MadeFrom)
+        query.relationDepth shouldBe mapOf(Relation.Composition to 1)
     }
 
     should("request designation, product designation, name and format attributes") {

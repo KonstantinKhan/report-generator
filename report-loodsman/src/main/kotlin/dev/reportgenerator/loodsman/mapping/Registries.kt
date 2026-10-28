@@ -30,6 +30,7 @@ object Registries {
             "DOCUMENT" to Relation.Document,
             "TECHNOLOGICAL_PART" to Relation.TechnologicalPart,
             "MADE_FROM" to Relation.MadeFrom,
+            "VARIANT" to Relation.Variant,
         )
     )
 

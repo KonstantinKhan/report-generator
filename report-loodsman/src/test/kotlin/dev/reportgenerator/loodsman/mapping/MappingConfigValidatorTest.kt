@@ -254,6 +254,36 @@ class MappingConfigValidatorTest : ShouldSpec({
         MappingConfigValidator.validate(mapping, confirmed).shouldBeEmpty()
     }
 
+    context("variant link (Исполнения) rule") {
+        val variantRule = RelationRule(link = "Исполнения", relation = "VARIANT", from = listOf("Сборочная единица"))
+        val variantSnapshot = MetadataSnapshot(
+            linkTypes = listOf(LinkTypeInfo(id = 9, name = "Исполнения")),
+            objectTypes = listOf("Сборочная единица", "Деталь").mapIndexed { index, name ->
+                ObjectTypeInfo(id = index + 1, typeName = name, keyAttribute = "Обозначение")
+            },
+            attributeNames = setOf("Обозначение"),
+            version = 1,
+        )
+        fun withVariantLink(direction: Int) = variantSnapshot.copy(
+            typeLinks = listOf(TypeLinkInfo(typeId1 = 1, typeId2 = 1, idLinkType = 9, direction = direction)),
+        )
+
+        should("accept the variant rule when the assembly unit allows the forward direction") {
+            MappingConfigValidator.validate(
+                config(relations = listOf(variantRule), requiredRelations = emptySet(), attributes = emptyMap(), link = LinkMapping()),
+                withVariantLink(1),
+            ).shouldBeEmpty()
+        }
+
+        should("report the variant rule when the assembly unit allows only the inverse direction") {
+            val errors = MappingConfigValidator.validate(
+                config(relations = listOf(variantRule), requiredRelations = emptySet(), attributes = emptyMap(), link = LinkMapping()),
+                withVariantLink(-1),
+            )
+            errors.size shouldBe 1
+        }
+    }
+
     context("relation rules from and direction") {
         val techRule = RelationRule(
             link = "Технологическая ДСЕ для",

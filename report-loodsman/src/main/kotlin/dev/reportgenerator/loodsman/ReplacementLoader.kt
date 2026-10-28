@@ -15,7 +15,6 @@ import io.github.konstantinkhan.loodsman.dto.V3_GetInfoAboutVersionMode20OutputD
  */
 internal class ReplacementLoader(
     private val api: LoodsmanApi,
-    private val limiter: Limiter,
 ) {
 
     /**
@@ -25,6 +24,7 @@ internal class ReplacementLoader(
      * у которых есть загруженная связь состава (замены относятся к usages состава).
      */
     suspend fun loadReplacements(
+        session: LoadSession,
         query: StructureQuery,
         rootId: Int,
         nodes: Map<Int, LoadedNode>,
@@ -39,9 +39,11 @@ internal class ReplacementLoader(
         }
         if (ids.isEmpty()) return emptyMap()
 
-        return limiter.withPermits(ids) { id ->
-            groupsOf(api.objectInfo.replacementVariants(id))
+        val rows = session.replacements.getAll(ids) { missing ->
+            val results = session.limiter.mapPermitted(missing) { id -> api.objectInfo.replacementVariants(id) }
+            missing.zip(results).toMap()
         }
+        return ids.associateWith { id -> groupsOf(rows.getValue(id)) }
     }
 
     /**

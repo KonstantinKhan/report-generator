@@ -1,5 +1,7 @@
 package dev.reportgenerator.reports.specification
 
+import dev.reportgenerator.ir.FlowAppendix
+import dev.reportgenerator.ir.FlowAppendixBlock
 import dev.reportgenerator.template.DataContext
 import dev.reportgenerator.template.DataValue
 import dev.reportgenerator.template.RecordBuilder
@@ -21,7 +23,24 @@ fun SpecificationData.toDataContext(): DataContext = dataContext {
 // One record per item, the sections in the order of the sheet and the items of a section in their data order.
 // Fields without a value (position of documentation, quantity of documentation or of a non-basic item, unit of a non-material) are left out:
 // the template marks their cells `optional` or does not bind them.
-fun SpecificationData.itemRecords(): List<DataValue.Record> = rows().map { row ->
+fun SpecificationData.itemRecords(): List<DataValue.Record> = rows().records()
+
+// The part "Переменные данные для исполнений" after the main table (same columns and groups), null when no execution has
+// a block. The title spans the designation and the name columns; the label of a block is the execution's designation.
+internal fun SpecificationData.variantAppendix(): FlowAppendix? {
+    if (variants.isEmpty()) return null
+    return FlowAppendix(
+        title = VARIANTS_TITLE,
+        titleFrom = "designation",
+        titleTo = "name",
+        labelColumn = "name",
+        blocks = variants.map { FlowAppendixBlock(it.designation, it.rows().records()) },
+    )
+}
+
+internal const val VARIANTS_TITLE = "Переменные данные для исполнений"
+
+private fun List<ItemRow>.records(): List<DataValue.Record> = map { row ->
     dataContext { item { itemFields(row) } }.get("item") as DataValue.Record
 }
 
@@ -40,7 +59,18 @@ private class ItemRow(
     val notes: List<String> = emptyList(),
 )
 
-private fun SpecificationData.rows(): List<ItemRow> =
+private fun SpecificationData.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials)
+
+private fun SpecificationVariant.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials)
+
+private fun sectionRows(
+    documentation: List<DocumentationItem>,
+    assemblies: List<AssemblyItem>,
+    parts: List<PartItem>,
+    standards: List<StandardItem>,
+    others: List<OtherItem>,
+    materials: List<MaterialItem>,
+): List<ItemRow> =
     documentation.map {
         ItemRow(SpecificationSection.DOCUMENTATION, designation = it.designation, name = it.name, format = it.format, notes = it.notes)
     } + assemblies.map {

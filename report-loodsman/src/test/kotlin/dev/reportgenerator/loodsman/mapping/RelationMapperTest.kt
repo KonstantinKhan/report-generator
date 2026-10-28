@@ -33,6 +33,11 @@ class RelationMapperTest : ShouldSpec({
             mapper.map("Состоит из ...") shouldBe Relation.Composition
         }
 
+        should("map the variant link to the variant relation") {
+            val mapper = RelationMapper(config.copy(relations = config.relations + RelationRule(link = "Исполнения", relation = "VARIANT", from = listOf("Деталь"))), log)
+            mapper.map("Исполнения") shouldBe Relation.Variant
+        }
+
         should("map link name of an INVERSE rule to its relation") {
             val mapper = RelationMapper(config, log)
             mapper.map("Технологическая ДСЕ для") shouldBe Relation.TechnologicalPart

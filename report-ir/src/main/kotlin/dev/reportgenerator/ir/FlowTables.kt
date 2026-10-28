@@ -9,6 +9,7 @@ import dev.reportgenerator.template.FlowRemainder
 import dev.reportgenerator.template.FlowHeaderCell
 import dev.reportgenerator.template.placeCells
 import dev.reportgenerator.template.FlowShaper
+import dev.reportgenerator.template.ShapedGroup
 import dev.reportgenerator.template.FlowStick
 import dev.reportgenerator.template.FlowTableSpec
 import dev.reportgenerator.template.MapDataContext
@@ -35,7 +36,13 @@ object FlowTables {
 
     // `rows` = one `item` record per row, in source order. `path` = YAML location of the spec (e.g.
     // `blocks[5].table`), for error messages. The spec is checked against `schema` first (TemplateContract).
-    fun build(spec: FlowTableSpec, schema: DataSchema, rows: List<DataValue.Record>, path: String = "table"): IrTable {
+    fun build(
+        spec: FlowTableSpec,
+        schema: DataSchema,
+        rows: List<DataValue.Record>,
+        path: String = "table",
+        appendix: FlowAppendix? = null
+    ): IrTable {
         TemplateContract.requireFlowTable(spec, schema, path)
         val shaped = FlowShaper.shapeTable(spec, schema, rows)
         val rowSchema = spec.itemSchema(schema)
@@ -124,11 +131,41 @@ object FlowTables {
             }
         )
 
+        fun groupElement(g: ShapedGroup) = IrGroup(requireNotNull(g.title), g.rows.map(::row), footer = g.totals.map(::totalRow))
+
+        // The appendix: the same groups per block (its own rows), spacers and a title/label kept with the first data line.
+        fun appendixElements(a: FlowAppendix): List<IrTableElement> {
+            require(spec.groupBy != null) { "$path: a flow table with an appendix needs groupBy" }
+            val keep = LayoutConstraints(keepWithNext = true)
+            val titleStyle = groupTitle.style
+            fun blank(constraints: LayoutConstraints = LayoutConstraints.Default) = IrRow(columns.map { IrCell("") }, constraints)
+            fun labelRow(text: String) = IrRow(
+                spec.columns.map { column ->
+                    if (column.id == a.labelColumn) IrCell(text, style = titleStyle, align = groupTitle.align)
+                    else IrCell("")
+                },
+                keep
+            )
+            val out = mutableListOf<IrTableElement>()
+            repeat(a.spacersBeforeTitle) { out += blank() }
+            out += IrSpanRow(IrCell(a.title, style = titleStyle, align = groupTitle.align), a.titleFrom, a.titleTo, keep)
+            a.blocks.forEach { block ->
+                repeat(a.spacersBeforeLabel) { out += blank(keep) }
+                out += labelRow(block.label)
+                out += blank(keep)
+                FlowShaper.shapeTable(spec, schema, block.rows).groups.forEach { out += groupElement(it) }
+                repeat(a.spacersAfterBlock) { out += blank() }
+            }
+            return out
+        }
+
+        val mainContent: List<IrTableElement> = if (spec.groupBy == null) shaped.groups.flatMap { it.rows }.map(::row)
+        else shaped.groups.map(::groupElement)
+
         return IrTable(
             columns = columns,
             header = header,
-            content = if (spec.groupBy == null) shaped.groups.flatMap { it.rows }.map(::row)
-            else shaped.groups.map { g -> IrGroup(requireNotNull(g.title), g.rows.map(::row), footer = g.totals.map(::totalRow)) },
+            content = mainContent + appendix?.let(::appendixElements).orEmpty(),
             rowHeight = spec.rowHeight.mm,
             groupTitle = groupTitle,
             fillBlank = spec.fill == FlowFill.BLANK,
