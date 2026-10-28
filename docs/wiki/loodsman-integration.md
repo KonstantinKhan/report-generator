@@ -35,11 +35,11 @@
 | Свойство `LoodsmanApi` | Класс | Контроллер Loodsman | Эндпоинты |
 |---|---|---|---|
 | `auth` | `AuthApi` | `/api/v4/Auth` | `databases()` (без сессии), `isAdmin()` |
-| `objectInfo` | `ObjectInfoApi` | `/api/v4/ObjectInfo` | `propObjects(versionIds)`, `propObject(versionId)`, `infoAboutVersion(versionId)`, `linkedObjects(objectIds, linkTypeIds, inverse = false)`, `linkAttributes(linkId)` |
+| `objectInfo` | `ObjectInfoApi` | `/api/v4/ObjectInfo` | `propObjects(versionIds)`, `propObject(versionId)`, `infoAboutVersion(versionId)`, `linkedObjects(objectIds, linkTypeIds, inverse = false)`, `linkAttributes(linkId)`, `replacementVariants(versionId)` (`get-info-about-version-mode-20`: группы замен объекта) |
 | `metaData` | `MetaDataApi` | `/api/v4/MetaData` | `typeList()`, `linkList()`, `attributeList(mode)`, `cacheVersion()` |
 | `metaDataCustom` | `MetaDataCustomApi` | `/api/v4/MetaDataCustom` | `typesLinks()` (`types-links`: какие типы объектов могут быть связаны каким типом связи и в каком направлении) |
 
-Итого 12 эндпоинтов и `logout()`. Одна группа — один файл. Конструкторы групп `internal`: создать группу снаружи нельзя.
+Итого 13 эндпоинтов и `logout()`. Одна группа — один файл. Конструкторы групп `internal`: создать группу снаружи нельзя.
 Почему группы, а не плоский интерфейс, — в [design-decisions.md](design-decisions.md#группы-эндпоинтов-вместо-плоского-интерфейса).
 До коммита `bd5afc1` был плоский интерфейс `LoodsmanApi` с 9 методами (включая `logout`) и реализация `KtorLoodsmanApi`;
 заменено на группы.
@@ -572,6 +572,11 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
    подходит по тройке, делается один запрос `/api/v4/ObjectInfo/get-link-attributes` (параллельно, через `Limiter`).
    Результаты собираются в карту `linkId → атрибуты`.
 
+3b. **Загрузка групп замен (фаза 2b).** ПОСЛЕ обхода, только при `query.replacements = true`: для каждого узла уровней
+   `0..min(replacementDepth, depth - 1)`, попавшего в дерево, делается один `get-info-about-version-mode-20`
+   (параллельно, через `Limiter`). Узлы на уровне `depth` не запрашиваются: их связи состава не раскрыты, сопоставлять
+   замены не с чем. Подробности — раздел «Группы замен».
+
 4. **Кэш.** Свойства, узловые атрибуты и связи хранятся по `idVersion`/`idLink`. Узел разворачивается один раз на
    минимальной глубине, повторные вхождения в дерево используют те же данные. Метаданные (типы связей и объектов)
    берутся из `MetadataSource` один раз на `loadTree` (см. раздел «Метаданные: снимок, MetadataCache, обновление»).
@@ -586,6 +591,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - Связи: один `get-linked-objects-for-objects` на раскрываемый узел — только если уровень разрешён `depth`/`relationDepth`
   и тип узла подошёл по `from`; отсечённые по любому из них узлы не стоят ни одного вызова;
 - Атрибуты связей: один `get-link-attributes` на связь (если нужны или есть правила позиции).
+- Группы замен: один `get-info-about-version-mode-20` на узел уровней `0..min(replacementDepth, depth - 1)` — только при
+  `replacements = true`; при `false` запросов нет, `PdmNode.replacements` пуст.
 
 Неустранимый остаток без `from`: у каждого документного узла на разрешённых уровнях спрашиваются его документы —
 у чертежей и спецификаций такой запрос обычно пуст (один лишний вызов на узел-документ). Лечится `from` на
@@ -616,6 +623,40 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - **Version и State** — ВСЕГДА из свойств объекта, источник задаёт блок `properties` (по умолчанию `VERSION` и
   `STATE`). Значение — трим; непустое → `Field.Value(строка)`, пустое или отсутствующее → `Field.Missing`
   (версия у объекта бывает не задана, состояние ожидается всегда, но отсутствие не считается ошибкой загрузки).
+
+### Группы замен (допускаемые замены)
+
+Группы замен узла читаются эндпоинтом `get-info-about-version-mode-20` (`ObjectInfoApi.replacementVariants(versionId)`).
+Ответ — плоский массив, по одной строке на каждого члена варианта. Ответ пустой — у узла нет замен.
+
+**Структура строки.** Группа (`idGroupChange`, `groupChangeName`, `groupChangeType`) содержит варианты (`idVariant`,
+`variantName`, `basic`: 1 — базовый вариант). Член варианта задан связью `idLink` — это тот же `idLink`, что у обычной
+связи состава («Состоит из ...») из `get-linked-objects-for-objects`.
+
+**Тип группы** (`groupChangeType`): `0` — потребитель (`ReplacementType.Consumer`), `1` — производство
+(`Production`), `2` — допускаемая замена (`Permissible`). Неизвестный код — `LoodsmanApiException` в `ReplacementLoader`.
+
+**Домен.** `PdmNode.replacements: List<ReplacementGroup>`; `ReplacementGroup(id, name, type, variants, inCurrentConfiguration)`;
+`ReplacementVariant(id, name, basic, linkIds, inCurrentConfiguration)`. `linkIds` — id связей состава, которые входят в вариант.
+`inCurrentConfiguration` — входит в текущую конфигурацию сессии Loodsman: у группы из `groupInCurrentConf == 1`,
+у варианта из `variantInCurrentConf == 1` (значения берутся из первой строки группы/варианта).
+
+**Все члены сохраняются.** `PdmNode.replacements` узла — все группы, как они сгруппированы в `ReplacementLoader.groupsOf`,
+включая членов, чей `idLink` не является связью состава корня. Отбор по usages делается в спецификации
+(`reports/specification`, `ReplacementNotes.kt`), а не в общем слое: так дерево не теряет данные замен.
+
+**Привязка к usages.** `CompositionUsage.linkId` заполняется всегда при загрузке дерева (значение `Link.linkId`,
+`null` — только в тестах и ручных сборках). Член группы сопоставляется с composition usage по `linkId` в спецификации.
+
+**Обход и запрос.** Замены относятся к usages состава, поэтому обход для них идёт только по связям
+`Relation.Composition` (документы и прочие связи не раскрываются). `get-info-about-version-mode-20` запрашивается
+только для узлов, у которых есть загруженная связь состава в `links[id]` и вид (`kind`) не null. Узел без связей состава
+(например, стандартное изделие) или документ не запрашиваются.
+
+`StructureQuery.replacements: Boolean = false` включает загрузку; `StructureQuery.replacementDepth: Int = 0` —
+предел уровней, корень — уровень 0. При `replacementDepth = 0` запрашивается только корень (если у него есть состав).
+Отрицательное значение, а также `replacementDepth > 0` при `replacements = false` — `LoodsmanApiException`
+(проверка в клиенте). Замены не читаются в `loadNode` (одиночный узел не получает флага запроса).
 
 ### Состояния значений и доступ к ним
 

@@ -4,6 +4,7 @@ import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto
 import io.github.konstantinkhan.loodsman.dto.LinkAttributeOutputDto
 import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
 import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
+import io.github.konstantinkhan.loodsman.dto.V3_GetInfoAboutVersionMode20OutputDto
 import io.ktor.client.request.parameter
 
 class ObjectInfoApi internal constructor(
@@ -41,5 +42,11 @@ class ObjectInfoApi internal constructor(
     suspend fun linkAttributes(linkId: Int): List<LinkAttributeOutputDto> =
         http.get("$blockBaseUrl/get-link-attributes") {
             parameter("linkId", linkId)
+        }
+
+    /** Группы замен объекта: по одной строке на каждого члена варианта. Пустой список — замен нет. */
+    suspend fun replacementVariants(versionId: Int): List<V3_GetInfoAboutVersionMode20OutputDto> =
+        http.get("$blockBaseUrl/get-info-about-version-mode-20") {
+            parameter("idVersion", versionId)
         }
 }

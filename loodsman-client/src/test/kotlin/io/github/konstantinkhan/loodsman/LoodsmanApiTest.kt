@@ -59,6 +59,10 @@ private const val LINKED_OBJECTS_JSON = """[{"idLink":7,"idParent":10,"idChild":
     "minQuantity":2.0,"maxQuantity":2.0,"unit":"шт"}]"""
 private const val TYPES_LINKS_JSON = """[{"typeId1":1,"typeId2":2,"idLinkType":3,"direction":1},{"typeId1":2,"typeId2":1,"idLinkType":4,"direction":-1}]"""
 private const val LINK_ATTRIBUTES_JSON ="""[{"id":5,"name":"Позиция","value":"1","type":0,"accessLevel":1}]"""
+private const val REPLACEMENT_VARIANTS_JSON = """[{"idGroupChange":240,"groupChangeName":"Замена","groupChangeType":2,
+    "groupInCurrentConf":1,"idVariant":271,"variantName":"Основной","basic":1,"variantInCurrentConf":1,"idLink":10045,
+    "idParent":4757,"linkType":"Состоит из ...","idVersion":5001,"idType":3,"idState":1,"product":"DET-5","version":"1",
+    "idLock":0,"accessLevel":1,"label":0,"labelName":null}]"""
 
 class LoodsmanApiTest : ShouldSpec({
 
@@ -251,6 +255,24 @@ class LoodsmanApiTest : ShouldSpec({
         val request = requests.last { it.url.encodedPath == "/api/v4/ObjectInfo/get-link-attributes" }
         request.method shouldBe HttpMethod.Get
         request.url.parameters["linkId"] shouldBe "5"
+        request.session() shouldBe "s1"
+    }
+
+    should("fetch replacement variants of an object with session") {
+        val requests = mutableListOf<HttpRequestData>()
+        val logins = AtomicInteger()
+        val api = ktorApi(requests, logins) { reply(REPLACEMENT_VARIANTS_JSON) }
+
+        api.objectInfo.replacementVariants(4757).single().also {
+            it.idGroupChange shouldBe 240
+            it.groupChangeType shouldBe 2
+            it.idVariant shouldBe 271
+            it.basic shouldBe 1
+            it.idLink shouldBe 10045
+        }
+        val request = requests.last { it.url.encodedPath == "/api/v4/ObjectInfo/get-info-about-version-mode-20" }
+        request.method shouldBe HttpMethod.Get
+        request.url.parameters["idVersion"] shouldBe "4757"
         request.session() shouldBe "s1"
     }
 

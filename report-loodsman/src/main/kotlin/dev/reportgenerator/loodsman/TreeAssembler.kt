@@ -10,6 +10,7 @@ import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.Relation
+import dev.reportgenerator.domain.ReplacementGroup
 import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.domain.TechnologicalPartUsage
 import dev.reportgenerator.domain.UnmappedUsage
@@ -33,6 +34,7 @@ internal class TreeAssembler(
         nodes: Map<Int, LoadedNode>,
         links: Map<Int, List<Link>>,
         linkAttributes: Map<Int, LinkAttributesData>,
+        replacements: Map<Int, List<ReplacementGroup>>,
         path: List<Int>
     ): PdmNode {
         if (id in path) {
@@ -52,7 +54,7 @@ internal class TreeAssembler(
                 val linkAttrs = linkAttributes[link.linkId]?.attributes ?: emptyMap()
                 val attrs = linkAttributesOf(link.relation, kind, childKind, query, linkAttrs)
                 val childNode = buildNode(
-                    link.dto.idChild, remaining - 1, query, nodes, links, linkAttributes, path + id
+                    link.dto.idChild, remaining - 1, query, nodes, links, linkAttributes, replacements, path + id
                 )
 
                 when (link.relation) {
@@ -65,7 +67,8 @@ internal class TreeAssembler(
                             position = position,
                             quantity = quantityOf(link.dto),
                             unit = link.dto.text(mapping.link.fields.unit)?.let { Field.Value(it) } ?: Field.Missing,
-                            attributes = attrs
+                            attributes = attrs,
+                            linkId = link.linkId,
                         )
                     }
 
@@ -83,7 +86,9 @@ internal class TreeAssembler(
             emptyList()
         }
 
-        return nodeLoader.toPdmNode(node.prop, kind, node.attributes, request).copy(usages = usages)
+        // Группы замен берутся целиком; отбор членов по usages узла делается в спецификации (ReplacementNotes).
+        return nodeLoader.toPdmNode(node.prop, kind, node.attributes, request)
+            .copy(usages = usages, replacements = replacements[id].orEmpty())
     }
 
     private fun linkAttributesOf(

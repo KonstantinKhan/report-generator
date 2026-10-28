@@ -8,4 +8,6 @@ data class PdmNode(
     val attributes: Map<AttributeKey, AttributeValue> = emptyMap(),
     val usages: List<Usage> = emptyList(),
     val key: NodeKey = NodeKey.NotLoaded,
+    /** Группы замен узла; пусто, если замены не запрошены ([StructureQuery.replacements]) или их нет. */
+    val replacements: List<ReplacementGroup> = emptyList(),
 )

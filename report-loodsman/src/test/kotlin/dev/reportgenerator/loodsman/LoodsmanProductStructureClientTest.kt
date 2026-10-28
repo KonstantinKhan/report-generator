@@ -11,6 +11,9 @@ import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.TechnologicalPartUsage
 import dev.reportgenerator.domain.Relation
+import dev.reportgenerator.domain.ReplacementGroup
+import dev.reportgenerator.domain.ReplacementType
+import dev.reportgenerator.domain.ReplacementVariant
 import dev.reportgenerator.domain.StructureQuery
 import dev.reportgenerator.loodsman.mapping.AttributeRule
 import dev.reportgenerator.loodsman.mapping.LinkAttributeRule
@@ -91,7 +94,9 @@ private class FakeLoodsman(
     private val edges: List<Edge>,
     private val linkNames: List<String> = listOf(COMPOSITION, "Документы"),
     private val requestDelay: Duration = Duration.ZERO,
+    private val replacementRows: Map<Int, List<JsonElement>> = emptyMap(),
 ) {
+    val replacementCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val propsCalls: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val linkCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val linkRequests: MutableList<LinkRequest> = Collections.synchronizedList(mutableListOf())
@@ -207,6 +212,11 @@ private class FakeLoodsman(
                         linkOf(linkId, requested, neighbor, edge.link)
                     })
                 }
+                "/api/v4/ObjectInfo/get-info-about-version-mode-20" -> {
+                    val id = params["idVersion"]!!.toInt()
+                    replacementCalls.add(id)
+                    JsonArray(replacementRows[id].orEmpty())
+                }
                 "/api/v4/ObjectInfo/get-link-attributes" -> {
                     val linkId = params["linkId"]!!.toInt()
                     linkAttributeCalls.add(linkId)
@@ -274,6 +284,14 @@ private val bolt = Obj(
 private val pin = Obj(4, "Деталь", "АБ.003", mapOf("Наименование" to "Штифт"))
 
 private val tree = listOf(assembly, shaft, bolt, pin)
+
+// Сборка 2 со связью состава на штифт 4: для проверки обхода замен, где промежуточный узел раскрывается по составу.
+private val subAssembly = Obj(2, "Сборочная единица", "АБ.002", mapOf("Наименование" to "Узел"))
+private val subAssemblyEdges = listOf(
+    Edge(1, 2),
+    Edge(1, 3, min = 4.0, max = 6.0),
+    Edge(2, 4),
+)
 private val treeEdges = listOf(
     Edge(1, 2, min = 2.0, max = 2.0, unit = "шт"),
     Edge(1, 3, min = 4.0, max = 6.0),
@@ -294,6 +312,34 @@ private fun query(
     linkAttributes = linkAttributes,
     includeUnmappedAttributes = includeUnmapped
 )
+
+// Строка ответа get-info-about-version-mode-20: член варианта группы замен, связь [idLink] объекта [parent].
+private fun replacementRow(
+    group: Int,
+    groupType: Int,
+    variant: Int,
+    basic: Boolean,
+    idLink: Int,
+    groupName: String? = "Замена",
+    variantName: String? = "Вариант",
+) = buildJsonObject {
+    put("idGroupChange", group)
+    groupName?.let { put("groupChangeName", it) }
+    put("groupChangeType", groupType)
+    put("groupInCurrentConf", 1)
+    put("idVariant", variant)
+    variantName?.let { put("variantName", it) }
+    put("basic", if (basic) 1 else 0)
+    put("variantInCurrentConf", 1)
+    put("idLink", idLink)
+    put("idParent", 0)
+    put("idVersion", 0)
+    put("idType", 0)
+    put("idState", 0)
+    put("idLock", 0)
+    put("accessLevel", 0)
+    put("label", 0)
+}
 
 // Корень-деталь и технологическая деталь, связанная обратной связью "Технологическая ДСЕ для" (от детали).
 private val detail = Obj(10, "Деталь", "АБ.010", mapOf("Наименование" to "Деталь"))
@@ -319,6 +365,13 @@ private fun technologicalQuery(depth: Int) = StructureQuery(
     rootId = PdmNodeId(10),
     depth = depth,
     relations = setOf(Relation.Composition, Relation.TechnologicalPart),
+)
+
+private fun replacementQuery(depth: Int, replacementDepth: Int, replacements: Boolean = true) = StructureQuery(
+    rootId = PdmNodeId(1),
+    depth = depth,
+    replacements = replacements,
+    replacementDepth = replacementDepth,
 )
 
 class LoodsmanProductStructureClientTest : ShouldSpec({
@@ -884,5 +937,152 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         fake.linkRequests.isNotEmpty() shouldBe true
         fake.linkRequests.map { it.inverse }.distinct() shouldBe listOf(false)
         fake.linkRequests.map { it.linkTypeIds }.distinct() shouldBe listOf(listOf(1))
+    }
+    should("not request replacements and leave them empty when the replacements flag is off") {
+        val rows = mapOf(1 to listOf(replacementRow(240, 2, 271, true, 100)))
+        val fake = FakeLoodsman(tree, treeEdges, replacementRows = rows)
+
+        val root = fake.client().loadTree(replacementQuery(depth = 2, replacementDepth = 0, replacements = false))
+
+        fake.replacementCalls shouldBe emptyList()
+        root.replacements shouldBe emptyList()
+        root.usages.forEach { (it as CompositionUsage).target.replacements shouldBe emptyList() }
+    }
+
+    should("request replacements only for the root when replacementDepth is 0") {
+        val rows = mapOf(1 to listOf(replacementRow(240, 2, 271, true, 100)))
+        val fake = FakeLoodsman(tree, treeEdges, replacementRows = rows)
+
+        val root = fake.client().loadTree(replacementQuery(depth = 2, replacementDepth = 0))
+
+        fake.replacementCalls shouldBe listOf(1)
+        root.replacements.single().id shouldBe 240
+    }
+
+    should("request replacements for the root and its composition children with composition links when replacementDepth is 1") {
+        // Узел 2 — сборка со связью состава (штифт 4); болт (3) без связей состава.
+        val fake = FakeLoodsman(listOf(assembly, subAssembly, bolt, pin), subAssemblyEdges)
+
+        fake.client().loadTree(replacementQuery(depth = 3, replacementDepth = 1))
+
+        // Штифт (4) на уровне 2 — за пределом replacementDepth.
+        fake.replacementCalls.sorted() shouldBe listOf(1, 2)
+    }
+
+    should("not request replacements for documents or for nodes without composition links when replacementDepth is 1") {
+        val spec = Obj(5, "Спецификация", "АБ.005", mapOf("Наименование" to "Спецификация"))
+        val fake = FakeLoodsman(listOf(assembly, subAssembly, bolt, pin, spec), subAssemblyEdges + Edge(1, 5, link = "Документы"))
+
+        val root = fake.client().loadTree(
+            StructureQuery(
+                rootId = PdmNodeId(1),
+                depth = 3,
+                relations = setOf(Relation.Composition, Relation.Document),
+                replacements = true,
+                replacementDepth = 1,
+            )
+        )
+
+        // Спецификация (5) — документ корня: в обход замен не входит. Болт (3) — без связей состава.
+        fake.replacementCalls.sorted() shouldBe listOf(1, 2)
+        root.usages.filter { it.relation == Relation.Document }.single().target.id shouldBe PdmNodeId(5)
+    }
+
+    should("request replacements of the root only when the root is the only node with composition links") {
+        val fake = FakeLoodsman(
+            listOf(assembly, bolt),
+            listOf(Edge(1, 3, min = 4.0, max = 6.0)),
+        )
+
+        fake.client().loadTree(replacementQuery(depth = 3, replacementDepth = 2))
+
+        // Болт (3) — без связей состава, его замены не запрашиваются.
+        fake.replacementCalls shouldBe listOf(1)
+    }
+
+    should("request replacements only up to depth - 1 even when replacementDepth is larger") {
+        val fake = FakeLoodsman(tree, treeEdges)
+
+        fake.client().loadTree(replacementQuery(depth = 1, replacementDepth = 5))
+
+        fake.replacementCalls shouldBe listOf(1)
+    }
+
+    should("attach replacements of a child node to its composition usages and keep all members of the groups") {
+        // Композиция раскрывается только из сборочной единицы: промежуточный узел 2 — сборка с состав 4.
+        val subAssembly = Obj(2, "Сборочная единица", "АБ.002", mapOf("Наименование" to "Узел"))
+        val fake = FakeLoodsman(
+            listOf(assembly, subAssembly, pin),
+            listOf(Edge(1, 2), Edge(2, 4)),
+            replacementRows = mapOf(
+                1 to listOf(
+                    replacementRow(240, 2, 271, true, 100, groupName = "Замена А", variantName = "Основной"),
+                    replacementRow(240, 2, 272, false, 555, groupName = "Замена А", variantName = "Доп"),
+                    // Группа без членов в дереве не попадает в результат.
+                    replacementRow(239, 0, 269, true, 777),
+                ),
+                2 to listOf(
+                    replacementRow(241, 1, 273, true, 200, groupName = "Замена Б"),
+                    replacementRow(241, 1, 274, false, 201, groupName = "Замена Б"),
+                ),
+            ),
+        )
+
+        val root = fake.client().loadTree(replacementQuery(depth = 3, replacementDepth = 1))
+
+        root.replacements shouldBe listOf(
+            ReplacementGroup(
+                id = 240,
+                name = "Замена А",
+                type = ReplacementType.Permissible,
+                variants = listOf(
+                    ReplacementVariant(271, "Основной", basic = true, linkIds = listOf(100), inCurrentConfiguration = true),
+                    ReplacementVariant(272, "Доп", basic = false, linkIds = listOf(555), inCurrentConfiguration = true),
+                ),
+                inCurrentConfiguration = true,
+            ),
+            ReplacementGroup(
+                id = 239,
+                name = "Замена",
+                type = ReplacementType.Consumer,
+                variants = listOf(
+                    ReplacementVariant(269, "Вариант", basic = true, linkIds = listOf(777), inCurrentConfiguration = true),
+                ),
+                inCurrentConfiguration = true,
+            ),
+        )
+        val subUsage = root.usages.single() as CompositionUsage
+        subUsage.linkId shouldBe 100
+        subUsage.target.replacements shouldBe listOf(
+            ReplacementGroup(
+                id = 241,
+                name = "Замена Б",
+                type = ReplacementType.Production,
+                variants = listOf(
+                    ReplacementVariant(273, "Вариант", basic = true, linkIds = listOf(200), inCurrentConfiguration = true),
+                    ReplacementVariant(274, "Вариант", basic = false, linkIds = listOf(201), inCurrentConfiguration = true),
+                ),
+                inCurrentConfiguration = true,
+            ),
+        )
+        fake.replacementCalls.sorted() shouldBe listOf(1, 2)
+    }
+
+    should("set linkId on composition usages even when replacements are not requested") {
+        val fake = FakeLoodsman(tree, treeEdges)
+
+        val root = fake.client().loadTree(query(1))
+
+        root.usages.map { (it as CompositionUsage).linkId } shouldBe listOf(100, 101)
+        fake.replacementCalls shouldBe emptyList()
+    }
+
+    should("reject a negative replacementDepth and a replacementDepth without the flag") {
+        shouldThrow<LoodsmanApiException> {
+            FakeLoodsman(tree, treeEdges).client().loadTree(replacementQuery(depth = 2, replacementDepth = -1))
+        }
+        shouldThrow<LoodsmanApiException> {
+            FakeLoodsman(tree, treeEdges).client().loadTree(replacementQuery(depth = 2, replacementDepth = 1, replacements = false))
+        }
     }
 })

@@ -99,6 +99,11 @@
 нерабочие batch-эндпоинты) — **[loodsman-integration.md](loodsman-integration.md)**.
 Читать перед любыми правками `loodsman-client` и `report-loodsman`.
 
+Группы замен (допускаемые замены, `get-info-about-version-mode-20`) — в домене `PdmNode.replacements` при
+`StructureQuery.replacements = true`, предел уровней `replacementDepth`. Сопоставление с usages через
+`CompositionUsage.linkId`. Этап 1 (загрузка и домен), этап 2 — спецификация выводит допускаемые замены корня (раздел «Допускаемые замены» в specification-table-format.md). Детали — раздел «Группы замен» в
+[loodsman-integration.md](loodsman-integration.md#группы-замен-допускаемые-замены).
+
 ## Что сознательно НЕ начато
 
 XLSX-проекция (фаза 7 по `../dev-plan-0.1.md`) — отложена по явному решению пользователя.

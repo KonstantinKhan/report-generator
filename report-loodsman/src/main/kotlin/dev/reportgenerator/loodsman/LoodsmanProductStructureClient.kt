@@ -30,6 +30,7 @@ class LoodsmanProductStructureClient internal constructor(
     private val nodeLoader = NodeLoader(api, mapping, kindMapper, attributeRequests, limiter)
     private val linkLoader = LinkLoader(api, limiter)
     private val linkAttributeLoader = LinkAttributeLoader(api, mapping, limiter)
+    private val replacementLoader = ReplacementLoader(api, limiter)
     private val treeAssembler = TreeAssembler(mapping, nodeLoader, linkAttributeLoader)
 
     override suspend fun loadTree(query: StructureQuery): PdmNode {
@@ -39,6 +40,7 @@ class LoodsmanProductStructureClient internal constructor(
         query.attributes.forEach { attributeRequests.ruleOf(it) }
         validateLinkAttributes(query)
         validateRelationDepths(query)
+        validateReplacementDepth(query)
 
         val state = TraversalState()
         var frontier = listOf(rootId)
@@ -71,7 +73,10 @@ class LoodsmanProductStructureClient internal constructor(
         }
 
         val linkAttributes = linkAttributeLoader.loadLinkAttributes(query, state.nodes, state.links)
-        return treeAssembler.buildNode(rootId, query.depth, query, state.nodes, state.links, linkAttributes, emptyList())
+        val replacements = replacementLoader.loadReplacements(query, rootId, state.nodes, state.links)
+        return treeAssembler.buildNode(
+            rootId, query.depth, query, state.nodes, state.links, linkAttributes, replacements, emptyList()
+        )
     }
 
     override suspend fun loadNode(
@@ -105,6 +110,15 @@ class LoodsmanProductStructureClient internal constructor(
             if (limit < 1) {
                 throw LoodsmanApiException("relationDepth for '$relation' must be at least 1, got $limit")
             }
+        }
+    }
+
+    private fun validateReplacementDepth(query: StructureQuery) {
+        if (query.replacementDepth < 0) {
+            throw LoodsmanApiException("replacementDepth must not be negative, got ${query.replacementDepth}")
+        }
+        if (!query.replacements && query.replacementDepth != 0) {
+            throw LoodsmanApiException("replacementDepth is set without replacements = true")
         }
     }
 
