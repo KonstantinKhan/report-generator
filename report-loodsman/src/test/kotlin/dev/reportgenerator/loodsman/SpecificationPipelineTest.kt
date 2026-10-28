@@ -412,7 +412,7 @@ class SpecificationPipelineTest : ShouldSpec({
                     name = "Вал",
                     quantity = 1.0,
                     format = "*)",
-                    notes = listOf("*) А3х3", "Закалить"),
+                    notes = listOf("*)А3х3", "Закалить"),
                 ),
             ),
         )

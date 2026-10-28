@@ -25,13 +25,15 @@ data class DocumentationItem(
     val name: String,
 )
 
-// `format` = null when the item has no format. A complex format (with the letter x) is the mark "*)" here and its
-// value is the first of `notes`. `notes` = one line per note, the unit of a material is the first of them.
+// `format` / `zone` = null when the item has none. A complex format (with the letter x) and a complex zone (several
+// zones, comma-separated) are the mark "*)" here, their value follows the mark in `notes` ("*)А3х3"): the format
+// first, then the zone. `notes` = one line per note, the unit of a material is the first of them.
 data class AssemblyItem(
     override val position: Int? = null,
     override val designation: String? = null,
     override val name: String,
     val quantity: Double,
+    val zone: String? = null,
     val format: String? = null,
     val notes: List<String> = emptyList(),
 ) : PositionedItem
@@ -41,6 +43,7 @@ data class PartItem(
     override val designation: String? = null,
     override val name: String,
     val quantity: Double,
+    val zone: String? = null,
     val format: String? = null,
     val notes: List<String> = emptyList(),
 ) : PositionedItem
@@ -50,6 +53,7 @@ data class StandardItem(
     override val designation: String? = null,
     override val name: String,
     val quantity: Double,
+    val zone: String? = null,
     val notes: List<String> = emptyList(),
 ) : PositionedItem
 
@@ -58,6 +62,7 @@ data class OtherItem(
     override val designation: String? = null,
     override val name: String,
     val quantity: Double,
+    val zone: String? = null,
     val notes: List<String> = emptyList(),
 ) : PositionedItem
 
@@ -66,5 +71,6 @@ data class MaterialItem(
     override val designation: String? = null,
     override val name: String,
     val quantity: Double,
+    val zone: String? = null,
     val notes: List<String> = emptyList(),
 ) : PositionedItem

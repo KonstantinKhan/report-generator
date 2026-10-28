@@ -70,6 +70,7 @@ class RegistriesTest : ShouldSpec({
     context("linkAttributeKeys registry") {
         should("contain known LinkAttributeKey variants") {
             Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.Note)
+            Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.Zone)
         }
 
         should("throw error for unknown link attribute key") {

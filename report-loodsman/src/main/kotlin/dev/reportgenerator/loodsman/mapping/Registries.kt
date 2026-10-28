@@ -49,7 +49,8 @@ object Registries {
         "linkAttributeKey",
         mapOf(
             "position" to LinkAttributeKey.Position,
-            "note" to LinkAttributeKey.Note
+            "note" to LinkAttributeKey.Note,
+            "zone" to LinkAttributeKey.Zone
         )
     )
 }

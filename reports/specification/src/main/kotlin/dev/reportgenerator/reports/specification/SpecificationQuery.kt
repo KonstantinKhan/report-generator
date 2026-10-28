@@ -11,8 +11,8 @@ import dev.reportgenerator.domain.StructureQuery
 // one level only (relationDepth), so the children of the children stay out; their documents are read (depth 2).
 // The material of a material form is read by the made-from link of the form (the form is at the depth of the
 // composition, its link is expanded one level further, depth 2).
-// Designation, product designation, name and format are read from attributes, the note from the link attributes of the
-// composition. The product designation is set for standard and other products only, for the other kinds it is not read.
+// Designation, product designation, name and format are read from attributes, the note and the zone from the link
+// attributes of the composition. The product designation is set for standard and other products only, for the other kinds it is not read.
 fun specificationQuery(rootId: PdmNodeId): StructureQuery = StructureQuery(
     rootId = rootId,
     depth = 2,
@@ -24,5 +24,5 @@ fun specificationQuery(rootId: PdmNodeId): StructureQuery = StructureQuery(
         AttributeKey.Name,
         AttributeKey.Format,
     ),
-    linkAttributes = setOf(LinkAttributeKey.Note),
+    linkAttributes = setOf(LinkAttributeKey.Note, LinkAttributeKey.Zone),
 )

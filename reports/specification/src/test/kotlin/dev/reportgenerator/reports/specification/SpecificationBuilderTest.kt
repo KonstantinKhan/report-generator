@@ -165,7 +165,7 @@ class SpecificationBuilderTest {
             documentDesignation = "AAA.00.000",
             documentName = "Тестовое изделие",
             assemblies = listOf(
-                AssemblyItem(position = 1, designation = "AAA.01.000", name = "Корпус", quantity = 1.0, format = "*)", notes = listOf("*) А3х3")),
+                AssemblyItem(position = 1, designation = "AAA.01.000", name = "Корпус", quantity = 1.0, format = "*)", notes = listOf("*)А3х3")),
             ),
             parts = listOf(
                 PartItem(position = 2, designation = "AAA.02.001", name = "Вал", quantity = 2.0, format = "A4", notes = listOf("Закалить")),
@@ -177,7 +177,7 @@ class SpecificationBuilderTest {
         val rows = table.content.filterIsInstance<IrGroup>().flatMap { it.rows }
 
         assertEquals(listOf("*)", "A4"), rows.map { it.cells[0].text })
-        assertEquals(listOf("*) А3х3", "Закалить"), rows.map { it.cells[6].text })
+        assertEquals(listOf("*)А3х3", "Закалить"), rows.map { it.cells[6].text })
     }
 
     @Test

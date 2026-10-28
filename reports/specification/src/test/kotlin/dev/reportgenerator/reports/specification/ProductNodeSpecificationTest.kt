@@ -65,12 +65,16 @@ private fun composition(
     unit: Field<String> = Field.Missing,
     position: Field<Int> = Field.Missing,
     note: AttributeValue? = null,
+    zone: AttributeValue? = null,
 ) = CompositionUsage(
     target = child,
     position = position,
     quantity = quantity,
     unit = unit,
-    attributes = buildMap { note?.let { put(LinkAttributeKey.Note, it) } },
+    attributes = buildMap {
+        note?.let { put(LinkAttributeKey.Note, it) }
+        zone?.let { put(LinkAttributeKey.Zone, it) }
+    },
 )
 
 private fun document(child: PdmNode) = DocumentUsage(child)
@@ -469,10 +473,10 @@ class ProductNodeSpecificationTest : ShouldSpec({
         ).toSpecificationData()
 
         data.parts.single() shouldBe PartItem(
-            designation = "АБ.2", name = "Имя 2", quantity = 1.0, format = "*)", notes = listOf("*) А3х3"),
+            designation = "АБ.2", name = "Имя 2", quantity = 1.0, format = "*)", notes = listOf("*)А3х3"),
         )
         data.assemblies.single() shouldBe AssemblyItem(
-            designation = "АБ.3", name = "Имя 3", quantity = 1.0, format = "*)", notes = listOf("*) A3x3"),
+            designation = "АБ.3", name = "Имя 3", quantity = 1.0, format = "*)", notes = listOf("*)A3x3"),
         )
     }
 
@@ -481,7 +485,7 @@ class ProductNodeSpecificationTest : ShouldSpec({
         val data = root(composition(withDocuments(part, detailDrawingOf("A3X3")))).toSpecificationData()
 
         data.parts.single().format shouldBe "*)"
-        data.parts.single().notes shouldBe listOf("*) A3X3")
+        data.parts.single().notes shouldBe listOf("*)A3X3")
     }
 
     should("give no format when the item has no document of its kind") {
@@ -519,13 +523,64 @@ class ProductNodeSpecificationTest : ShouldSpec({
         data.materials.single().notes shouldBe listOf("Лист")
     }
 
+    should("take the zone of the composition link for every section") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Assembly), zone = AttributeValue.Text("А1")),
+            composition(node(3, kind = PdmNodeKind.Part), zone = AttributeValue.Text("Б2")),
+            composition(node(4, kind = PdmNodeKind.Standard), zone = AttributeValue.Text("В3")),
+            composition(node(5, kind = PdmNodeKind.Other), zone = AttributeValue.Text("Г4")),
+            composition(node(6, kind = PdmNodeKind.Material), zone = AttributeValue.Text("Д5")),
+        ).toSpecificationData()
+
+        data.assemblies.single().zone shouldBe "А1"
+        data.parts.single().zone shouldBe "Б2"
+        data.standards.single().zone shouldBe "В3"
+        data.others.single().zone shouldBe "Г4"
+        data.materials.single().zone shouldBe "Д5"
+    }
+
+    should("mark a complex zone with several zones and put its value into the notes") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Part), zone = AttributeValue.Text("7B, 8C")),
+            composition(node(3, kind = PdmNodeKind.Material), zone = AttributeValue.Text("1A,2B"), note = AttributeValue.Text("Лист")),
+        ).toSpecificationData()
+
+        data.parts.single().zone shouldBe "*)"
+        data.parts.single().notes shouldBe listOf("*)7B, 8C")
+        data.materials.single().zone shouldBe "*)"
+        data.materials.single().notes shouldBe listOf("*)1A,2B", "Лист")
+    }
+
+    should("put the complex format before the complex zone in the notes") {
+        val data = root(
+            composition(
+                withDocuments(node(2, kind = PdmNodeKind.Part), detailDrawingOf("А3х3")),
+                zone = AttributeValue.Text("7B,8C"),
+                note = AttributeValue.Text("Закалить"),
+            ),
+        ).toSpecificationData()
+
+        data.parts.single().format shouldBe "*)"
+        data.parts.single().zone shouldBe "*)"
+        data.parts.single().notes shouldBe listOf("*)А3х3", "*)7B,8C", "Закалить")
+    }
+
+    should("leave the zone empty when the link has none or it is blank") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Part)),
+            composition(node(3, kind = PdmNodeKind.Part), zone = AttributeValue.Text(" ")),
+        ).toSpecificationData()
+
+        data.parts.map { it.zone } shouldBe listOf(null, null)
+    }
+
     should("put the complex format before the note of the link") {
         val part = node(2, kind = PdmNodeKind.Part)
         val data = root(
             composition(withDocuments(part, detailDrawingOf("А3х3")), note = AttributeValue.Text("Прим.")),
         ).toSpecificationData()
 
-        data.parts.single().notes shouldBe listOf("*) А3х3", "Прим.")
+        data.parts.single().notes shouldBe listOf("*)А3х3", "Прим.")
     }
 
     should("put the unit of a material first and the note of the link second") {

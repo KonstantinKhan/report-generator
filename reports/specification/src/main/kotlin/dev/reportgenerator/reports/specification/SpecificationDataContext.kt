@@ -36,6 +36,7 @@ private class ItemRow(
     val name: String,
     val quantity: Double? = null,
     val format: String? = null,
+    val zone: String? = null,
     val notes: List<String> = emptyList(),
 )
 
@@ -43,15 +44,15 @@ private fun SpecificationData.rows(): List<ItemRow> =
     documentation.map {
         ItemRow(SpecificationSection.DOCUMENTATION, designation = it.designation, name = it.name)
     } + assemblies.map {
-        ItemRow(SpecificationSection.ASSEMBLY, it.position, it.designation, it.name, it.quantity, format = it.format, notes = it.notes)
+        ItemRow(SpecificationSection.ASSEMBLY, it.position, it.designation, it.name, it.quantity, zone = it.zone, format = it.format, notes = it.notes)
     } + parts.map {
-        ItemRow(SpecificationSection.PART, it.position, it.designation, it.name, it.quantity, format = it.format, notes = it.notes)
+        ItemRow(SpecificationSection.PART, it.position, it.designation, it.name, it.quantity, zone = it.zone, format = it.format, notes = it.notes)
     } + standards.map {
-        ItemRow(SpecificationSection.STANDARD, it.position, it.designation, it.name, it.quantity, notes = it.notes)
+        ItemRow(SpecificationSection.STANDARD, it.position, it.designation, it.name, it.quantity, zone = it.zone, notes = it.notes)
     } + others.map {
-        ItemRow(SpecificationSection.OTHER, it.position, it.designation, it.name, it.quantity, notes = it.notes)
+        ItemRow(SpecificationSection.OTHER, it.position, it.designation, it.name, it.quantity, zone = it.zone, notes = it.notes)
     } + materials.map {
-        ItemRow(SpecificationSection.MATERIAL, it.position, it.designation, it.name, it.quantity, notes = it.notes)
+        ItemRow(SpecificationSection.MATERIAL, it.position, it.designation, it.name, it.quantity, zone = it.zone, notes = it.notes)
     }
 
 private fun RecordBuilder.itemFields(row: ItemRow?) {
@@ -62,6 +63,7 @@ private fun RecordBuilder.itemFields(row: ItemRow?) {
     // BigDecimal.valueOf(double): the shortest decimal text of the double, as the legacy formatter used it
     decimal("quantity", row?.quantity?.let { BigDecimal.valueOf(it) })
     string("format", row?.format)
+    string("zone", row?.zone)
     // The template has no list binds: the notes of a row are one text, one note per line.
     string("notes", row?.notes?.takeIf { it.isNotEmpty() }?.joinToString("\n"))
 }

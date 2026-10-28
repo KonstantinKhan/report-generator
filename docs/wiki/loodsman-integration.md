@@ -259,7 +259,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 **(а3) Формат и примечания.** Формат сборочной единицы — из документов самой сборочной единицы (первый «Спецификация»
 с непустым «Формат»), детали — из «Чертёж детали». Для этого `specificationQuery` читает документы детей корня:
 `depth = 2`, состав раскрывается только до детей корня (`relationDepth = {Composition: 1}`), `Format` — атрибут
-документа, `Note` — атрибут связи состава. Примечание состава — `LinkAttributeKey.Note` из `CompositionUsage.attributes`.
+документа, `Note` — атрибут связи состава. Примечание состава — `LinkAttributeKey.Note`, зона — `LinkAttributeKey.Zone` (атрибут связи «Зона», relation COMPOSITION) из `CompositionUsage.attributes`.
 Правила записи в колонки «Формат» и «Примечание» (сложный формат `*)`, единица материала первой строкой) — в
 [specification-table-format.md](specification-table-format.md#правила-формата-и-примечаний-спецификации).
 

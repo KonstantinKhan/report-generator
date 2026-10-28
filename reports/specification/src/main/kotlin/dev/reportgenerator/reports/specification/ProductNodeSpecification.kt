@@ -72,13 +72,15 @@ private fun CompositionUsage.toAssemblyItem(): AssemblyItem {
     val fields = fields()
     val (designation, name) = target.designationAndName()
     val format = formatCell(target.formatOf(PdmNodeKind.Specification))
+    val zone = zoneCell(zoneOf())
     return AssemblyItem(
         position = fields.position,
         designation = designation,
         name = name,
         quantity = fields.quantity,
+        zone = zone.column,
         format = format.column,
-        notes = format.notes + listOfNotNull(noteOf()),
+        notes = format.notes + zone.notes + listOfNotNull(noteOf()),
     )
 }
 
@@ -86,37 +88,43 @@ private fun CompositionUsage.toPartItem(): PartItem {
     val fields = fields()
     val (designation, name) = target.designationAndName()
     val format = formatCell(target.formatOf(PdmNodeKind.DetailDrawing))
+    val zone = zoneCell(zoneOf())
     return PartItem(
         position = fields.position,
         designation = designation,
         name = name,
         quantity = fields.quantity,
+        zone = zone.column,
         format = format.column,
-        notes = format.notes + listOfNotNull(noteOf()),
+        notes = format.notes + zone.notes + listOfNotNull(noteOf()),
     )
 }
 
 private fun CompositionUsage.toStandardItem(): StandardItem {
     val fields = fields()
     val (designation, name) = target.standardDesignationAndName()
+    val zone = zoneCell(zoneOf())
     return StandardItem(
         position = fields.position,
         designation = designation,
         name = name,
         quantity = fields.quantity,
-        notes = listOfNotNull(noteOf()),
+        zone = zone.column,
+        notes = zone.notes + listOfNotNull(noteOf()),
     )
 }
 
 private fun CompositionUsage.toOtherItem(): OtherItem {
     val fields = fields()
     val (designation, name) = target.standardDesignationAndName()
+    val zone = zoneCell(zoneOf())
     return OtherItem(
         position = fields.position,
         designation = designation,
         name = name,
         quantity = fields.quantity,
-        notes = listOfNotNull(noteOf()),
+        zone = zone.column,
+        notes = zone.notes + listOfNotNull(noteOf()),
     )
 }
 
@@ -128,12 +136,14 @@ private val materialKinds = setOf(PdmNodeKind.Material, PdmNodeKind.MaterialForm
 private fun CompositionUsage.toMaterialItem(): MaterialItem {
     val fields = fields()
     val (designation, name) = target.materialNode().designationAndName()
+    val zone = zoneCell(zoneOf())
     return MaterialItem(
         position = fields.position,
         designation = designation,
         name = name,
         quantity = fields.quantity,
-        notes = listOfNotNull(fields.unit, noteOf()),
+        zone = zone.column,
+        notes = listOfNotNull(fields.unit) + zone.notes + listOfNotNull(noteOf()),
     )
 }
 
@@ -145,22 +155,29 @@ private fun PdmNode.materialNode(): PdmNode {
         ?: throw SpecificationDataException("Node ${id.asInt()}: material form has no material")
 }
 
-// Format of the sheet: the mark "*)" and the value of a complex format (with the letter x), the value itself otherwise.
-private class FormatCell(val column: String?, val notes: List<String>)
+// A value that does not fit its narrow column goes to the notes: the column shows the mark "*)", the first note
+// of the row is the mark and the value (no space between them).
+private class FootnoteCell(val column: String?, val notes: List<String>)
 
-private const val COMPLEX_FORMAT_MARK = "*)"
+private const val FOOTNOTE_MARK = "*)"
+
+private fun footnoteCell(value: String?, isComplex: (String) -> Boolean): FootnoteCell = when {
+    value == null -> FootnoteCell(column = null, notes = emptyList())
+    isComplex(value) -> FootnoteCell(column = FOOTNOTE_MARK, notes = listOf("$FOOTNOTE_MARK$value"))
+    else -> FootnoteCell(column = value, notes = emptyList())
+}
 
 // Letters of a complex format: the Latin x and the Cyrillic х (х, Х), both cases.
 private val complexFormatLetters = setOf('x', 'X', 'х', 'Х')
 
-private fun formatCell(format: String?): FormatCell = when {
-    format == null -> FormatCell(column = null, notes = emptyList())
-    format.any { it in complexFormatLetters } -> FormatCell(
-        column = COMPLEX_FORMAT_MARK,
-        notes = listOf("$COMPLEX_FORMAT_MARK $format"),
-    )
-    else -> FormatCell(column = format, notes = emptyList())
-}
+// Format of the sheet: a complex format has the letter x.
+private fun formatCell(format: String?): FootnoteCell =
+    footnoteCell(format) { value -> value.any { it in complexFormatLetters } }
+
+// Zone of the sheet: a complex zone lists several zones, separated by a comma.
+private const val ZONE_SEPARATOR = ','
+
+private fun zoneCell(zone: String?): FootnoteCell = footnoteCell(zone) { ZONE_SEPARATOR in it }
 
 // Format of an assembly or a part: the first document of the given kind (specification, detail drawing) that has a
 // format. A document without a format or with a format not loaded gives no format.
@@ -171,6 +188,9 @@ private fun PdmNode.formatOf(documentKind: PdmNodeKind): String? = usages
 
 // Note of the composition link: null when the link has none (empty) or the note was not requested (not loaded).
 private fun CompositionUsage.noteOf(): String? = attributes[LinkAttributeKey.Note].textOrNull()
+
+// Zone of the composition link: null when the link has none (empty) or the zone was not requested (not loaded).
+private fun CompositionUsage.zoneOf(): String? = attributes[LinkAttributeKey.Zone].textOrNull()
 
 private fun CompositionUsage.positionOf(): Int? = when (val value = position) {
     is Field.Value -> value.value
