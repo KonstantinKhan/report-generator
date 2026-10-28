@@ -825,7 +825,7 @@ table:
       - {id: position, width: 8, stick: first, align: center}
       - {id: designation, width: 70}
       - {id: name, width: 63}
-      - {id: quantity, width: 10, stick: last, align: center}
+      - {id: quantity, width: 10, stick: first, align: center}
       - {id: note, width: 22, stick: last, align: center}
     header:
       height: 15
