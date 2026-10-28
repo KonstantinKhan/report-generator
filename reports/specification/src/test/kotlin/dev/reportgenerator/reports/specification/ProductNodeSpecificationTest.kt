@@ -12,6 +12,9 @@ import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.Relation
+import dev.reportgenerator.domain.ReplacementGroup
+import dev.reportgenerator.domain.ReplacementType
+import dev.reportgenerator.domain.ReplacementVariant
 import dev.reportgenerator.domain.Usage
 import dev.reportgenerator.domain.UnmappedUsage
 import io.kotest.assertions.throwables.shouldThrow
@@ -48,13 +51,14 @@ private fun rootNode(
     designation: AttributeValue? = AttributeValue.Text("ИЗД.001"),
     name: AttributeValue? = AttributeValue.Text("Изделие"),
     usages: List<Usage> = emptyList(),
+    replacements: List<ReplacementGroup> = emptyList(),
 ) = node(
     id = 1,
     kind = PdmNodeKind.Assembly,
     designation = designation,
     name = name,
     usages = usages,
-)
+).copy(replacements = replacements)
 
 private fun root(vararg usages: Usage) = rootNode(usages = usages.toList())
 
@@ -66,6 +70,7 @@ private fun composition(
     position: Field<Int> = Field.Missing,
     note: AttributeValue? = null,
     zone: AttributeValue? = null,
+    linkId: Int? = null,
 ) = CompositionUsage(
     target = child,
     position = position,
@@ -75,6 +80,7 @@ private fun composition(
         note?.let { put(LinkAttributeKey.Note, it) }
         zone?.let { put(LinkAttributeKey.Zone, it) }
     },
+    linkId = linkId,
 )
 
 private fun document(child: PdmNode) = DocumentUsage(child)
@@ -691,7 +697,115 @@ class ProductNodeSpecificationTest : ShouldSpec({
 
         data.standards.forEach { it.notes shouldBe emptyList() }
     }
+
+    should("give replacement notes to the permissible members and keep the other groups ordinary") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт М12x25")), Quantity.Exact(4.0), position = Field.Value(5), linkId = 10045),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт 2М12x25")), Quantity.Exact(4.0), position = Field.Value(7), linkId = 10037),
+                composition(node(4, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Шплинт 3,2x28.4")), Quantity.Exact(4.0), position = Field.Value(8), linkId = 10046),
+                composition(node(5, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Шайба 80")), position = Field.Value(9), linkId = 10035),
+                composition(node(6, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Supporting ring DIN")), position = Field.Value(10), linkId = 10036),
+            ),
+            replacements = listOf(
+                group(1, ReplacementType.Permissible, listOf(10045), listOf(10037, 10046)),
+                group(2, ReplacementType.Production, listOf(10035), listOf(10036)),
+            ),
+        ).toSpecificationData()
+
+        data.standards shouldBe listOf(
+            StandardItem(position = 5, name = "Болт М12x25", quantity = 4.0, notes = listOf("Допуск. замена на поз. 7 совместно с поз. 8")),
+            StandardItem(position = 7, name = "Болт 2М12x25", quantity = null, notes = listOf("4 шт.", "примен. с поз. 8 взамен поз. 5")),
+            StandardItem(position = 8, name = "Шплинт 3,2x28.4", quantity = null, notes = listOf("4 шт.", "примен. с поз. 7 взамен поз. 5")),
+            StandardItem(position = 9, name = "Шайба 80", quantity = 1.0),
+            StandardItem(position = 10, name = "Supporting ring DIN", quantity = 1.0),
+        )
+    }
+
+    should("show the lower bound of a non-basic range as the count and keep the upper bound note") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), Quantity.Exact(4.0), position = Field.Value(5), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Гайка")), Quantity.Range(2.0, 4.5), position = Field.Value(7), linkId = 2),
+            ),
+            replacements = listOf(group(1, ReplacementType.Permissible, listOf(1), listOf(2))),
+        ).toSpecificationData()
+
+        data.standards shouldBe listOf(
+            StandardItem(position = 5, name = "Болт", quantity = 4.0, notes = listOf("Допуск. замена на поз. 7")),
+            StandardItem(position = 7, name = "Гайка", quantity = null, notes = listOf("2 шт.", "Наиб. кол. 5", "примен. взамен поз. 5")),
+        )
+    }
+
+    should("keep the replacement text of a basic item lowercase when a note comes before it") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), Quantity.Range(2.0, 4.5), position = Field.Value(5), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Гайка")), position = Field.Value(7), linkId = 2),
+            ),
+            replacements = listOf(group(1, ReplacementType.Permissible, listOf(1), listOf(2))),
+        ).toSpecificationData()
+
+        data.standards.first().notes shouldBe listOf("Наиб. кол. 5", "допуск. замена на поз. 7")
+    }
+
+    should("give a non-basic material its count with the unit and no repeated unit note") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Сталь 45")), Quantity.Exact(1.0), Field.Value("кг"), position = Field.Value(5), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Сталь 09Г2С")), Quantity.Exact(2.5), Field.Value("кг"), position = Field.Value(7), linkId = 2),
+            ),
+            replacements = listOf(group(1, ReplacementType.Permissible, listOf(1), listOf(2))),
+        ).toSpecificationData()
+
+        data.materials shouldBe listOf(
+            MaterialItem(position = 5, name = "Сталь 45", quantity = 1.0, notes = listOf("кг", "допуск. замена на поз. 7")),
+            MaterialItem(position = 7, name = "Сталь 09Г2С", quantity = null, notes = listOf("2,5 кг", "примен. взамен поз. 5")),
+        )
+    }
+
+    should("skip a permissible group with a member outside the composition and keep its members ordinary") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), Quantity.Exact(4.0), position = Field.Value(5), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Гайка")), Quantity.Exact(2.0), position = Field.Value(7), linkId = 2),
+            ),
+            replacements = listOf(group(1, ReplacementType.Permissible, listOf(1), listOf(99))),
+        ).toSpecificationData()
+
+        data.standards shouldBe listOf(
+            StandardItem(position = 5, name = "Болт", quantity = 4.0),
+            StandardItem(position = 7, name = "Гайка", quantity = 2.0),
+        )
+    }
+
+    should("fail when a member of a permissible group has no position") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), position = Field.Value(5), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Гайка")), position = Field.Missing, linkId = 2),
+            ),
+            replacements = listOf(group(1, ReplacementType.Permissible, listOf(1), listOf(2))),
+        )
+
+        shouldThrow<SpecificationDataException> { data.toSpecificationData() }.message shouldContain "member 2"
+    }
 })
+
+// A replacement group of the root: the basic variant, then one non-basic variant per list, the ids by the group id.
+private fun group(id: Int, type: ReplacementType, basic: List<Int>, vararg nonBasic: List<Int>): ReplacementGroup =
+    ReplacementGroup(
+        id = id,
+        name = null,
+        type = type,
+        variants = listOf(ReplacementVariant(id = id * 10, name = null, basic = true, linkIds = basic, inCurrentConfiguration = true)) +
+            nonBasic.mapIndexed { index, linkIds ->
+                ReplacementVariant(
+                    id = id * 10 + index + 1, name = null, basic = false, linkIds = linkIds, inCurrentConfiguration = true,
+                )
+            },
+        inCurrentConfiguration = true,
+    )
 
 // A document usage of the item with the format attribute (null: the format key is not requested).
 private fun documentWith(kind: PdmNodeKind, format: AttributeValue?): DocumentUsage = DocumentUsage(

@@ -120,6 +120,8 @@ private class ParityLoodsman(
                         .filter { (_, edge) -> edge.parent == parent && linkTypeId(edge.link) in linkTypes }
                         .map { (index, edge) -> linkOf(edge, index + 1) })
                 }
+                // Replacement groups of the root (the specification asks for them): none in these fixtures.
+                "/api/v4/ObjectInfo/get-info-about-version-mode-20" -> buildJsonArray {}
                 "/api/v4/MetaDataCustom/types-links" -> buildJsonArray {}
                 "/api/v4/MetaData/get-type-list" -> buildJsonArray {
                     objects.map { it.type }.distinct().forEachIndexed { index, type ->

@@ -188,7 +188,7 @@ blocks:
   # job. The code (reports/specification) only supplies the typed row record `item` (raw values):
   #   item.position Integer (absent = empty), item.designation String (absent = empty), item.name String,
   #   item.section Enum(DOCUMENTATION|ASSEMBLY|PART|STANDARD|OTHER|MATERIAL) = the section of the row,
-  #   item.quantity Decimal (absent for documentation), item.format String (absent = empty), item.zone String (absent = empty),
+  #   item.quantity Decimal (absent for documentation and for a non-basic item of a replacement), item.format String (absent = empty), item.zone String (absent = empty),
   #   item.notes String (absent = empty, one note per line; a material has its unit as the first note).
   # Columns: 6+6+8+70+63+10+22 = 185 mm = the sheet's content width (checked, no tolerance).
   # `stick`: first / last = a single-line value sits on the first / last physical line of a wrapped row.
@@ -247,6 +247,7 @@ blocks:
           # materials: the number as is, no rounding (up to 60 decimals: the pattern limit), trailing zeros trimmed,
           # decimal comma (1,5; 0,35; 0,000002; 3). Every other section
           # is a whole count (rounded half up): Loodsman counts them in pieces.
+          # absent quantity (documentation, a non-basic item of a replacement): the cell is empty
           quantity:
             style: data
             cases:
@@ -254,8 +255,10 @@ blocks:
                 text: ""
               - where: {field: section, eq: MATERIAL}
                 bind: "${item.quantity}"
+                optional: true
                 format: {pattern: "0.############################################################", locale: ru, rounding: HALF_UP}
             bind: "${item.quantity}"
+            optional: true
             format: {pattern: "0", rounding: HALF_UP}
           # the notes of every section, one per line (a material: the unit first, then the note of the link)
           note:

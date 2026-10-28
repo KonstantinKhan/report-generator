@@ -19,7 +19,7 @@ fun SpecificationData.toDataContext(): DataContext = dataContext {
 }
 
 // One record per item, the sections in the order of the sheet and the items of a section in their data order.
-// Fields without a value (position of documentation, quantity of documentation, unit of a non-material) are left out:
+// Fields without a value (position of documentation, quantity of documentation or of a non-basic item, unit of a non-material) are left out:
 // the template marks their cells `optional` or does not bind them.
 fun SpecificationData.itemRecords(): List<DataValue.Record> = rows().map { row ->
     dataContext { item { itemFields(row) } }.get("item") as DataValue.Record

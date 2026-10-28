@@ -13,6 +13,7 @@ import dev.reportgenerator.domain.StructureQuery
 // composition, its link is expanded one level further, depth 2).
 // Designation, product designation, name and format are read from attributes, the note and the zone from the link
 // attributes of the composition. The product designation is set for standard and other products only, for the other kinds it is not read.
+// The replacement groups are read for the root only (depth 0): the permissible ones give the replacement notes of the items.
 fun specificationQuery(rootId: PdmNodeId): StructureQuery = StructureQuery(
     rootId = rootId,
     depth = 2,
@@ -25,4 +26,6 @@ fun specificationQuery(rootId: PdmNodeId): StructureQuery = StructureQuery(
         AttributeKey.Format,
     ),
     linkAttributes = setOf(LinkAttributeKey.Note, LinkAttributeKey.Zone),
+    replacements = true,
+    replacementDepth = 0,
 )

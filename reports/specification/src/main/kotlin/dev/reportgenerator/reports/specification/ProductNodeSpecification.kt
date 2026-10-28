@@ -28,6 +28,8 @@ fun PdmNode.toSpecificationData(): SpecificationData {
         is TextState.NotLoaded -> throw SpecificationDataException("Root node ${id.asInt()}: name is not loaded")
     }
     val composition = usages.filterIsInstance<CompositionUsage>()
+    // The replacement notes of the root's items (permissible groups only), computed once for the whole sheet.
+    val replacements = ReplacementNotes.of(this)
     return SpecificationData(
         documentDesignation = documentDesignation,
         documentName = documentName,
@@ -35,11 +37,12 @@ fun PdmNode.toSpecificationData(): SpecificationData {
             .filter { it.isSpecificationDocument() }
             .map { it.target.toDocumentationItem() }
             .sortedWith(documentationOrder),
-        assemblies = composition.ofKind(PdmNodeKind.Assembly).map { it.toAssemblyItem() }.sortedByPosition(),
-        parts = composition.ofKind(PdmNodeKind.Part).map { it.toPartItem() }.sortedByPosition(),
-        standards = composition.ofKind(PdmNodeKind.Standard).map { it.toStandardItem() }.sortedByPosition(),
-        others = composition.ofKind(PdmNodeKind.Other).map { it.toOtherItem() }.sortedByPosition(),
-        materials = composition.filter { it.target.kind in materialKinds }.map { it.toMaterialItem() }.sortedByPosition(),
+        assemblies = composition.ofKind(PdmNodeKind.Assembly).map { it.toAssemblyItem(replacements) }.sortedByPosition(),
+        parts = composition.ofKind(PdmNodeKind.Part).map { it.toPartItem(replacements) }.sortedByPosition(),
+        standards = composition.ofKind(PdmNodeKind.Standard).map { it.toStandardItem(replacements) }.sortedByPosition(),
+        others = composition.ofKind(PdmNodeKind.Other).map { it.toOtherItem(replacements) }.sortedByPosition(),
+        materials = composition.filter { it.target.kind in materialKinds }
+            .map { it.toMaterialItem(replacements) }.sortedByPosition(),
     )
 }
 
@@ -67,23 +70,48 @@ private fun PdmNode.toDocumentationItem(): DocumentationItem {
 
 // Values every composition item reads. The unit is read for all sections, but only materials show it (in the notes).
 // The quantity is the exact one or the lower bound of a range; the upper bound of a range is the note `maxQuantityNote`.
+// A non-basic item of a permissible replacement group has no quantity in the column (null); its count is the first note
+// (`countNote`, the lower bound of the quantity), the replacement texts are the last notes.
 private class CompositionFields(
     val position: Int?,
-    val quantity: Double,
+    val quantity: Double?,
+    val countNote: String?,
     val unit: String?,
     val maxQuantityNote: String?,
-)
+    val replacementTexts: List<String>,
+) {
+    // The notes in the order of the sheet: the count of a non-basic item, the notes of the item, the replacement texts.
+    // The replacement text of a basic item starts with a capital letter only when it is the first note of the item.
+    fun notes(base: List<String>): List<String> {
+        val head = listOfNotNull(countNote)
+        val texts = if (head.isEmpty() && base.isEmpty()) capitalizedFirst(replacementTexts) else replacementTexts
+        return head + base + texts
+    }
 
-private fun CompositionUsage.fields(material: Boolean = false): CompositionFields =
-    CompositionFields(
+    private fun capitalizedFirst(texts: List<String>): List<String> {
+        val first = texts.firstOrNull() ?: return texts
+        if (!first.startsWith(ReplacementNotes.BASIC_TEXT_START)) return texts
+        return listOf(first.replaceFirstChar { it.uppercaseChar() }) + texts.drop(1)
+    }
+}
+
+private fun CompositionUsage.fields(replacements: Map<Int, ReplacementNote>, material: Boolean = false): CompositionFields {
+    val replacement = linkId?.let { replacements[it] }
+    val nonBasic = replacement?.isNonBasic == true
+    val minQuantity = quantityOf()
+    val unit = unitOf()
+    return CompositionFields(
         position = positionOf(),
-        quantity = quantityOf(),
-        unit = unitOf(),
+        quantity = minQuantity.takeUnless { nonBasic },
+        countNote = if (nonBasic) countNoteOf(minQuantity, unit, material) else null,
+        unit = unit,
         maxQuantityNote = maxQuantityNoteOf(material),
+        replacementTexts = replacement?.texts.orEmpty(),
     )
+}
 
-private fun CompositionUsage.toAssemblyItem(): AssemblyItem {
-    val fields = fields()
+private fun CompositionUsage.toAssemblyItem(replacements: Map<Int, ReplacementNote>): AssemblyItem {
+    val fields = fields(replacements)
     val (designation, name) = target.designationAndName()
     val format = formatCell(target.formatOf(PdmNodeKind.Specification))
     val zone = zoneCell(zoneOf())
@@ -94,12 +122,12 @@ private fun CompositionUsage.toAssemblyItem(): AssemblyItem {
         quantity = fields.quantity,
         zone = zone.column,
         format = format.column,
-        notes = format.notes + zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf()),
+        notes = fields.notes(format.notes + zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf())),
     )
 }
 
-private fun CompositionUsage.toPartItem(): PartItem {
-    val fields = fields()
+private fun CompositionUsage.toPartItem(replacements: Map<Int, ReplacementNote>): PartItem {
+    val fields = fields(replacements)
     val (designation, name) = target.designationAndName()
     val format = formatCell(target.formatOf(PdmNodeKind.DetailDrawing))
     val zone = zoneCell(zoneOf())
@@ -110,12 +138,12 @@ private fun CompositionUsage.toPartItem(): PartItem {
         quantity = fields.quantity,
         zone = zone.column,
         format = format.column,
-        notes = format.notes + zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf()),
+        notes = fields.notes(format.notes + zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf())),
     )
 }
 
-private fun CompositionUsage.toStandardItem(): StandardItem {
-    val fields = fields()
+private fun CompositionUsage.toStandardItem(replacements: Map<Int, ReplacementNote>): StandardItem {
+    val fields = fields(replacements)
     val (designation, name) = target.standardDesignationAndName()
     val zone = zoneCell(zoneOf())
     return StandardItem(
@@ -124,12 +152,12 @@ private fun CompositionUsage.toStandardItem(): StandardItem {
         name = name,
         quantity = fields.quantity,
         zone = zone.column,
-        notes = zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf()),
+        notes = fields.notes(zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf())),
     )
 }
 
-private fun CompositionUsage.toOtherItem(): OtherItem {
-    val fields = fields()
+private fun CompositionUsage.toOtherItem(replacements: Map<Int, ReplacementNote>): OtherItem {
+    val fields = fields(replacements)
     val (designation, name) = target.standardDesignationAndName()
     val zone = zoneCell(zoneOf())
     return OtherItem(
@@ -138,17 +166,18 @@ private fun CompositionUsage.toOtherItem(): OtherItem {
         name = name,
         quantity = fields.quantity,
         zone = zone.column,
-        notes = zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf()),
+        notes = fields.notes(zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf())),
     )
 }
 
 // Kinds of the materials section: a material itself, or a material form whose material is read from its usages.
 private val materialKinds = setOf(PdmNodeKind.Material, PdmNodeKind.MaterialForm)
 
-// The unit of a material is the first note, the note of the composition link follows it. A material form takes its
+// The unit of a material is the first note, the note of the composition link follows it. A non-basic material shows its
+// count with the unit instead ("2,5 кг" is the first note, the unit is not repeated). A material form takes its
 // name and designation from its material, the position, quantity, unit and note come from the composition link.
-private fun CompositionUsage.toMaterialItem(): MaterialItem {
-    val fields = fields(material = true)
+private fun CompositionUsage.toMaterialItem(replacements: Map<Int, ReplacementNote>): MaterialItem {
+    val fields = fields(replacements, material = true)
     val (designation, name) = target.materialNode().designationAndName()
     val zone = zoneCell(zoneOf())
     return MaterialItem(
@@ -157,7 +186,7 @@ private fun CompositionUsage.toMaterialItem(): MaterialItem {
         name = name,
         quantity = fields.quantity,
         zone = zone.column,
-        notes = listOfNotNull(fields.unit) + zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf()),
+        notes = fields.notes(listOfNotNull(fields.unit.takeIf { fields.countNote == null }) + zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf())),
     )
 }
 
@@ -206,7 +235,7 @@ private fun CompositionUsage.noteOf(): String? = attributes[LinkAttributeKey.Not
 // Zone of the composition link: null when the link has none (empty) or the zone was not requested (not loaded).
 private fun CompositionUsage.zoneOf(): String? = attributes[LinkAttributeKey.Zone].textOrNull()
 
-private fun CompositionUsage.positionOf(): Int? = when (val value = position) {
+internal fun CompositionUsage.positionOf(): Int? = when (val value = position) {
     is Field.Value -> value.value
     is Field.Missing -> null
     is Field.NotLoaded -> throw SpecificationDataException("Node ${target.id.asInt()}: position is not loaded")
@@ -219,21 +248,32 @@ private fun CompositionUsage.quantityOf(): Double = when (val value = quantity) 
     is Quantity.NotLoaded -> throw SpecificationDataException("Node ${target.id.asInt()}: quantity is not loaded")
 }
 
-// The upper bound of a quantity range is the note "Наиб. кол. <max>"; an exact quantity has none. A material shows the
-// number as is (decimal comma, no trailing zeros), the other sections show a whole count (rounded half up), as the
-// quantity column does.
+// The upper bound of a quantity range is the note "Наиб. кол. <max>"; an exact quantity has none.
 private fun CompositionUsage.maxQuantityNoteOf(material: Boolean): String? {
     val range = quantity as? Quantity.Range ?: return null
-    val max = BigDecimal.valueOf(range.max)
-    val text = if (material) {
-        max.stripTrailingZeros().toPlainString().replace('.', ',')
-    } else {
-        max.setScale(0, RoundingMode.HALF_UP).toPlainString()
-    }
-    return "$MAX_QUANTITY_NOTE $text"
+    return "$MAX_QUANTITY_NOTE ${formatQuantity(range.max, material)}"
 }
 
 private const val MAX_QUANTITY_NOTE = "Наиб. кол."
+
+// The count of a non-basic item: the quantity (its lower bound) and the unit of a material, or the piece unit.
+private fun countNoteOf(quantity: Double, unit: String?, material: Boolean): String {
+    val suffix = if (material) unit ?: PIECE_UNIT else PIECE_UNIT
+    return "${formatQuantity(quantity, material)} $suffix"
+}
+
+private const val PIECE_UNIT = "шт."
+
+// A material shows the number as is (decimal comma, no trailing zeros), the other sections show a whole count (rounded
+// half up), as the quantity column does.
+private fun formatQuantity(value: Double, material: Boolean): String {
+    val decimal = BigDecimal.valueOf(value)
+    return if (material) {
+        decimal.stripTrailingZeros().toPlainString().replace('.', ',')
+    } else {
+        decimal.setScale(0, RoundingMode.HALF_UP).toPlainString()
+    }
+}
 
 private fun CompositionUsage.unitOf(): String? = when (val value = unit) {
     is Field.Value -> value.value

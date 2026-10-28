@@ -30,11 +30,13 @@ data class DocumentationItem(
 // `format` / `zone` = null when the item has none. A complex format (with the letter x) and a complex zone (several
 // zones, comma-separated) are the mark "*)" here, their value follows the mark in `notes` ("*)А3х3"): the format
 // first, then the zone. `notes` = one line per note, the unit of a material is the first of them.
+// `quantity` = null when the cell is empty: an item of a permissible replacement group that is non-basic (its count
+// is the first note, its replacement texts the last ones).
 data class AssemblyItem(
     override val position: Int? = null,
     override val designation: String? = null,
     override val name: String,
-    val quantity: Double,
+    val quantity: Double?,
     val zone: String? = null,
     val format: String? = null,
     val notes: List<String> = emptyList(),
@@ -44,7 +46,7 @@ data class PartItem(
     override val position: Int? = null,
     override val designation: String? = null,
     override val name: String,
-    val quantity: Double,
+    val quantity: Double?,
     val zone: String? = null,
     val format: String? = null,
     val notes: List<String> = emptyList(),
@@ -54,7 +56,7 @@ data class StandardItem(
     override val position: Int? = null,
     override val designation: String? = null,
     override val name: String,
-    val quantity: Double,
+    val quantity: Double?,
     val zone: String? = null,
     val notes: List<String> = emptyList(),
 ) : PositionedItem
@@ -63,7 +65,7 @@ data class OtherItem(
     override val position: Int? = null,
     override val designation: String? = null,
     override val name: String,
-    val quantity: Double,
+    val quantity: Double?,
     val zone: String? = null,
     val notes: List<String> = emptyList(),
 ) : PositionedItem
@@ -72,7 +74,7 @@ data class MaterialItem(
     override val position: Int? = null,
     override val designation: String? = null,
     override val name: String,
-    val quantity: Double,
+    val quantity: Double?,
     val zone: String? = null,
     val notes: List<String> = emptyList(),
 ) : PositionedItem

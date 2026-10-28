@@ -32,4 +32,11 @@ class SpecificationQueryTest : ShouldSpec({
     should("keep the given root id") {
         specificationQuery(PdmNodeId(42)).rootId shouldBe PdmNodeId(42)
     }
+
+    should("read the replacement groups of the root only: depth 0") {
+        val query = specificationQuery(PdmNodeId(1))
+
+        query.replacements shouldBe true
+        query.replacementDepth shouldBe 0
+    }
 })

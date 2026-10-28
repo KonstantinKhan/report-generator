@@ -4,6 +4,7 @@ import dev.reportgenerator.ir.IrGroup
 import dev.reportgenerator.ir.IrTable
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 // The `quantity` / `note` cells of the `body` table (format + cases in gost-spec.yaml).
 // Expected texts are literals: MATERIAL is the number as is (no rounding, trailing zeros trimmed, comma separator;
@@ -107,6 +108,20 @@ class SpecificationQuantityFormatTest {
         assertEquals("-0,004", quantity(Section.MATERIAL, -0.004))
         // other negative finite values keep the material format
         assertEquals("-1,5", quantity(Section.MATERIAL, -1.5))
+    }
+
+    @Test
+    fun `a non-basic item has an empty quantity cell and keeps its notes`() {
+        val data = SpecificationData(
+            documentDesignation = "X",
+            documentName = "Y",
+            standards = listOf(StandardItem(name = "Тест", quantity = null, notes = listOf("4 шт.", "примен. взамен поз. 5"))),
+        )
+        val row = cells(data)
+
+        assertEquals("", row[5])
+        assertTrue(row[6].contains("4 шт."), row[6])
+        assertTrue(row[6].contains("примен. взамен поз. 5"), row[6])
     }
 
     @Test
