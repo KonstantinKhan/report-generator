@@ -278,10 +278,33 @@ class ProductNodeSpecificationTest : ShouldSpec({
         data.materials.single().notes shouldBe emptyList()
     }
 
-    should("fail on a quantity range because it is not supported") {
-        val usage = composition(node(2), Quantity.Range(1.0, 3.0))
+    should("show the lower bound of a quantity range and the upper bound in the notes") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Part), Quantity.Range(1.0, 3.0), note = AttributeValue.Text("Закалить")),
+            composition(
+                node(3, kind = PdmNodeKind.Material),
+                Quantity.Range(0.5, 1.25),
+                unit = Field.Value("кг"),
+                zone = AttributeValue.Text("1A,2B"),
+            ),
+        ).toSpecificationData()
 
-        shouldThrow<SpecificationDataException> { root(usage).toSpecificationData() }.message shouldContain "2"
+        data.parts.single().quantity shouldBe 1.0
+        data.parts.single().notes shouldBe listOf("Наиб. кол. 3", "Закалить")
+        data.materials.single().quantity shouldBe 0.5
+        data.materials.single().notes shouldBe listOf("кг", "*)1A,2B", "Наиб. кол. 1,25")
+    }
+
+    should("round the upper bound of a range to a whole count outside the materials") {
+        val data = root(composition(node(2, kind = PdmNodeKind.Standard), Quantity.Range(2.0, 4.5))).toSpecificationData()
+
+        data.standards.single().notes shouldBe listOf("Наиб. кол. 5")
+    }
+
+    should("give no maximum note for an exact quantity") {
+        val data = root(composition(node(2, kind = PdmNodeKind.Part), Quantity.Exact(3.0))).toSpecificationData()
+
+        data.parts.single().notes shouldBe emptyList()
     }
 
     should("fail on a missing or not loaded quantity") {

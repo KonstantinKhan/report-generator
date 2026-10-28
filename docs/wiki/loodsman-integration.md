@@ -248,8 +248,8 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 - `min == max` → `Quantity.Exact`;
 - иначе `Quantity.Range`.
 
-В спецификации `Exact` даёт число, `Range` и `Missing` — `SpecificationDataException` (диапазон в спецификации не
-выводится). У документации количества нет: в разделе документации поля количества нет, ячейка пустая.
+В спецификации `Exact` даёт число, `Range` — минимум в колонке «Кол.» и примечание `Наиб. кол. <max>` (правила — в
+[specification-table-format.md](specification-table-format.md)), `Missing` — `SpecificationDataException`. У документации количества нет: в разделе документации поля количества нет, ячейка пустая.
 
 **(а2) Позиция.** Источник — атрибут связи «Позиция» по правилу `link.attributes.position`. Правило есть, а значения
 нет — `Field.Missing` → позиция пустая. Значение в `Field.NotLoaded` в пайплайне не попадает (отсутствие правила или
@@ -754,7 +754,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 |---|---|
 | `versionId` не целое число | 400 |
 | `LoodsmanApiException`: Loodsman недоступен, объект не найден, сессия не восстановилась, ошибка метаданных или конфига маппинга | 502 |
-| `SpecificationDataException`: нет обозначения у корня, диапазон или отсутствие количества у позиции, и т.п. | 502 |
+| `SpecificationDataException`: нет обозначения у корня, отсутствие количества у позиции, и т.п. | 502 |
 | `IOException` сверх `LoodsmanApiException` | 502 |
 | Прочее | 500, тело `internal error` |
 

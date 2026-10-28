@@ -10,6 +10,8 @@ import dev.reportgenerator.domain.MadeFromUsage
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Quantity
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 // Converts the product structure of the root node into the specification data. Each section takes the usages whose
 // target has the kind of the section; usages of other kinds (complex, kit, unmapped, drawings other than the assembly
@@ -64,10 +66,21 @@ private fun PdmNode.toDocumentationItem(): DocumentationItem {
 }
 
 // Values every composition item reads. The unit is read for all sections, but only materials show it (in the notes).
-private class CompositionFields(val position: Int?, val quantity: Double, val unit: String?)
+// The quantity is the exact one or the lower bound of a range; the upper bound of a range is the note `maxQuantityNote`.
+private class CompositionFields(
+    val position: Int?,
+    val quantity: Double,
+    val unit: String?,
+    val maxQuantityNote: String?,
+)
 
-private fun CompositionUsage.fields(): CompositionFields =
-    CompositionFields(position = positionOf(), quantity = quantityOf(), unit = unitOf())
+private fun CompositionUsage.fields(material: Boolean = false): CompositionFields =
+    CompositionFields(
+        position = positionOf(),
+        quantity = quantityOf(),
+        unit = unitOf(),
+        maxQuantityNote = maxQuantityNoteOf(material),
+    )
 
 private fun CompositionUsage.toAssemblyItem(): AssemblyItem {
     val fields = fields()
@@ -81,7 +94,7 @@ private fun CompositionUsage.toAssemblyItem(): AssemblyItem {
         quantity = fields.quantity,
         zone = zone.column,
         format = format.column,
-        notes = format.notes + zone.notes + listOfNotNull(noteOf()),
+        notes = format.notes + zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf()),
     )
 }
 
@@ -97,7 +110,7 @@ private fun CompositionUsage.toPartItem(): PartItem {
         quantity = fields.quantity,
         zone = zone.column,
         format = format.column,
-        notes = format.notes + zone.notes + listOfNotNull(noteOf()),
+        notes = format.notes + zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf()),
     )
 }
 
@@ -111,7 +124,7 @@ private fun CompositionUsage.toStandardItem(): StandardItem {
         name = name,
         quantity = fields.quantity,
         zone = zone.column,
-        notes = zone.notes + listOfNotNull(noteOf()),
+        notes = zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf()),
     )
 }
 
@@ -125,7 +138,7 @@ private fun CompositionUsage.toOtherItem(): OtherItem {
         name = name,
         quantity = fields.quantity,
         zone = zone.column,
-        notes = zone.notes + listOfNotNull(noteOf()),
+        notes = zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf()),
     )
 }
 
@@ -135,7 +148,7 @@ private val materialKinds = setOf(PdmNodeKind.Material, PdmNodeKind.MaterialForm
 // The unit of a material is the first note, the note of the composition link follows it. A material form takes its
 // name and designation from its material, the position, quantity, unit and note come from the composition link.
 private fun CompositionUsage.toMaterialItem(): MaterialItem {
-    val fields = fields()
+    val fields = fields(material = true)
     val (designation, name) = target.materialNode().designationAndName()
     val zone = zoneCell(zoneOf())
     return MaterialItem(
@@ -144,7 +157,7 @@ private fun CompositionUsage.toMaterialItem(): MaterialItem {
         name = name,
         quantity = fields.quantity,
         zone = zone.column,
-        notes = listOfNotNull(fields.unit) + zone.notes + listOfNotNull(noteOf()),
+        notes = listOfNotNull(fields.unit) + zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf()),
     )
 }
 
@@ -201,12 +214,26 @@ private fun CompositionUsage.positionOf(): Int? = when (val value = position) {
 
 private fun CompositionUsage.quantityOf(): Double = when (val value = quantity) {
     is Quantity.Exact -> value.amount
-    is Quantity.Range -> throw SpecificationDataException(
-        "Node ${target.id.asInt()}: quantity range ${value.min}..${value.max} is not supported in specification"
-    )
+    is Quantity.Range -> value.min
     is Quantity.Missing -> throw SpecificationDataException("Node ${target.id.asInt()}: quantity is missing")
     is Quantity.NotLoaded -> throw SpecificationDataException("Node ${target.id.asInt()}: quantity is not loaded")
 }
+
+// The upper bound of a quantity range is the note "Наиб. кол. <max>"; an exact quantity has none. A material shows the
+// number as is (decimal comma, no trailing zeros), the other sections show a whole count (rounded half up), as the
+// quantity column does.
+private fun CompositionUsage.maxQuantityNoteOf(material: Boolean): String? {
+    val range = quantity as? Quantity.Range ?: return null
+    val max = BigDecimal.valueOf(range.max)
+    val text = if (material) {
+        max.stripTrailingZeros().toPlainString().replace('.', ',')
+    } else {
+        max.setScale(0, RoundingMode.HALF_UP).toPlainString()
+    }
+    return "$MAX_QUANTITY_NOTE $text"
+}
+
+private const val MAX_QUANTITY_NOTE = "Наиб. кол."
 
 private fun CompositionUsage.unitOf(): String? = when (val value = unit) {
     is Field.Value -> value.value
