@@ -23,13 +23,19 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
 /**
+ * Число одновременных запросов к Loodsman по умолчанию. Нагрузка задержко-зависимая: запросы идут через туннель,
+ * поэтому при высокой задержке ответа лимит 8 оставляет канал простаивающим.
+ */
+internal const val DEFAULT_CONCURRENCY = 24
+
+/**
  * Клиент структуры изделия поверх Loodsman. Кэш и лимит запросов живут в [LoadSession]: вне сессии каждый вызов
  * [loadTree] / [loadTrees] открывает свою, внутри [loadSession] вызовы делят одну.
  */
 class LoodsmanProductStructureClient internal constructor(
     api: LoodsmanApi,
     private val mapping: MappingConfig,
-    private val concurrency: Int = 8,
+    private val concurrency: Int = DEFAULT_CONCURRENCY,
     private val metadata: MetadataSource
 ) : PdmNodeStructureClient {
 
@@ -105,7 +111,7 @@ class LoodsmanProductStructureClient internal constructor(
             throw LoodsmanApiException("Root object $rootId has unmapped type '${root.prop.type}'")
         }
 
-        val linkAttributes = linkAttributeLoader.loadLinkAttributes(session, query, state.nodes, state.links)
+        val linkAttributes = linkAttributeLoader.loadLinkAttributes(session, query, snapshot, state.nodes, state.links)
         val replacements = replacementLoader.loadReplacements(session, query, rootId, state.nodes, state.links)
         return treeAssembler.buildNode(
             rootId, query.depth, query, state.nodes, state.links, linkAttributes, replacements, emptyList()

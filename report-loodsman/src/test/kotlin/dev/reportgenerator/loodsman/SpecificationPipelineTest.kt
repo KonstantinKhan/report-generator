@@ -141,19 +141,23 @@ private class ParityLoodsman(
                         })
                     }
                 }
-                // Link attributes: the note of the edge (linkId = index of the edge + 1). The position is not in the mock,
+                // Link attributes: the note of the edge (linkId = index of the edge + 1), batched by linkIds. The position is not in the mock,
                 // it stays Missing.
-                "/api/v4/ObjectInfo/get-link-attributes" -> {
-                    val edge = edges[params["linkId"]!!.toInt() - 1]
+                "/api/v4/ObjectInfo/get-original-link-attributes" -> {
+                    val linkIds = params["linkIds"]!!.split(",").map { it.toInt() }
                     buildJsonArray {
-                        edge.note?.let { note ->
-                            add(buildJsonObject {
-                                put("id", 1)
-                                put("name", NOTE_ATTRIBUTE)
-                                put("value", note)
-                                put("type", 0)
-                                put("accessLevel", 0)
-                            })
+                        for (linkId in linkIds) {
+                            edges[linkId - 1].note?.let { note ->
+                                add(buildJsonObject {
+                                    put("id", linkId * 10)
+                                    put("idLink", linkId)
+                                    put("attrId", 1)
+                                    put("attrName", NOTE_ATTRIBUTE)
+                                    put("attrType", 0)
+                                    put("isSystem", 0)
+                                    put("value", note)
+                                })
+                            }
                         }
                     }
                 }

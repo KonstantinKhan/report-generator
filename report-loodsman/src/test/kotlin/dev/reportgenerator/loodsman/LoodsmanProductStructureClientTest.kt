@@ -83,12 +83,15 @@ internal data class Edge(
 // Запросы, которые клиент распараллеливает через семафор: по ним считается число одновременных запросов.
 internal val CONCURRENT_PATHS = setOf(
     "/api/v4/ObjectInfo/get-linked-objects-for-objects",
-    "/api/v4/ObjectInfo/get-link-attributes",
+    "/api/v4/ObjectInfo/get-original-link-attributes",
     "/api/v4/ObjectInfo/get-info-about-version-mode-3",
 )
 
 /** Запрос связей фейку: объект, id типов связей и признак inverse. */
 internal data class LinkRequest(val objectId: Int, val linkTypeIds: List<Int>, val inverse: Boolean)
+
+/** Атрибут Loodsman из справочника get-attribute-list-2. */
+internal data class AttributeDef(val id: Int, val name: String)
 
 internal class FakeLoodsman(
     private val objects: List<Obj>,
@@ -102,6 +105,8 @@ internal class FakeLoodsman(
     private val trackedGate: CompletableDeferred<Unit>? = null,
     /** Число запросов в полёте, при котором завершается [inFlightReached]. */
     private val signalInFlightAt: Int = Int.MAX_VALUE,
+    /** Справочник атрибутов: отдаётся в get-attribute-list-2 и в [snapshot]. Пусто — имена не найдены. */
+    private val attributes: List<AttributeDef> = emptyList(),
 ) {
     val inFlightReached = CompletableDeferred<Unit>()
     /** Пачки объектов каждого запроса связей, в порядке прихода. */
@@ -110,9 +115,15 @@ internal class FakeLoodsman(
     val propsCalls: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val linkCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val linkRequests: MutableList<LinkRequest> = Collections.synchronizedList(mutableListOf())
+    /** Связи, по которым запрошены атрибуты (по одной записи на связь, пачки разворачиваются). */
     val linkAttributeCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
+    /** Пачки линков каждого запроса атрибутов связей, в порядке прихода. */
+    val linkAttributeBatches: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val infoCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
     val linkListFailures = AtomicInteger(0)
+    /** Параметры каждого запроса атрибутов связей (linkIds, mode, attrIds). */
+    val linkAttributeParams: MutableList<Map<String, String>> = Collections.synchronizedList(mutableListOf())
+    val linkAttributeFailures = AtomicInteger(0)
     val maxInFlight = AtomicInteger(0)
     private val inFlight = AtomicInteger(0)
     private val linkIdToEdge = ConcurrentHashMap<Int, Edge>()
@@ -123,8 +134,9 @@ internal class FakeLoodsman(
     fun snapshot(version: Long = 1): MetadataSnapshot = MetadataSnapshot(
         linkTypes = linkNames.mapIndexed { index, name -> LinkTypeInfo(id = index + 1, name = name) },
         objectTypes = objectTypes(),
-        attributeNames = emptySet(),
+        attributeNames = attributes.map { it.name }.toSet(),
         version = version,
+        attributeIds = attributes.groupBy({ it.name }, { it.id }),
     )
 
     private fun objectTypes(): List<ObjectTypeInfo> =
@@ -136,7 +148,7 @@ internal class FakeLoodsman(
     suspend fun client(
         mapping: MappingConfig = MappingConfigLoader.load(emptyMap()),
         metadata: MetadataSource? = null,
-        concurrency: Int = 8,
+        concurrency: Int = DEFAULT_CONCURRENCY,
     ): LoodsmanProductStructureClient {
         val api = api()
         val source = metadata ?: MetadataCache(api, validate = { emptyList() }).also { it.initialize() }
@@ -149,6 +161,11 @@ internal class FakeLoodsman(
                 linkListFailures.getAndUpdate { if (it > 0) it - 1 else 0 } > 0
             ) {
                 return@MockEngine respond("boom", HttpStatusCode.InternalServerError)
+            }
+            if (request.url.encodedPath == "/api/v4/ObjectInfo/get-original-link-attributes" &&
+                linkAttributeFailures.getAndUpdate { if (it > 0) it - 1 else 0 } > 0
+            ) {
+                return@MockEngine respond("boom", HttpStatusCode.BadRequest)
             }
             val tracked = request.url.encodedPath in CONCURRENT_PATHS
             if (tracked) {
@@ -179,7 +196,17 @@ internal class FakeLoodsman(
                         })
                     }
                 }
-                "/api/v4/MetaData/get-attribute-list-2" -> buildJsonArray {}
+                "/api/v4/MetaData/get-attribute-list-2" -> buildJsonArray {
+                    attributes.forEach { attr ->
+                        add(buildJsonObject {
+                            put("id", attr.id)
+                            put("name", attr.name)
+                            put("attrType", 0)
+                            put("system", 0)
+                            put("onlyListItems", 0)
+                        })
+                    }
+                }
                 "/api/v4/MetaDataCustom/types-links" -> buildJsonArray {}
                 "/api/v4/MetaData/get-type-list" -> buildJsonArray {
                     objects.map { it.type }.distinct().forEachIndexed { index, type ->
@@ -236,19 +263,24 @@ internal class FakeLoodsman(
                     replacementCalls.add(id)
                     JsonArray(replacementRows[id].orEmpty())
                 }
-                "/api/v4/ObjectInfo/get-link-attributes" -> {
-                    val linkId = params["linkId"]!!.toInt()
-                    linkAttributeCalls.add(linkId)
-                    val edge = linkIdToEdge[linkId]
+                "/api/v4/ObjectInfo/get-original-link-attributes" -> {
+                    val linkIds = params["linkIds"]!!.split(",").map { it.toInt() }
+                    linkAttributeBatches.add(linkIds)
+                    linkAttributeParams.add(params.names().associateWith { params[it].orEmpty() })
+                    linkAttributeCalls.addAll(linkIds)
                     buildJsonArray {
-                        edge?.attrs?.forEach { (name, value) ->
-                            add(buildJsonObject {
-                                put("id", 1)
-                                put("name", name)
-                                put("value", value)
-                                put("type", 0)
-                                put("accessLevel", 0)
-                            })
+                        for (linkId in linkIds) {
+                            linkIdToEdge[linkId]?.attrs?.forEach { (name, value) ->
+                                add(buildJsonObject {
+                                    put("id", linkId * 10)
+                                    put("idLink", linkId)
+                                    put("attrId", 1)
+                                    put("attrName", name)
+                                    put("attrType", 0)
+                                    put("isSystem", 0)
+                                    put("value", value)
+                                })
+                            }
                         }
                     }
                 }
@@ -676,7 +708,7 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         }
     }
 
-    should("not call get-link-attributes when depth is 0") {
+    should("not call get-original-link-attributes when depth is 0") {
         val fake = FakeLoodsman(tree, treeEdges)
 
         fake.client().loadTree(query(0))
@@ -888,6 +920,125 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
 
             fake.maxInFlight.get().shouldBeLessThanOrEqualTo(concurrency)
             if (concurrency > 1) fake.maxInFlight.get().shouldBeGreaterThan(1)
+        }
+    }
+
+    should("read link attributes of 250 links in batches of 30 with mode 1 and without attrIds when no name is in the snapshot") {
+        val children = (2..251).map { Obj(it, "Деталь", "АБ.%03d".format(it), mapOf("Наименование" to "Д$it")) }
+        val edges = children.map { Edge(1, it.id, attrs = mapOf("Примечание" to "n${it.id}")) }
+        val fake = FakeLoodsman(listOf(assembly) + children, edges)
+
+        val root = fake.client().loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+        fake.linkAttributeBatches.size shouldBe 9
+        fake.linkAttributeBatches.map { it.size }.sortedDescending() shouldBe List(8) { 30 } + 10
+        // Связи фейка: родитель 1 даёт linkId 100..349 (parent * 100 + порядок).
+        fake.linkAttributeBatches.flatten().sorted() shouldBe (100 until 350).toList()
+        fake.linkAttributeParams.all { it["mode"] == "1" && "attrIds" !in it } shouldBe true
+        root.usages.map { (it as CompositionUsage).attributes } shouldBe children.map {
+            mapOf(LinkAttributeKey.Note to AttributeValue.Text("n${it.id}"))
+        }
+    }
+
+    should("split 65 links into batches of 30, 30 and 5") {
+        val children = (2..66).map { Obj(it, "Деталь", "АБ.%03d".format(it)) }
+        val edges = children.map { Edge(1, it.id, attrs = mapOf("Примечание" to "n${it.id}")) }
+        val fake = FakeLoodsman(listOf(assembly) + children, edges)
+
+        fake.client().loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+        fake.linkAttributeBatches.map { it.size }.sortedDescending() shouldBe listOf(30, 30, 5)
+        fake.linkAttributeBatches.flatten().sorted() shouldBe (100 until 165).toList()
+    }
+
+    should("pass the ids of the position and requested attributes as attrIds in every batch") {
+        val children = (2..66).map { Obj(it, "Деталь", "АБ.%03d".format(it)) }
+        val edges = children.map { Edge(1, it.id, attrs = mapOf("Примечание" to "n${it.id}")) }
+        // Зоны в справочнике нет: её id не находится и в фильтр не попадает. Масса не запрошена.
+        val attributes = listOf(AttributeDef(11, "Позиция"), AttributeDef(12, "Примечание"), AttributeDef(13, "Масса"))
+        val fake = FakeLoodsman(listOf(assembly) + children, edges, attributes = attributes)
+
+        fake.client().loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+        fake.linkAttributeParams.size shouldBe 3
+        fake.linkAttributeParams.map { it["attrIds"] }.distinct() shouldBe listOf("11,12")
+        fake.linkAttributeParams.all { it["mode"] == "1" } shouldBe true
+    }
+
+    should("pass every id of a name shared by attributes of different kinds") {
+        val children = (2..4).map { Obj(it, "Деталь", "АБ.%03d".format(it)) }
+        val edges = children.map { Edge(1, it.id, attrs = mapOf("Примечание" to "n${it.id}")) }
+        val attributes = listOf(AttributeDef(11, "Позиция"), AttributeDef(12, "Примечание"), AttributeDef(21, "Примечание"))
+        val fake = FakeLoodsman(listOf(assembly) + children, edges, attributes = attributes)
+
+        val root = fake.client().loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+        fake.linkAttributeParams.map { it["attrIds"] }.distinct() shouldBe listOf("11,12,21")
+        root.usages.map { it.attributes[LinkAttributeKey.Note] } shouldBe children.map {
+            AttributeValue.Text("n${it.id}")
+        }
+    }
+
+    should("read without attrIds when none of the required names is found in the snapshot") {
+        val children = (2..4).map { Obj(it, "Деталь", "АБ.%03d".format(it)) }
+        val edges = children.map { Edge(1, it.id, attrs = mapOf("Примечание" to "n${it.id}")) }
+        val attributes = listOf(AttributeDef(13, "Масса"))
+        val fake = FakeLoodsman(listOf(assembly) + children, edges, attributes = attributes)
+
+        val root = fake.client().loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+        fake.linkAttributeParams.isNotEmpty() shouldBe true
+        fake.linkAttributeParams.all { "attrIds" !in it } shouldBe true
+        root.usages.map { it.attributes[LinkAttributeKey.Note] } shouldBe children.map {
+            AttributeValue.Text("n${it.id}")
+        }
+    }
+
+    should("keep only the requested attribute and the position when the server returns other attributes of the link") {
+        val edges = listOf(Edge(1, 2, attrs = mapOf("Позиция" to "3", "Примечание" to "n", "Масса" to "1.5")))
+        val attributes = listOf(AttributeDef(11, "Позиция"), AttributeDef(12, "Примечание"))
+        // Фейк отдаёт все атрибуты связи и игнорирует attrIds: отбор по attrName остаётся на клиенте.
+        val fake = FakeLoodsman(listOf(assembly, shaft), edges, attributes = attributes)
+
+        val root = fake.client().loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+        val usage = root.usages.single() as CompositionUsage
+        usage.position shouldBe Field.Value(3)
+        usage.attributes shouldBe mapOf(LinkAttributeKey.Note to AttributeValue.Text("n"))
+        fake.linkAttributeParams.single()["attrIds"] shouldBe "11,12"
+    }
+
+    should("map each batch row to the usage of its own link id in the order of the tree") {
+        val children = listOf(
+            Obj(2, "Деталь", "АБ.002", mapOf("Наименование" to "Вал")),
+            Obj(3, "Деталь", "АБ.003", mapOf("Наименование" to "Ось")),
+            Obj(4, "Деталь", "АБ.004", mapOf("Наименование" to "Палец")),
+        )
+        val edges = listOf(
+            Edge(1, 2, attrs = mapOf("Примечание" to "первое")),
+            Edge(1, 3),
+            Edge(1, 4, attrs = mapOf("Примечание" to "третье")),
+        )
+        val fake = FakeLoodsman(listOf(assembly) + children, edges)
+
+        val root = fake.client().loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
+
+        root.usages.map { it.target.id } shouldBe listOf(PdmNodeId(2), PdmNodeId(3), PdmNodeId(4))
+        root.usages.map { it.attributes[LinkAttributeKey.Note] } shouldBe listOf(
+            AttributeValue.Text("первое"),
+            AttributeValue.Empty,
+            AttributeValue.Text("третье"),
+        )
+        fake.linkAttributeBatches.size shouldBe 1
+        fake.linkAttributeBatches.single().sorted() shouldBe listOf(100, 101, 102)
+    }
+
+    should("fail the load when a batch of link attributes fails") {
+        val fake = FakeLoodsman(tree, treeEdges)
+        fake.linkAttributeFailures.set(1)
+
+        shouldThrow<LoodsmanApiException> {
+            fake.client().loadTree(query(1, linkAttributes = setOf(LinkAttributeKey.Note)))
         }
     }
 

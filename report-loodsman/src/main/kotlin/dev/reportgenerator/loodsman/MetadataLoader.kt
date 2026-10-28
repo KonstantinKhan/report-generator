@@ -37,6 +37,9 @@ object MetadataLoader {
                 attributeNames = attributes.await()
                     .mapNotNull { it.name?.takeIf(String::isNotEmpty) }
                     .toSet(),
+                attributeIds = attributes.await()
+                    .mapNotNull { attr -> attr.name?.takeIf(String::isNotEmpty)?.let { it to attr.id } }
+                    .groupBy({ it.first }, { it.second }),
                 version = version,
                 typeLinks = typeLinks.await().map {
                     TypeLinkInfo(

@@ -11,10 +11,19 @@ data class MetadataSnapshot(
     val version: Long,
     /** Связи между типами объектов (metaDataCustom types-links); пусто, если не загружены. */
     val typeLinks: List<TypeLinkInfo> = emptyList(),
+    /**
+     * Id атрибутов по имени (get-attribute-list-2). Одно имя может принадлежать нескольким атрибутам разных видов,
+     * поэтому значение — список id. Имена сравниваются так же строго, как в [attributeNames].
+     */
+    val attributeIds: Map<String, List<Int>> = emptyMap(),
 ) {
 
     fun linkTypeId(pdmName: String): Int? =
         linkTypes.firstOrNull { it.name == pdmName }?.id
+
+    /** Отсортированные уникальные id атрибутов с любым из [names]; имена, которых нет в снимке, пропускаются. */
+    fun attributeIdsOf(names: Collection<String>): List<Int> =
+        names.flatMap { attributeIds[it].orEmpty() }.distinct().sorted()
 
     fun hasObjectType(typeName: String): Boolean =
         objectTypes.any { it.typeName == typeName }

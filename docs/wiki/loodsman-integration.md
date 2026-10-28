@@ -51,7 +51,7 @@
 | Свойство `LoodsmanApi` | Класс | Контроллер Loodsman | Эндпоинты |
 |---|---|---|---|
 | `auth` | `AuthApi` | `/api/v4/Auth` | `databases()` (без сессии), `isAdmin()` |
-| `objectInfo` | `ObjectInfoApi` | `/api/v4/ObjectInfo` | `propObjects(versionIds)`, `propObject(versionId)`, `infoAboutVersion(versionId)`, `linkedObjects(objectIds, linkTypeIds, inverse = false)`, `linkAttributes(linkId)`, `replacementVariants(versionId)` (`get-info-about-version-mode-20`: группы замен объекта) |
+| `objectInfo` | `ObjectInfoApi` | `/api/v4/ObjectInfo` | `propObjects(versionIds)`, `propObject(versionId)`, `infoAboutVersion(versionId)`, `linkedObjects(objectIds, linkTypeIds, inverse = false)`, `linkAttributes(linkId)` (`get-link-attributes`, по одной связи), `originalLinkAttributes(linkIds, attrIds = null, mode = 1)` (`get-original-link-attributes`, пачка связей), `replacementVariants(versionId)` (`get-info-about-version-mode-20`: группы замен объекта) |
 | `metaData` | `MetaDataApi` | `/api/v4/MetaData` | `typeList()`, `linkList()`, `attributeList(mode)`, `cacheVersion()` |
 | `metaDataCustom` | `MetaDataCustomApi` | `/api/v4/MetaDataCustom` | `typesLinks()` (`types-links`: какие типы объектов могут быть связаны каким типом связи и в каком направлении) |
 
@@ -322,7 +322,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 ## Конфиг маппинга и PdmNodeStructureClient
 
-`LoodsmanProductStructureClient(api, mapping, concurrency = 8, metadata)` — адаптер, реализующий интерфейс `PdmNodeStructureClient`
+`LoodsmanProductStructureClient(api, mapping, concurrency = DEFAULT_CONCURRENCY, metadata)` — адаптер, реализующий интерфейс `PdmNodeStructureClient`
 из `report-domain` (`loadTree(StructureQuery): PdmNode`). Возвращает дерево состава изделия в доменной модели
 (`PdmNode` + `Usage`), не зависящей от словаря Loodsman. Соответствие названий типов, связей и атрибутов PDM
 моделям задаётся конфигом маппинга, а не кодом. Конструктор `internal`, без значения по умолчанию для `mapping`:
@@ -588,7 +588,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - **Дедупликация в полёте.** Ключ, который уже грузится, не грузится второй раз: второй вызывающий ждёт тот же `Deferred`.
   Загрузка идёт в scope сессии, а не в контексте вызывающего: отмена одного вызывающего не ломает ждущих. Ошибка не кэшируется:
   запись удаляется, ждущие получают ту же `LoodsmanApiException` с тем же текстом.
-- **Общий лимит.** `concurrency` (по умолчанию 8) действует на все запросы сессии вместе, а не на каждое дерево.
+- **Общий лимит.** `concurrency` (`DEFAULT_CONCURRENCY = 24`) действует на все запросы сессии вместе, а не на каждое дерево.
   Разрешение держится только на время одного HTTP-запроса; внутри лимита кэш не ждут, поэтому взаимной блокировки нет.
 - **`loadTrees(queries)`** грузит деревья параллельно в одной сессии, результат в порядке входа. Сбой одного дерева отменяет
   остальные и пробрасывает его ошибку. `loadTree(query)` — то же для одного запроса.
@@ -606,6 +606,44 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 вызову на группу (тип связей + направление) на каждые 100 раскрываемых узлов; атрибуты — по одному на узел с запросом атрибутов.
 Для спецификации с `V` исполнениями общий кэш заменяет прежнее «корень + V полных деревьев с повторным чтением общих узлов»
 на «каждый уникальный узел — один раз». Точное число зависит от структуры; проверяется счётчиками в `LoadSessionTest`.
+
+### Атрибуты связей: пачки
+
+Атрибуты связей читаются пачками, а не по одной связи. Был один `GET /api/v4/ObjectInfo/get-link-attributes?linkId=N`
+на каждую связь (175 запросов на спецификацию). Теперь `LinkAttributeLoader` читает `GET /api/v4/ObjectInfo/get-original-link-attributes`:
+
+- `linkIds` — id связей через запятую, пачка по `LINK_ATTRIBUTES_BATCH_SIZE = 30` связей;
+- `mode=1` — только обычные атрибуты (служебные не нужны: для позиции и примечания они не используются);
+- `attrIds` — id только нужных атрибутов связей: имена правил позиции (`positionRules`) и запрошенных атрибутов
+  (`query.linkAttributes` → `mapping.link.attributes`).
+
+Почему так: без `attrIds` сервер отдаёт все обычные атрибуты каждой связи. На пачку из 100 связей ответ получался большим,
+и на реальном сервере (изделие 4757) 3 из 9 пачек падали по `HttpRequestTimeoutException` (этап ~60 с). Пачка 30 и фильтр
+`attrIds` делают ответ мал: запросов больше, но каждый быстрый и параллельный через `Limiter`.
+
+Как получаются id: `MetadataSnapshot.attributeIds` — карта «имя → список id» из `get-attribute-list-2` (mode 0), собирается
+в `MetadataLoader` из того же ответа, что и `attributeNames`. Имя сравнивается строго, как в снимке. Одно имя может принадлежать
+атрибутам разных видов, поэтому передаются все id имени. Id считаются один раз на загрузку дерева (`loadLinkAttributes`), не на пачку.
+
+Откат: если ни одно нужное имя не найдено в снимке, `attrIds` не передаётся (читаются все обычные атрибуты), чтобы результат
+не потерялся. Если найдены не все имена, передаются найденные: имени, которого нет в справочнике, у связей значений быть не может.
+Клиентский фильтр по `attrName` остаётся страховкой и работает в обоих случаях.
+
+Что берётся из ответа: строки сопоставляются по `idLink` (связь), атрибут — по `attrName` (имя из правила в `mapping.link.attributes`),
+значение — из `value`. `originalValue` (оригинальная разметка инструмента) не используется. Связь без строк в ответе
+получает пустой набор атрибутов: `Usage.attributes` → `Empty`, позиция → `Missing`.
+
+Пачки идут через общий `Limiter` сессии (`mapPermitted` по пачкам, одна пачка = одно разрешение). Кэш `LoadSession.linkAttributes`
+ключуется по `linkId`: пачка заполняет записи для всех своих связей, ждущие по ключу не грузят его повторно. Связи, которым
+атрибуты не нужны (нет запрошенного ключа и нет правила позиции), в пачки не попадают.
+
+Оценка: число запросов атрибутов связей = ⌈L / 30⌉, где L — число связей с нужными атрибутами (вместо L запросов).
+Для спецификации depth 2 при 175 связях: 6 запросов вместо 175. Ошибка пачки пробрасывается как прежняя `LoodsmanApiException`.
+
+**Предупреждение.** Совпадение `value` из `get-original-link-attributes` со `value` из устаревшего `get-link-attributes`
+не проверено: по схеме оба поля названы `value`, но это не гарантирует одинакового формата. Перед выкаткой сверить итоговый PDF спецификации на реальном
+объекте со старой сборкой (позиция и примечание у всех связей). Расхождение формата значения (разметка, пробелы, единицы)
+означает, что нужно переключить чтение на `originalValue` или на `get-link-attributes-2`, а не править маппинг.
 
 ### Алгоритм загрузки структуры
 
@@ -635,7 +673,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 3. **Загрузка атрибутов связей (фаза 2).** ПОСЛЕ полного обхода дерева: если запрошены `query.linkAttributes`
    или есть правило для `position`, для каждой загруженной связи с известными видами обоих концов, у которой правило
-   подходит по тройке, делается один запрос `/api/v4/ObjectInfo/get-link-attributes` (параллельно, через `Limiter`).
+   подходит по тройке, читается пачками через `/api/v4/ObjectInfo/get-original-link-attributes` (см. «Атрибуты связей: пачки»).
    Результаты собираются в карту `linkId → атрибуты`.
 
 3b. **Загрузка групп замен (фаза 2b).** ПОСЛЕ обхода, только при `query.replacements = true`: для каждого узла уровней
@@ -657,7 +695,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - Связи: один `get-linked-objects-for-objects` на группу (тип связей + направление) и пачку до 100 раскрываемых узлов
   (см. «Сессия загрузки»); только если уровень разрешён `depth`/`relationDepth` и тип узла подошёл по `from`;
   отсечённые по любому из них узлы не стоят ни одного вызова;
-- Атрибуты связей: один `get-link-attributes` на связь (если нужны или есть правила позиции).
+- Атрибуты связей: один `get-original-link-attributes` на пачку до 30 связей с `attrIds` нужных атрибутов (если нужны или есть правила позиции).
 - Группы замен: один `get-info-about-version-mode-20` на узел уровней `0..min(replacementDepth, depth - 1)` — только при
   `replacements = true`; при `false` запросов нет, `PdmNode.replacements` пуст.
 
@@ -672,8 +710,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
   правила `DOCUMENT` не имеют — вызова нет);
 - свойства документов: +⌈D/100⌉ батчей `get-prop-objects` (один уровень, чанки по 100);
 - атрибуты документов (обозначение, наименование, формат): +D вызовов `get-info-about-version-mode-3`;
-- атрибуты связей: +0. У связи состава уже есть правило позиции, поэтому один `get-link-attributes` на связь
-  читает и «Позицию», и «Примечание»;
+- атрибуты связей: +0. У связи состава уже есть правило позиции, поэтому связь читается в пачке `get-original-link-attributes`
+  и даёт и «Позицию», и «Примечание»; вызовов: ⌈L/100⌉ на все связи состава, где нужны атрибуты;
 - состав детей не раскрывается (`relationDepth`): +0 вызовов связей состава и узлов третьего уровня.
 Итого порядок: N + D + ⌈D/100⌉ вызовов. Документы документов не запрашиваются (правило `from` их не включает).
 
@@ -748,11 +786,11 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
   по связи (см. «Правила связей»). `Usage` — `CompositionUsage`, `DocumentUsage`, `TechnologicalPartUsage`, `MadeFromUsage`, `UnmappedUsage`.
   `TechnologicalPartUsage` в спецификацию не попадает.
 - **Позиция** (`CompositionUsage.position`) — выбирается по правилам ключа `position` в `mapping.link.attributes` (`select(relation, parentKind, childKind)`).
-  Если есть правило, ищется атрибут связи с именем из правила в ответе `/get-link-attributes`. Значение преобразуется
+  Если есть правило, ищется атрибут связи с именем из правила (`attrName`) в ответе `/get-original-link-attributes`. Значение преобразуется
   в `Int`: успешно → `Field.Value(число)`, нет → `Field.Missing`.
 - **Атрибуты связи** (`Usage.attributes`) — только ключи из `query.linkAttributes`. Для каждого ключа ищется список
   правил в `mapping.link.attributes[ключ]` и выбирается по специфичности селектора (как для позиции).
-  Если есть правило и атрибут найден в `/get-link-attributes` → `AttributeValue.Text(значение)`, иначе `Empty`.
+  Если есть правило и атрибут найден в `/get-original-link-attributes` → `AttributeValue.Text(значение)`, иначе `Empty`.
 - **Количество** (`Usage.quantity`) — поля связи из `link.fields.quantityMin` и `quantityMax`, по правилу (а) выше.
   **Единица** (`Usage.unit`) — поле из `link.fields.unit` (по умолчанию `unit`).
   Валидация конфига: `quantityMin`/`quantityMax` должны быть числовыми полями, `unit` — текстовым.
@@ -774,8 +812,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 | Атрибуты узла | атрибуты объекта (`get-info-about-version-mode-3`) | `attributes` (+ `byKind`) | `PdmNode.attributes` |
 | Количество | поля связи `minQuantity`, `maxQuantity` | `link.fields.quantityMin`, `quantityMax` | `Usage.quantity` |
 | Единица | поле связи `unit` | `link.fields.unit` | `Usage.unit` |
-| Позиция | атрибут связи (`get-link-attributes`) | `link.attributes.position` | `CompositionUsage.position` |
-| Прочие атрибуты связи | атрибуты связи (`get-link-attributes`) | `link.attributes.<ключ>` | `Usage.attributes` |
+| Позиция | атрибут связи (`get-original-link-attributes`) | `link.attributes.position` | `CompositionUsage.position` |
+| Прочие атрибуты связи | атрибуты связи (`get-original-link-attributes`) | `link.attributes.<ключ>` | `Usage.attributes` |
 | Тип связи | `idLinkType` + `get-link-list` (имя `link`) | `relations` (`as`, `direction`, `from`) | `Usage.relation` |
 | Связанный узел | `idChild` ответа `get-linked-objects-for-objects` | — | `Usage.target` (для `INVERSE` — сосед, не потомок) |
 

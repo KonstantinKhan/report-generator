@@ -110,4 +110,17 @@ class MetadataSnapshotTest : ShouldSpec({
             withTypeLinks.linkDirections("деталь", 10) shouldBe emptySet()
         }
     }
+
+    should("return sorted distinct ids of the given names and skip names missing in the snapshot") {
+        val withIds = MetadataSnapshot(
+            linkTypes = emptyList(),
+            objectTypes = emptyList(),
+            attributeNames = setOf("Примечание", "Позиция"),
+            version = 1,
+            attributeIds = mapOf("Примечание" to listOf(21, 12), "Позиция" to listOf(11)),
+        )
+
+        withIds.attributeIdsOf(listOf("Примечание", "Позиция", "Зона")) shouldBe listOf(11, 12, 21)
+        withIds.attributeIdsOf(listOf("Зона")) shouldBe emptyList()
+    }
 })

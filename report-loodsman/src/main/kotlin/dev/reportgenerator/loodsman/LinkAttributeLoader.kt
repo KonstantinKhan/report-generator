@@ -10,6 +10,13 @@ import dev.reportgenerator.loodsman.mapping.Registries
 import dev.reportgenerator.loodsman.mapping.select
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
+import io.github.konstantinkhan.loodsman.dto.GetOriginalLinkAttributesOutputDto
+
+/**
+ * Число связей в одном запросе атрибутов: пачка идёт одним `get-original-link-attributes`.
+ * Короче запросы, больше параллельных: ответ на пачку мал и не упирается в таймаут на сервере.
+ */
+internal const val LINK_ATTRIBUTES_BATCH_SIZE = 30
 
 /**
  * Загрузка атрибутов связей. Атрибуты читаются только у связей, для которых запрошен атрибут
@@ -32,6 +39,7 @@ internal class LinkAttributeLoader(
     suspend fun loadLinkAttributes(
         session: LoadSession,
         query: StructureQuery,
+        snapshot: MetadataSnapshot,
         nodes: Map<Int, LoadedNode>,
         links: Map<Int, List<Link>>
     ): Map<Int, LinkAttributesData> {
@@ -58,17 +66,38 @@ internal class LinkAttributeLoader(
                     requestedRules.any { it.select(link.relation, parentKind, childKind) != null }
         }.map { it.linkId }
 
+        // Id считаются один раз на вызов, а не на пачку. null — имена не найдены в снимке: читаем без фильтра.
+        val attrIds = linkAttributeIdsOf(snapshot, positionRules = mapping.link.positionRules, requestedRules = requestedRules)
+
         val loaded = session.linkAttributes.getAll(needed) { missing ->
-            val results = session.limiter.mapPermitted(missing) { linkId -> api.objectInfo.linkAttributes(linkId) }
-            missing.zip(results).toMap()
+            // Пачка — один запрос; связь без строк в ответе получает пустой список, иначе кэш сочтёт её ошибкой.
+            val rows = session.limiter.mapPermitted(missing.chunked(LINK_ATTRIBUTES_BATCH_SIZE)) { batch ->
+                api.objectInfo.originalLinkAttributes(batch, attrIds = attrIds)
+            }.flatten()
+            val rowsByLinkId = rows.groupBy { it.idLink }
+            missing.associateWith { linkId -> rowsByLinkId[linkId].orEmpty() }
         }
 
         return linksByLinkId.keys.associateWith { linkId ->
             LinkAttributesData(
                 loaded[linkId].orEmpty()
-                    .associate { it.name.orEmpty() to it.value.orEmpty() }
+                    .associate { it.attrName.orEmpty() to it.value.orEmpty() }
                     .filterKeys { it.isNotEmpty() }
             )
         }
+    }
+
+    /**
+     * Id атрибутов, которые читает загрузка: имена правил позиции и запрошенных атрибутов.
+     * `null`, если ни одно имя не найдено в снимке, — тогда фильтр не передаётся, чтобы результат не потерялся.
+     * Клиентский фильтр по `attrName` остаётся страховкой и в том случае, когда фильтр передан.
+     */
+    private fun linkAttributeIdsOf(
+        snapshot: MetadataSnapshot,
+        positionRules: List<LinkAttributeRule>,
+        requestedRules: List<List<LinkAttributeRule>>,
+    ): List<Int>? {
+        val names = (positionRules + requestedRules.flatten()).map { it.name }
+        return snapshot.attributeIdsOf(names).takeIf { it.isNotEmpty() }
     }
 }

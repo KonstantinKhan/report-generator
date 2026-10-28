@@ -59,6 +59,11 @@ private const val LINKED_OBJECTS_JSON = """[{"idLink":7,"idParent":10,"idChild":
     "minQuantity":2.0,"maxQuantity":2.0,"unit":"шт"}]"""
 private const val TYPES_LINKS_JSON = """[{"typeId1":1,"typeId2":2,"idLinkType":3,"direction":1},{"typeId1":2,"typeId2":1,"idLinkType":4,"direction":-1}]"""
 private const val LINK_ATTRIBUTES_JSON ="""[{"id":5,"name":"Позиция","value":"1","type":0,"accessLevel":1}]"""
+private const val ORIGINAL_LINK_ATTRIBUTES_JSON = """[
+    {"id":7,"idLink":5,"attrId":3,"attrName":"Позиция","attrType":1,"isSystem":0,"value":"1","originalValue":"<b>1</b>",
+     "idUnit":null,"unit":null,"idMeasure":null,"measure":null,"baseValue":null},
+    {"id":8,"idLink":6,"attrId":4,"attrName":"Примечание","attrType":0,"isSystem":0,"value":"note","originalValue":"note",
+     "idUnit":null,"unit":null,"idMeasure":null,"measure":null,"baseValue":null}]"""
 private const val REPLACEMENT_VARIANTS_JSON = """[{"idGroupChange":240,"groupChangeName":"Замена","groupChangeType":2,
     "groupInCurrentConf":1,"idVariant":271,"variantName":"Основной","basic":1,"variantInCurrentConf":1,"idLink":10045,
     "idParent":4757,"linkType":"Состоит из ...","idVersion":5001,"idType":3,"idState":1,"product":"DET-5","version":"1",
@@ -256,6 +261,37 @@ class LoodsmanApiTest : ShouldSpec({
         request.method shouldBe HttpMethod.Get
         request.url.parameters["linkId"] shouldBe "5"
         request.session() shouldBe "s1"
+    }
+
+    should("fetch original link attributes of several links in one request with session") {
+        val requests = mutableListOf<HttpRequestData>()
+        val logins = AtomicInteger()
+        val api = ktorApi(requests, logins) { reply(ORIGINAL_LINK_ATTRIBUTES_JSON) }
+
+        api.objectInfo.originalLinkAttributes(linkIds = listOf(5, 6)).also {
+            it.map { row -> row.idLink } shouldBe listOf(5, 6)
+            it.first().attrName shouldBe "Позиция"
+            it.first().value shouldBe "1"
+            it.first().originalValue shouldBe "<b>1</b>"
+        }
+        val request = requests.last { it.url.encodedPath == "/api/v4/ObjectInfo/get-original-link-attributes" }
+        request.method shouldBe HttpMethod.Get
+        request.url.parameters["linkIds"] shouldBe "5,6"
+        request.url.parameters["mode"] shouldBe "1"
+        request.url.parameters.contains("attrIds") shouldBe false
+        request.session() shouldBe "s1"
+    }
+
+    should("pass attribute ids comma separated when filtering original link attributes") {
+        val requests = mutableListOf<HttpRequestData>()
+        val logins = AtomicInteger()
+        val api = ktorApi(requests, logins) { reply("[]") }
+
+        api.objectInfo.originalLinkAttributes(linkIds = listOf(5), attrIds = listOf(11, 12), mode = 0)
+
+        val request = requests.last { it.url.encodedPath == "/api/v4/ObjectInfo/get-original-link-attributes" }
+        request.url.parameters["attrIds"] shouldBe "11,12"
+        request.url.parameters["mode"] shouldBe "0"
     }
 
     should("fetch replacement variants of an object with session") {

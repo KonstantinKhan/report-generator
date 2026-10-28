@@ -83,6 +83,7 @@ class MetadataLoaderTest : ShouldSpec({
                 TypeLinkInfo(typeId1 = 1, typeId2 = 2, idLinkType = 10, direction = 1),
                 TypeLinkInfo(typeId1 = 2, typeId2 = 1, idLinkType = 11, direction = 0),
             ),
+            attributeIds = mapOf(" Масса " to listOf(1), "Наименование" to listOf(2), "   " to listOf(4)),
         )
     }
 

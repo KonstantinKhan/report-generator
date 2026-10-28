@@ -1,7 +1,7 @@
 package dev.reportgenerator.loodsman
 
 import io.github.konstantinkhan.loodsman.dto.GetLinkedObjectsForObjectsOutputDto_V4
-import io.github.konstantinkhan.loodsman.dto.LinkAttributeOutputDto
+import io.github.konstantinkhan.loodsman.dto.GetOriginalLinkAttributesOutputDto
 import io.github.konstantinkhan.loodsman.dto.ObjectAttributeOutputDto
 import io.github.konstantinkhan.loodsman.dto.PropObjectOutputDto
 import io.github.konstantinkhan.loodsman.dto.V3_GetInfoAboutVersionMode20OutputDto
@@ -31,7 +31,7 @@ internal class LoadSession(
     val props = Memo<Int, PropObjectOutputDto>(scope)
     val attributes = Memo<AttributesKey, List<ObjectAttributeOutputDto>>(scope)
     val links = Memo<LinksKey, List<GetLinkedObjectsForObjectsOutputDto_V4>>(scope)
-    val linkAttributes = Memo<Int, List<LinkAttributeOutputDto>>(scope)
+    val linkAttributes = Memo<Int, List<GetOriginalLinkAttributesOutputDto>>(scope)
     val replacements = Memo<Int, List<V3_GetInfoAboutVersionMode20OutputDto>>(scope)
 
     fun close() = scope.cancel()
