@@ -18,6 +18,12 @@ internal class ReplacementLoader(
 ) {
 
     /**
+     * Последний уровень, связи которого нужны для замен: замены зависят только от узлов и связей состава уровней
+     * 0..[lastLevel]. Когда обход раскрыл этот уровень, замены можно грузить параллельно с остальным обходом.
+     */
+    fun lastLevel(query: StructureQuery): Int = minOf(query.replacementDepth, query.depth - 1)
+
+    /**
      * Группы замен по id узла. Запросы только если [StructureQuery.replacements] = true.
      * Узлы — уровни 0..min(replacementDepth, depth - 1): на уровне depth связи состава не раскрыты,
      * сопоставлять замены не с чем, поэтому такие узлы не запрашиваются. Запрос только для узлов,
@@ -31,7 +37,7 @@ internal class ReplacementLoader(
         links: Map<Int, List<Link>>,
     ): Map<Int, List<ReplacementGroup>> {
         if (!query.replacements) return emptyMap()
-        val maxLevel = minOf(query.replacementDepth, query.depth - 1)
+        val maxLevel = lastLevel(query)
         if (maxLevel < 0) return emptyMap()
 
         val ids = nodesWithinLevel(rootId, maxLevel, links).filter { id ->

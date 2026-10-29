@@ -6,7 +6,9 @@ import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.PdmNodeStructureClient
 import dev.reportgenerator.domain.Relation
+import dev.reportgenerator.domain.ReplacementGroup
 import dev.reportgenerator.domain.StructureQuery
+import dev.reportgenerator.domain.VariantUsage
 import dev.reportgenerator.loodsman.mapping.KindMapper
 import dev.reportgenerator.loodsman.mapping.MappingConfig
 import dev.reportgenerator.loodsman.mapping.RelationMapper
@@ -14,6 +16,7 @@ import org.slf4j.LoggerFactory
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -72,7 +75,14 @@ class LoodsmanProductStructureClient internal constructor(
         }
     }
 
-    private suspend fun loadTreeIn(session: LoadSession, query: StructureQuery): PdmNode {
+    /**
+     * Дерево одного запроса. Атрибуты связей и замены стартуют по мере готовности своих данных, а не после обхода:
+     * - атрибуты связи — когда загружены оба её конца (см. [LinkAttributeLoader.bothEndsLoaded]);
+     * - замены — когда раскрыты связи состава уровней 0..[ReplacementLoader.lastLevel].
+     * Снимки узлов и связей передаются в эти загрузки копиями: обход продолжает менять свои таблицы.
+     * Любая ошибка отменяет остальные загрузки дерева и пробрасывается как есть.
+     */
+    private suspend fun loadTreeIn(session: LoadSession, query: StructureQuery): PdmNode = coroutineScope {
         val rootId = query.rootId.asInt()
         val snapshot = metadata.snapshot()
         val linkTypes = resolveLinkTypes(snapshot, query.relations)
@@ -88,8 +98,34 @@ class LoodsmanProductStructureClient internal constructor(
         val effectiveDepths = query.relations.associateWith { relation ->
             minOf(query.depth, query.relationDepth[relation] ?: query.depth)
         }
+        val linkAttributeLoads = mutableListOf<Deferred<Map<Int, LinkAttributesData>>>()
+        val scheduledLinkIds = HashSet<Int>()
+        var replacementLoad: Deferred<Map<Int, List<ReplacementGroup>>>? = null
+        val replacementsLastLevel = replacementLoader.lastLevel(query)
+
+        // Связи, у которых оба конца уже загружены и которые ещё не отправлены на чтение атрибутов.
+        fun scheduleLinkAttributes() {
+            val fresh = state.links.values.flatten()
+                .filter { it.linkId !in scheduledLinkIds && linkAttributeLoader.bothEndsLoaded(it, state.nodes) }
+                .distinctBy { it.linkId }
+            if (fresh.isEmpty()) return
+            scheduledLinkIds += fresh.map { it.linkId }
+            val nodesSnapshot = state.nodes.toMap()
+            linkAttributeLoads += async { linkAttributeLoader.loadLinkAttributes(session, query, snapshot, nodesSnapshot, fresh) }
+        }
+
+        fun startReplacements() {
+            if (replacementLoad != null) return
+            val nodesSnapshot = state.nodes.toMap()
+            val linksSnapshot = state.links.toMap()
+            replacementLoad = async {
+                replacementLoader.loadReplacements(session, query, rootId, nodesSnapshot, linksSnapshot)
+            }
+        }
+
         while (frontier.isNotEmpty()) {
             nodeLoader.loadNodes(session, frontier, snapshot, state.nodes, query)
+            scheduleLinkAttributes()
             if (level >= query.depth) break
 
             // Дети следующего уровня по связи появляются, только если уровень не глубже её предела.
@@ -104,18 +140,74 @@ class LoodsmanProductStructureClient internal constructor(
                 .distinct()
                 .filter { it !in state.nodes }
             level++
+            // Связи уровней 0..lastLevel раскрыты: замены не зависят от дальнейшего обхода.
+            if (query.replacements && level > replacementsLastLevel) startReplacements()
         }
+        // Связи последнего раскрытия: если их дети уже были в nodes, цикл не делал новой загрузки узлов и готовность проверяется здесь.
+        scheduleLinkAttributes()
+        if (query.replacements) startReplacements()
 
         val root = state.nodes.getValue(rootId)
         if (root.kind == null) {
             throw LoodsmanApiException("Root object $rootId has unmapped type '${root.prop.type}'")
         }
 
-        val linkAttributes = linkAttributeLoader.loadLinkAttributes(session, query, snapshot, state.nodes, state.links)
-        val replacements = replacementLoader.loadReplacements(session, query, rootId, state.nodes, state.links)
-        return treeAssembler.buildNode(
+        val linkAttributes = mutableMapOf<Int, LinkAttributesData>()
+        linkAttributeLoads.awaitAll().forEach { linkAttributes.putAll(it) }
+        val replacements = replacementLoad?.await() ?: emptyMap()
+        treeAssembler.buildNode(
             rootId, query.depth, query, state.nodes, state.links, linkAttributes, replacements, emptyList()
         )
+    }
+
+    /**
+     * Исполнения корня и их полные деревья в одной сессии: корень ([loadTreeIn]) и исполнения стартуют параллельно.
+     * Id исполнений берутся из [variantIdsOf] (один запрос связей корня по связи исполнений), поэтому исполнения не
+     * ждут окончания обхода корня. Результат тот же, что у дефолтной реализации: порядок usages, дети без вида вне.
+     */
+    override suspend fun loadTreeWithVariants(
+        rootQuery: StructureQuery,
+        variantQuery: (PdmNodeId) -> StructureQuery,
+    ): PdmNode = loadSession {
+        val session = checkNotNull(coroutineContext[LoadSession]) { "loadSession must open the load session" }
+        coroutineScope {
+            val root = async { loadTreeIn(session, rootQuery) }
+            val variantIds = variantIdsOf(session, rootQuery)
+            val full = if (variantIds.isEmpty()) {
+                emptyMap()
+            } else {
+                variantIds.zip(loadTrees(variantIds.map(variantQuery))).toMap()
+            }
+            val tree = root.await()
+            if (full.isEmpty()) return@coroutineScope tree
+            tree.copy(usages = tree.usages.map { usage ->
+                if (usage is VariantUsage) usage.copy(target = full.getValue(usage.target.id)) else usage
+            })
+        }
+    }
+
+    /**
+     * Id исполнений корня так же, как их даёт обход [loadTreeIn]: связь исполнений глубиной не меньше 1 и корень
+     * с видом. Один запрос связей корня по связи исполнений; свойства детей читаются для отбора по виду (кэш сессии
+     * общий с обходом). Дети без вида отбрасываются, как в [TreeAssembler]. Запрос не из кэша обхода: ключ связей
+     * включает все типы связей прямой группы, поэтому обход корня повторяет связь исполнений (один лишний запрос).
+     */
+    private suspend fun variantIdsOf(session: LoadSession, query: StructureQuery): List<PdmNodeId> {
+        val variantDepth = minOf(query.depth, query.relationDepth[Relation.Variant] ?: query.depth)
+        if (Relation.Variant !in query.relations || variantDepth < 1) return emptyList()
+
+        val snapshot = metadata.snapshot()
+        val variantRules = resolveLinkTypes(snapshot, setOf(Relation.Variant))
+        val id = query.rootId.asInt()
+        val rootProp = session.props.getAll(listOf(id)) { missing -> nodeLoader.loadProps(session, missing) }.getValue(id)
+        val rootType = rootProp.type
+        if (rootType == null || kindMapper.map(rootType) == null) return emptyList()
+
+        val childIds = linkLoader.loadLinks(session, mapOf(id to rootType), variantRules)[id].orEmpty()
+            .map { it.dto.idChild }
+        val childProps = session.props.getAll(childIds.distinct()) { missing -> nodeLoader.loadProps(session, missing) }
+        return childIds.filter { childId -> kindMapper.map(childProps.getValue(childId).type) != null }
+            .map { PdmNodeId(it) }
     }
 
     override suspend fun loadNode(

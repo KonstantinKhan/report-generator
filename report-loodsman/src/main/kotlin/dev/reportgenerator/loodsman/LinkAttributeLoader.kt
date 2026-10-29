@@ -36,20 +36,26 @@ internal class LinkAttributeLoader(
     fun positionRuleOf(relation: Relation, parentKind: PdmNodeKind, childKind: PdmNodeKind): LinkAttributeRule? =
         mapping.link.positionRules.select(relation, parentKind, childKind)
 
+    /** Связь участвует в загрузке атрибутов, когда оба её конца загружены и имеют вид. */
+    fun bothEndsLoaded(link: Link, nodes: Map<Int, LoadedNode>): Boolean =
+        nodes[link.dto.idParent]?.kind != null && nodes[link.dto.idChild]?.kind != null
+
+    /**
+     * Атрибуты связей пачки [links]; каждая связь должна проходить [bothEndsLoaded]. Вызывается по мере появления
+     * связей, поэтому пачки формируются внутри одной порции связей, а не по всему дереву.
+     */
     suspend fun loadLinkAttributes(
         session: LoadSession,
         query: StructureQuery,
         snapshot: MetadataSnapshot,
         nodes: Map<Int, LoadedNode>,
-        links: Map<Int, List<Link>>
+        links: List<Link>,
     ): Map<Int, LinkAttributesData> {
         if (query.linkAttributes.isEmpty() && mapping.link.positionRules.isEmpty()) {
             return emptyMap()
         }
 
-        val linksByLinkId = links.values.flatten().filter { link ->
-            nodes[link.dto.idParent]?.kind != null && nodes[link.dto.idChild]?.kind != null
-        }.associateBy { it.linkId }
+        val linksByLinkId = links.associateBy { it.linkId }
 
         if (linksByLinkId.isEmpty()) {
             return emptyMap()

@@ -107,8 +107,18 @@ internal class FakeLoodsman(
     private val signalInFlightAt: Int = Int.MAX_VALUE,
     /** Справочник атрибутов: отдаётся в get-attribute-list-2 и в [snapshot]. Пусто — имена не найдены. */
     private val attributes: List<AttributeDef> = emptyList(),
+    /** Объекты, чтение свойств которых отвечает ошибкой 400: для проверки отмены при сбое. */
+    private val propFailures: Set<Int> = emptySet(),
 ) {
     val inFlightReached = CompletableDeferred<Unit>()
+    private val linkArrivals = ConcurrentHashMap<Int, CompletableDeferred<Unit>>()
+    /** Ответы фейка по ключу вида `link:<объект>`, `attr:<id связи>`, `replacement:<объект>`. */
+    private val answers = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
+
+    private fun answered(key: String): CompletableDeferred<Unit> = answers.computeIfAbsent(key) { CompletableDeferred() }
+
+    /** Ждёт ответа фейка по ключу из [answers]. */
+    suspend fun awaitAnswer(key: String) = answered(key).await()
     /** Пачки объектов каждого запроса связей, в порядке прихода. */
     val linkBatches: MutableList<List<Int>> = Collections.synchronizedList(mutableListOf())
     val replacementCalls: MutableList<Int> = Collections.synchronizedList(mutableListOf())
@@ -129,6 +139,9 @@ internal class FakeLoodsman(
     private val linkIdToEdge = ConcurrentHashMap<Int, Edge>()
 
     private fun linkTypeIdOf(name: String): Int = linkNames.indexOf(name) + 1
+
+    /** Ждёт прихода запроса связей, первым объектом которого стал [objectId]; ответ может быть ещё не отдан. */
+    suspend fun awaitLinkArrival(objectId: Int) = linkArrivals.computeIfAbsent(objectId) { CompletableDeferred() }.await()
 
     /** Снимок метаданных, который отдаёт тот же фейк (типы связей по [linkNames], виды по [objects]). */
     fun snapshot(version: Long = 1): MetadataSnapshot = MetadataSnapshot(
@@ -167,6 +180,12 @@ internal class FakeLoodsman(
             ) {
                 return@MockEngine respond("boom", HttpStatusCode.BadRequest)
             }
+            if (request.url.encodedPath == "/api/v4/ObjectInfo/get-prop-objects" &&
+                request.url.parameters["objectList"].orEmpty().split(",").mapNotNull { it.toIntOrNull() }
+                    .any { it in propFailures }
+            ) {
+                return@MockEngine respond("boom", HttpStatusCode.BadRequest)
+            }
             val tracked = request.url.encodedPath in CONCURRENT_PATHS
             if (tracked) {
                 val now = inFlight.incrementAndGet()
@@ -177,7 +196,9 @@ internal class FakeLoodsman(
             }
             val params = request.url.parameters
             if (request.url.encodedPath == "/api/v4/ObjectInfo/get-linked-objects-for-objects") {
-                linkGates[params["objectsIds"]!!.split(",").first().toInt()]?.await()
+                val first = params["objectsIds"]!!.split(",").first().toInt()
+                linkArrivals.computeIfAbsent(first) { CompletableDeferred() }.complete(Unit)
+                linkGates[first]?.await()
             }
             val body: JsonElement = when (request.url.encodedPath) {
                 "/api/v4/Auth/login" -> buildJsonObject {
@@ -244,6 +265,7 @@ internal class FakeLoodsman(
                     JsonArray(requestedIds.flatMap { requested ->
                         linkCalls.add(requested)
                         linkRequests.add(LinkRequest(requested, linkTypeIds, inverse))
+                        answered("link:$requested").complete(Unit)
                         // Как у Loodsman: inverse смотрит с точки запрошенного объекта, idParent = запрошенный.
                         val matched = edges.filter { edge ->
                             (if (inverse) edge.child else edge.parent) == requested &&
@@ -261,6 +283,7 @@ internal class FakeLoodsman(
                 "/api/v4/ObjectInfo/get-info-about-version-mode-20" -> {
                     val id = params["idVersion"]!!.toInt()
                     replacementCalls.add(id)
+                    answered("replacement:$id").complete(Unit)
                     JsonArray(replacementRows[id].orEmpty())
                 }
                 "/api/v4/ObjectInfo/get-original-link-attributes" -> {
@@ -268,6 +291,7 @@ internal class FakeLoodsman(
                     linkAttributeBatches.add(linkIds)
                     linkAttributeParams.add(params.names().associateWith { params[it].orEmpty() })
                     linkAttributeCalls.addAll(linkIds)
+                    linkIds.forEach { answered("attr:$it").complete(Unit) }
                     buildJsonArray {
                         for (linkId in linkIds) {
                             linkIdToEdge[linkId]?.attrs?.forEach { (name, value) ->

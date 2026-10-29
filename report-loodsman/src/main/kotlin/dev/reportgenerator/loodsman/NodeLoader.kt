@@ -93,7 +93,7 @@ internal class NodeLoader(
     }
 
     /** Свойства пачками по [PROPS_BATCH_SIZE]; объект, которого нет в Loodsman, — ошибка. */
-    private suspend fun loadProps(session: LoadSession, missing: List<Int>): Map<Int, PropObjectOutputDto> {
+    internal suspend fun loadProps(session: LoadSession, missing: List<Int>): Map<Int, PropObjectOutputDto> {
         // Пачки идут по одной: порядок запросов к Loodsman тот же, что был до кэша.
         val loaded = missing.chunked(PROPS_BATCH_SIZE).flatMap { chunk ->
             session.limiter.permit { api.objectInfo.propObjects(chunk) }

@@ -7,7 +7,6 @@ import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeStructureClient
 import dev.reportgenerator.domain.Relation
 import dev.reportgenerator.domain.StructureQuery
-import dev.reportgenerator.domain.VariantUsage
 
 // Specification needs the root's direct composition and the documents of the root and of its children: the
 // specification (assembly) and the detail drawing (part) of a child give its format. The composition is expanded
@@ -40,14 +39,7 @@ fun specificationQuery(rootId: PdmNodeId, variants: Boolean = true): StructureQu
 private val SPECIFICATION_RELATIONS = setOf(Relation.Composition, Relation.Document, Relation.MadeFrom)
 
 // The specification tree of the root: the root by [specificationQuery], then the same query for every variant of the
-// root (the variant's composition and documents), placed into the variant usages of the root. The root and the variants
-// are read in one load session: the variants are read in parallel, and the nodes they share with the root are read once.
-suspend fun PdmNodeStructureClient.loadSpecificationStructure(rootId: PdmNodeId): PdmNode = loadSession {
-    val root = loadTree(specificationQuery(rootId))
-    val variantIds = root.usages.filterIsInstance<VariantUsage>().map { it.target.id }
-    if (variantIds.isEmpty()) return@loadSession root
-    val full = variantIds.zip(loadTrees(variantIds.map { specificationQuery(it, variants = false) })).toMap()
-    root.copy(usages = root.usages.map { usage ->
-        if (usage is VariantUsage) usage.copy(target = full.getValue(usage.target.id)) else usage
-    })
-}
+// root (the variant's composition and documents), placed into the variant usages of the root. [loadTreeWithVariants]
+// reads the root and the variants in one load session in parallel, and the nodes they share are read once.
+suspend fun PdmNodeStructureClient.loadSpecificationStructure(rootId: PdmNodeId): PdmNode =
+    loadTreeWithVariants(specificationQuery(rootId)) { specificationQuery(it, variants = false) }
