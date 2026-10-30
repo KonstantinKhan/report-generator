@@ -31,7 +31,7 @@ fun specificationQuery(rootId: PdmNodeId, variants: Boolean = true): StructureQu
         AttributeKey.Name,
         AttributeKey.Format,
     ),
-    linkAttributes = setOf(LinkAttributeKey.Note, LinkAttributeKey.Zone),
+    linkAttributes = setOf(LinkAttributeKey.Note, LinkAttributeKey.Zone, LinkAttributeKey.ApplicationMethod),
     replacements = true,
     replacementDepth = 0,
 )

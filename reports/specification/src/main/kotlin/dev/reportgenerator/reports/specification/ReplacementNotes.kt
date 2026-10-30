@@ -1,20 +1,27 @@
 package dev.reportgenerator.reports.specification
 
 import dev.reportgenerator.domain.CompositionUsage
+import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.ReplacementGroup
 import dev.reportgenerator.domain.ReplacementType
 
-// Replacement notes of the root's items. Only the permissible groups (ReplacementType.Permissible) take part; the groups
-// of the other types are ignored and their members stay ordinary rows. A member is matched to the root's composition
-// usage by linkId, its position comes from that usage. A member that is not a composition of the root is ignored;
+// Replacement notes of the root's items. The permissible groups (ReplacementType.Permissible) give the replacement texts;
+// the production groups (ReplacementType.Production) give the application method of their members. The groups of the
+// consumer type are ignored and their members stay ordinary rows. A member is matched to the root's composition usage
+// by linkId, its position comes from that usage. A member that is not a composition of the root is ignored;
 // a permissible group left without a basic member or without a non-basic member is skipped (its members stay ordinary rows).
 //
 // Result: linkId -> note. `isNonBasic` = the member is in a non-basic variant of a permissible group (its quantity is not
 // shown). `texts` = the replacement texts of the member: first the basic text ("допуск. замена на ..." of the groups where
 // the member is basic), then the non-basic text ("примен. ..." of the groups where the member is non-basic). The text of
 // the basic member starts with a lowercase letter here, the item builder capitalizes it when it is the first note.
-internal data class ReplacementNote(val isNonBasic: Boolean, val texts: List<String>)
+// `applicationMethod` = the value of the application method attribute of a production member; null when it is blank.
+internal data class ReplacementNote(
+    val isNonBasic: Boolean,
+    val texts: List<String>,
+    val applicationMethod: String? = null,
+)
 
 internal object ReplacementNotes {
     internal const val BASIC_TEXT_START = "допуск. замена"
@@ -25,6 +32,17 @@ internal object ReplacementNotes {
     fun of(root: PdmNode): Map<Int, ReplacementNote> {
         val compositionByLinkId = root.usages.filterIsInstance<CompositionUsage>()
             .mapNotNull { usage -> usage.linkId?.let { it to usage } }
+            .toMap()
+
+        // production member -> its application method; the members that are not compositions of the root or have no value are left out
+        val applicationMethods = root.replacements
+            .filter { it.type == ReplacementType.Production }
+            .flatMap { group -> group.variants.flatMap { it.linkIds } }
+            .distinct()
+            .mapNotNull { linkId ->
+                val usage = compositionByLinkId[linkId] ?: return@mapNotNull null
+                usage.attributes[LinkAttributeKey.ApplicationMethod].textOrNull()?.let { linkId to it }
+            }
             .toMap()
 
         // basic member -> the fragments of the non-basic variants of every group where it is basic
@@ -66,13 +84,17 @@ internal object ReplacementNotes {
             }
         }
 
-        val linkIds = fragmentsOfBasic.keys + replacedBy.keys
+        val linkIds = (fragmentsOfBasic.keys + replacedBy.keys + applicationMethods.keys).distinct()
         return linkIds.associateWith { linkId ->
             val texts = listOfNotNull(
                 fragmentsOfBasic[linkId]?.let { BASIC_PREFIX + it.joinToString(OR_SEPARATOR) },
                 replacedBy[linkId]?.let { NON_BASIC_PREFIX + it.joinToString(OR_SEPARATOR) },
             )
-            ReplacementNote(isNonBasic = linkId in nonBasic, texts = texts)
+            ReplacementNote(
+                isNonBasic = linkId in nonBasic,
+                texts = texts,
+                applicationMethod = applicationMethods[linkId],
+            )
         }
     }
 

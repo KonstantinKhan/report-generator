@@ -7,5 +7,7 @@ sealed interface LinkAttributeKey {
 
     data object Zone : LinkAttributeKey
 
+    data object ApplicationMethod : LinkAttributeKey
+
     data class Unmapped(val pdmName: String) : LinkAttributeKey
 }

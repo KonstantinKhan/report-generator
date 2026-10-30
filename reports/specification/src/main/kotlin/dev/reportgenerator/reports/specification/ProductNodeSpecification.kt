@@ -177,21 +177,23 @@ private fun PdmNode.toDocumentationItem(): DocumentationItem {
 // Values every composition item reads. The unit is read for all sections, but only materials show it (in the notes).
 // The quantity is the exact one or the lower bound of a range; the upper bound of a range is the note `maxQuantityNote`.
 // A non-basic item of a permissible replacement group has no quantity in the column (null); its count is the first note
-// (`countNote`, the lower bound of the quantity), the replacement texts are the last notes.
+// (`countNote`, the lower bound of the quantity), the replacement texts are the last notes. The application method of a
+// production member is the note after the notes of the item and before the replacement texts.
 private class CompositionFields(
     val position: Int?,
     val quantity: Double?,
     val countNote: String?,
     val unit: String?,
     val maxQuantityNote: String?,
+    val applicationMethod: String?,
     val replacementTexts: List<String>,
 ) {
-    // The notes in the order of the sheet: the count of a non-basic item, the notes of the item, the replacement texts.
-    // The replacement text of a basic item starts with a capital letter only when it is the first note of the item.
+    // The notes in the order of the sheet: the count of a non-basic item, the notes of the item, the application method,
+    // the replacement texts. The replacement text of a basic item starts with a capital letter only when it is the first note of the item.
     fun notes(base: List<String>): List<String> {
         val head = listOfNotNull(countNote)
-        val texts = if (head.isEmpty() && base.isEmpty()) capitalizedFirst(replacementTexts) else replacementTexts
-        return head + base + texts
+        val texts = if (head.isEmpty() && base.isEmpty() && applicationMethod == null) capitalizedFirst(replacementTexts) else replacementTexts
+        return head + base + listOfNotNull(applicationMethod) + texts
     }
 
     private fun capitalizedFirst(texts: List<String>): List<String> {
@@ -212,6 +214,7 @@ private fun CompositionUsage.fields(replacements: Map<Int, ReplacementNote>, mat
         countNote = if (nonBasic) countNoteOf(minQuantity, unit, material) else null,
         unit = unit,
         maxQuantityNote = maxQuantityNoteOf(material),
+        applicationMethod = replacement?.applicationMethod,
         replacementTexts = replacement?.texts.orEmpty(),
     )
 }
@@ -444,7 +447,7 @@ private fun PdmNode.attributeText(key: AttributeKey): TextState = when (val valu
 }
 
 // Optional text of a value (format, note): the text, or null for an empty, blank or not loaded value.
-private fun AttributeValue?.textOrNull(): String? = when (this) {
+internal fun AttributeValue?.textOrNull(): String? = when (this) {
     is AttributeValue.Text -> value.takeIf { it.isNotBlank() }
     is AttributeValue.Number -> value.toString()
     AttributeValue.Empty, null -> null

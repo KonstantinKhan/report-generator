@@ -1,7 +1,9 @@
 package dev.reportgenerator.reports.specification
 
+import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.Field
+import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
@@ -24,6 +26,16 @@ private fun usage(linkId: Int, position: Field<Int> = Field.Value(linkId)) = Com
 )
 
 private fun at(linkId: Int, position: Int) = usage(linkId, Field.Value(position))
+
+// The composition usage of the root with the application method attribute value.
+private fun withMethod(linkId: Int, position: Int, method: AttributeValue) = CompositionUsage(
+    target = PdmNode(id = PdmNodeId(linkId), kind = PdmNodeKind.Standard),
+    position = Field.Value(position),
+    quantity = Quantity.Exact(1.0),
+    unit = Field.Missing,
+    linkId = linkId,
+    attributes = mapOf(LinkAttributeKey.ApplicationMethod to method),
+)
 
 private fun rootOf(usages: List<CompositionUsage>, groups: List<ReplacementGroup>) = PdmNode(
     id = PdmNodeId(1),
@@ -244,5 +256,75 @@ class ReplacementNotesTest : ShouldSpec({
         )
 
         shouldThrow<SpecificationDataException> { ReplacementNotes.of(root) }.message shouldContain "basic variant"
+    }
+
+    should("give a production member the application method of its composition link") {
+        val root = rootOf(
+            usages = listOf(withMethod(1, 5, AttributeValue.Text("Окраска"))),
+            groups = listOf(group(1, listOf(1), type = ReplacementType.Production)),
+        )
+
+        ReplacementNotes.of(root) shouldBe mapOf(
+            1 to ReplacementNote(isNonBasic = false, texts = emptyList(), applicationMethod = "Окраска"),
+        )
+    }
+
+    should("skip a production member without the application method") {
+        val root = rootOf(
+            usages = listOf(at(1, 5), withMethod(2, 7, AttributeValue.Text("  ")), withMethod(3, 8, AttributeValue.Empty)),
+            groups = listOf(group(1, listOf(1, 2, 3), type = ReplacementType.Production)),
+        )
+
+        ReplacementNotes.of(root) shouldBe emptyMap()
+    }
+
+    should("ignore a production member that is not a composition of the root") {
+        val root = rootOf(
+            usages = listOf(withMethod(1, 5, AttributeValue.Text("Окраска"))),
+            groups = listOf(group(1, listOf(1, 2), type = ReplacementType.Production)),
+        )
+
+        ReplacementNotes.of(root) shouldBe mapOf(
+            1 to ReplacementNote(isNonBasic = false, texts = emptyList(), applicationMethod = "Окраска"),
+        )
+    }
+
+    should("not fail for a production group with two basic variants") {
+        val root = rootOf(
+            usages = listOf(withMethod(1, 5, AttributeValue.Text("Сварка")), withMethod(2, 7, AttributeValue.Text("Пайка"))),
+            groups = listOf(
+                ReplacementGroup(
+                    id = 1,
+                    name = null,
+                    type = ReplacementType.Production,
+                    variants = listOf(
+                        ReplacementVariant(id = 11, name = null, basic = true, linkIds = listOf(1), inCurrentConfiguration = true),
+                        ReplacementVariant(id = 12, name = null, basic = true, linkIds = listOf(2), inCurrentConfiguration = true),
+                    ),
+                    inCurrentConfiguration = true,
+                ),
+            ),
+        )
+
+        ReplacementNotes.of(root) shouldBe mapOf(
+            1 to ReplacementNote(isNonBasic = false, texts = emptyList(), applicationMethod = "Сварка"),
+            2 to ReplacementNote(isNonBasic = false, texts = emptyList(), applicationMethod = "Пайка"),
+        )
+    }
+
+    should("keep the replacement texts and the application method of a member in production and permissible groups") {
+        // поз. 5 — базовый в допускаемой замене (поз. 7) и член производственной группы со способом применения
+        val root = rootOf(
+            usages = listOf(withMethod(1, 5, AttributeValue.Text("Окраска")), at(2, 7)),
+            groups = listOf(
+                group(1, listOf(1), listOf(2)),
+                group(2, listOf(1), type = ReplacementType.Production),
+            ),
+        )
+
+        ReplacementNotes.of(root) shouldBe mapOf(
+            1 to ReplacementNote(isNonBasic = false, texts = listOf("допуск. замена на поз. 7"), applicationMethod = "Окраска"),
+            2 to ReplacementNote(isNonBasic = true, texts = listOf("примен. взамен поз. 5")),
+        )
     }
 })

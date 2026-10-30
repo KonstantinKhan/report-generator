@@ -29,6 +29,15 @@ class LinkRuleValidationTest : ShouldSpec({
             config.link.attributes.keys shouldContainAll Registries.linkAttributeKeys.ids
         }
 
+        should("name the application method link attribute as the composition attribute Способ применения") {
+            val config = MappingConfigLoader.load(emptyMap())
+
+            val rule = config.link.attributes["applicationMethod"]?.single()
+
+            rule?.relation shouldBe "COMPOSITION"
+            rule?.name shouldBe "Способ применения"
+        }
+
         should("define a position rule for the composition relation") {
             val config = MappingConfigLoader.load(emptyMap())
 

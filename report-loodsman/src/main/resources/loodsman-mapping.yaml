@@ -78,6 +78,9 @@ link:
     zone:
       - relation: COMPOSITION
         name: Зона
+    applicationMethod:
+      - relation: COMPOSITION
+        name: Способ применения
 
 onUnmapped:
   kind: KEEP

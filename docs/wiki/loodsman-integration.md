@@ -276,6 +276,8 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 с непустым «Формат»), детали — из «Чертёж детали». Для этого `specificationQuery` читает документы детей корня:
 `depth = 2`, состав раскрывается только до детей корня (`relationDepth = {Composition: 1}`), `Format` — атрибут
 документа, `Note` — атрибут связи состава. Примечание состава — `LinkAttributeKey.Note`, зона — `LinkAttributeKey.Zone` (атрибут связи «Зона», relation COMPOSITION) из `CompositionUsage.attributes`.
+Способ применения — `LinkAttributeKey.ApplicationMethod` (атрибут связи «Способ применения», relation COMPOSITION, ключ `applicationMethod`
+в `link.attributes`): читается для членов производственных групп замен, см. [specification-table-format.md](specification-table-format.md) («Производственные группы»).
 Правила записи в колонки «Формат» и «Примечание» (сложный формат `*)`, единица материала первой строкой) — в
 [specification-table-format.md](specification-table-format.md#правила-формата-и-примечаний-спецификации).
 
@@ -417,6 +419,9 @@ link:
     note:
       - relation: COMPOSITION
         name: Примечание
+    applicationMethod:
+      - relation: COMPOSITION
+        name: Способ применения
 
 onUnmapped:
   kind: KEEP

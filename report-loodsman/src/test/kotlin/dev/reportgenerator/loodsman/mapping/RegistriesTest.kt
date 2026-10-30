@@ -6,6 +6,7 @@ import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Relation
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 
 class RegistriesTest : ShouldSpec({
@@ -71,6 +72,11 @@ class RegistriesTest : ShouldSpec({
         should("contain known LinkAttributeKey variants") {
             Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.Note)
             Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.Zone)
+            Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.ApplicationMethod)
+        }
+
+        should("resolve the application method id of the mapping to its domain key") {
+            Registries.linkAttributeKeys.resolve("applicationMethod") shouldBe LinkAttributeKey.ApplicationMethod
         }
 
         should("throw error for unknown link attribute key") {

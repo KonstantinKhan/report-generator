@@ -70,6 +70,7 @@ private fun composition(
     position: Field<Int> = Field.Missing,
     note: AttributeValue? = null,
     zone: AttributeValue? = null,
+    applicationMethod: AttributeValue? = null,
     linkId: Int? = null,
 ) = CompositionUsage(
     target = child,
@@ -79,6 +80,7 @@ private fun composition(
     attributes = buildMap {
         note?.let { put(LinkAttributeKey.Note, it) }
         zone?.let { put(LinkAttributeKey.Zone, it) }
+        applicationMethod?.let { put(LinkAttributeKey.ApplicationMethod, it) }
     },
     linkId = linkId,
 )
@@ -622,6 +624,32 @@ class ProductNodeSpecificationTest : ShouldSpec({
         ).toSpecificationData()
 
         data.parts.single().notes shouldBe listOf("*)А3х3", "Прим.")
+    }
+
+    should("put the application method of a production member after the note of the link") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), Quantity.Exact(4.0), position = Field.Value(5), note = AttributeValue.Text("Прим."), applicationMethod = AttributeValue.Text("Окраска"), linkId = 1),
+            ),
+            replacements = listOf(group(1, ReplacementType.Production, listOf(1))),
+        ).toSpecificationData()
+
+        data.standards.single().notes shouldBe listOf("Прим.", "Окраска")
+    }
+
+    should("put the application method before the replacement text and keep the text lowercase") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), Quantity.Exact(4.0), position = Field.Value(5), applicationMethod = AttributeValue.Text("Окраска"), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Гайка")), position = Field.Value(7), linkId = 2),
+            ),
+            replacements = listOf(
+                group(1, ReplacementType.Permissible, listOf(1), listOf(2)),
+                group(2, ReplacementType.Production, listOf(1)),
+            ),
+        ).toSpecificationData()
+
+        data.standards.first().notes shouldBe listOf("Окраска", "допуск. замена на поз. 7")
     }
 
     should("put the unit of a material first and the note of the link second") {
