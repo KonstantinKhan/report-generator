@@ -42,7 +42,8 @@ object FlowTables {
         rows: List<DataValue.Record>,
         path: String = "table",
         appendix: FlowAppendix? = null,
-        notes: FlowNotes? = null
+        notes: FlowNotes? = null,
+        kits: FlowKits? = null,
     ): IrTable {
         TemplateContract.requireFlowTable(spec, schema, path)
         val shaped = FlowShaper.shapeTable(spec, schema, rows)
@@ -136,26 +137,48 @@ object FlowTables {
 
         fun blank(constraints: LayoutConstraints = LayoutConstraints.Default) = IrRow(columns.map { IrCell("") }, constraints)
 
+        // A label row: the text in the column `labelColumn`, the other cells empty; the group title style and alignment.
+        fun labelRow(labelColumn: String, text: String, constraints: LayoutConstraints) = IrRow(
+            spec.columns.map { column ->
+                if (column.id == labelColumn) IrCell(text, style = groupTitle.style, align = groupTitle.align)
+                else IrCell("")
+            },
+            constraints
+        )
+
+        // The kits blocks: the title (when set) with the group title spacers, then per block the spacers, the label (kept
+        // with the blank row below it and the first data line) and the groups of its rows.
+        fun kitsElements(k: FlowKits): List<IrTableElement> {
+            require(spec.groupBy != null) { "$path: kits blocks need groupBy" }
+            val keep = LayoutConstraints(keepWithNext = true)
+            val out = mutableListOf<IrTableElement>()
+            k.title?.let { title ->
+                repeat(groupTitle.spacerBefore) { out += blank(keep) }
+                out += labelRow(k.labelColumn, title, keep)
+                repeat(groupTitle.spacerAfter) { out += blank(keep) }
+            }
+            k.blocks.forEach { block ->
+                repeat(k.spacersBeforeBlock) { out += blank(keep) }
+                out += labelRow(k.labelColumn, block.label, keep)
+                out += blank(keep)
+                FlowShaper.shapeTable(spec, schema, block.rows).groups.forEach { out += groupElement(it) }
+            }
+            return out
+        }
+
         // The appendix: the same groups per block (its own rows), spacers and a title/label kept with the first data line.
         fun appendixElements(a: FlowAppendix): List<IrTableElement> {
             require(spec.groupBy != null) { "$path: a flow table with an appendix needs groupBy" }
             val keep = LayoutConstraints(keepWithNext = true)
-            val titleStyle = groupTitle.style
-            fun labelRow(text: String) = IrRow(
-                spec.columns.map { column ->
-                    if (column.id == a.labelColumn) IrCell(text, style = titleStyle, align = groupTitle.align)
-                    else IrCell("")
-                },
-                keep
-            )
             val out = mutableListOf<IrTableElement>()
             repeat(a.spacersBeforeTitle) { out += blank() }
-            out += IrSpanRow(IrCell(a.title, style = titleStyle, align = groupTitle.align), a.titleFrom, a.titleTo, keep)
+            out += IrSpanRow(IrCell(a.title, style = groupTitle.style, align = groupTitle.align), a.titleFrom, a.titleTo, keep)
             a.blocks.forEach { block ->
                 repeat(a.spacersBeforeLabel) { out += blank(keep) }
-                out += labelRow(block.label)
+                out += labelRow(a.labelColumn, block.label, keep)
                 out += blank(keep)
                 FlowShaper.shapeTable(spec, schema, block.rows).groups.forEach { out += groupElement(it) }
+                block.kits?.let { out += kitsElements(it) }
                 repeat(a.spacersAfterBlock) { out += blank() }
             }
             return out
@@ -176,7 +199,8 @@ object FlowTables {
         return IrTable(
             columns = columns,
             header = header,
-            content = mainContent + appendix?.let(::appendixElements).orEmpty() + notes?.let(::notesElements).orEmpty(),
+            content = mainContent + kits?.let(::kitsElements).orEmpty() + appendix?.let(::appendixElements).orEmpty() +
+                notes?.let(::notesElements).orEmpty(),
             rowHeight = spec.rowHeight.mm,
             groupTitle = groupTitle,
             fillBlank = spec.fill == FlowFill.BLANK,

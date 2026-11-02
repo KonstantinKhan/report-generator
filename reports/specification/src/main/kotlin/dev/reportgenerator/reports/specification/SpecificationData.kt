@@ -18,6 +18,9 @@ data class SpecificationData(
     // Notes of the kits with a purpose (link attribute "Назначение комплекта"): one text per kit and purpose, from the
     // root and every execution. They go to the tail of the table, after the variants part.
     val kitNotes: List<String> = emptyList(),
+    // Блоки комплектов без назначения и без Спецификации: состав каждого комплекта, после строк комплектов со
+    // Спецификацией. Пусто, если таких комплектов нет.
+    val kitBlocks: List<KitBlock> = emptyList(),
 )
 
 // One execution (исполнение) of the product in the "Переменные данные для исполнений" section: its designation and the
@@ -31,9 +34,10 @@ data class SpecificationVariant(
     val others: List<OtherItem> = emptyList(),
     val materials: List<MaterialItem> = emptyList(),
     val kits: List<KitItem> = emptyList(),
+    val kitBlocks: List<KitBlock> = emptyList(),
 ) {
     fun isEmpty(): Boolean = documentation.isEmpty() && assemblies.isEmpty() && parts.isEmpty() &&
-        standards.isEmpty() && others.isEmpty() && materials.isEmpty() && kits.isEmpty()
+        standards.isEmpty() && others.isEmpty() && materials.isEmpty() && kits.isEmpty() && kitBlocks.isEmpty()
 }
 
 // Common part of the items that take a row of a section. `position` = null when the item has no position.
@@ -112,3 +116,18 @@ data class KitItem(
     val format: String? = null,
     val notes: List<String> = emptyList(),
 ) : PositionedItem
+
+// A kit without the purpose and without a specification: its composition as a block of the kits section. `label` is the
+// name of the kit; the sections are the sections of the composition (a kit inside the kit is not shown).
+data class KitBlock(
+    val label: String,
+    val documentation: List<DocumentationItem> = emptyList(),
+    val assemblies: List<AssemblyItem> = emptyList(),
+    val parts: List<PartItem> = emptyList(),
+    val standards: List<StandardItem> = emptyList(),
+    val others: List<OtherItem> = emptyList(),
+    val materials: List<MaterialItem> = emptyList(),
+) {
+    fun isEmpty(): Boolean = documentation.isEmpty() && assemblies.isEmpty() && parts.isEmpty() &&
+        standards.isEmpty() && others.isEmpty() && materials.isEmpty()
+}

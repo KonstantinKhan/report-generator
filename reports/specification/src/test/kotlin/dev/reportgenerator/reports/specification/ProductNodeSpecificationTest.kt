@@ -221,6 +221,57 @@ class ProductNodeSpecificationTest : ShouldSpec({
         data.kits.single().notes shouldBe listOf("*)2хА0", "Наиб. кол. 3", "Прим.")
     }
 
+    should("give a kit without the purpose and without a specification a block of its composition") {
+        val kit = node(2, kind = PdmNodeKind.Kit, usages = listOf(composition(node(5), Quantity.Exact(2.0))))
+        val data = root(composition(kit)).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.kitBlocks shouldBe listOf(
+            KitBlock(label = "Имя 2", parts = listOf(PartItem(designation = "АБ.5", name = "Имя 5", quantity = 2.0))),
+        )
+    }
+
+    should("give no kit block to a kit with the purpose or with a specification") {
+        val withPurpose = node(2, kind = PdmNodeKind.Kit, usages = listOf(composition(node(5))))
+        val withSpecification = node(
+            3,
+            kind = PdmNodeKind.Kit,
+            usages = listOf(documentWith(PdmNodeKind.Specification, AttributeValue.Text("А4")), composition(node(6))),
+        )
+        val data = root(
+            composition(withPurpose, kitPurpose = AttributeValue.Text("Для сборки")),
+            composition(withSpecification),
+        ).toSpecificationData()
+
+        data.kitBlocks shouldBe emptyList()
+        data.kits.map { it.designation } shouldBe listOf("АБ.3")
+    }
+
+    should("give no kit block to a kit without any composition") {
+        val data = root(composition(node(2, kind = PdmNodeKind.Kit))).toSpecificationData()
+
+        data.kitBlocks shouldBe emptyList()
+    }
+
+    should("skip a kit inside a kit and keep the other items of the kit") {
+        val inner = node(3, kind = PdmNodeKind.Kit, usages = listOf(composition(node(4))))
+        val outer = node(2, kind = PdmNodeKind.Kit, usages = listOf(composition(node(5)), composition(inner)))
+        val data = root(composition(outer)).toSpecificationData()
+
+        data.kitBlocks.single().parts.map { it.designation } shouldBe listOf("АБ.5")
+    }
+
+    should("sort the kit blocks by position, then by name") {
+        val second = node(7, kind = PdmNodeKind.Kit, usages = listOf(composition(node(20))))
+        val first = node(3, kind = PdmNodeKind.Kit, usages = listOf(composition(node(21))))
+        val data = root(
+            composition(second, position = Field.Value(2)),
+            composition(first, position = Field.Value(1)),
+        ).toSpecificationData()
+
+        data.kitBlocks.map { it.label } shouldBe listOf("Имя 3", "Имя 7")
+    }
+
     should("drop specification and detail drawings from the composition and from the documents") {
         val data = root(
             composition(node(2, kind = PdmNodeKind.Specification)),

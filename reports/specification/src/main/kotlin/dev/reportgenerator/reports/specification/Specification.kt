@@ -28,7 +28,7 @@ fun specification(data: SpecificationData, customerRepresentative: Boolean = tru
         table(
             FlowTables.build(
                 GostSpecTemplate.flowTable, dataContext.schema, data.itemRecords(), GostSpecTemplate.flowTablePath,
-                appendix = data.variantAppendix(), notes = data.kitNoteTail()
+                appendix = data.variantAppendix(), notes = data.kitNoteTail(), kits = data.kitsFlow()
             )
         )
     }

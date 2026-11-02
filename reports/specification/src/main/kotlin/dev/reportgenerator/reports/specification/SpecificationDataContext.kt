@@ -2,6 +2,8 @@ package dev.reportgenerator.reports.specification
 
 import dev.reportgenerator.ir.FlowAppendix
 import dev.reportgenerator.ir.FlowAppendixBlock
+import dev.reportgenerator.ir.FlowKitBlock
+import dev.reportgenerator.ir.FlowKits
 import dev.reportgenerator.ir.FlowNotes
 import dev.reportgenerator.template.DataContext
 import dev.reportgenerator.template.DataValue
@@ -35,11 +37,30 @@ internal fun SpecificationData.variantAppendix(): FlowAppendix? {
         titleFrom = "designation",
         titleTo = "name",
         labelColumn = "name",
-        blocks = variants.map { FlowAppendixBlock(it.designation, it.rows().records()) },
+        blocks = variants.map { FlowAppendixBlock(it.designation, it.rows().records(), it.kitsFlow()) },
     )
 }
 
 internal const val VARIANTS_TITLE = "Переменные данные для исполнений"
+
+// The blocks of the kits without a specification, after the kits rows of the main table; null when there are none.
+// The title is drawn only when the main table has no kits rows (the group KIT is skipped then).
+internal fun SpecificationData.kitsFlow(): FlowKits? = kitsFlow(kits, kitBlocks)
+
+// The same for a block of an execution: its kits rows and its kit blocks.
+private fun SpecificationVariant.kitsFlow(): FlowKits? = kitsFlow(kits, kitBlocks)
+
+private fun kitsFlow(kits: List<KitItem>, kitBlocks: List<KitBlock>): FlowKits? {
+    if (kitBlocks.isEmpty()) return null
+    return FlowKits(
+        blocks = kitBlocks.map { FlowKitBlock(it.label, it.rows().records()) },
+        labelColumn = "name",
+        title = KITS_TITLE.takeIf { kits.isEmpty() },
+    )
+}
+
+// The title of the kits section (the group title of the kits in the flow table, gost-spec.yaml).
+internal const val KITS_TITLE = "Комплекты"
 
 // The notes of the kits with a purpose, after the variants part: the text of every note in its own row spanning the
 // designation and the name columns, null when there is no note.
@@ -70,6 +91,9 @@ private class ItemRow(
 private fun SpecificationData.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials, kits)
 
 private fun SpecificationVariant.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials, kits)
+
+// The rows of a kit block: its sections (without kits: a kit inside a kit is not shown).
+private fun KitBlock.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials, emptyList())
 
 private fun sectionRows(
     documentation: List<DocumentationItem>,

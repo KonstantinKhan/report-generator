@@ -50,6 +50,50 @@ class ProductNodeVariantsTest : ShouldSpec({
     fun withVariants(root: PdmNode, vararg variants: PdmNode): PdmNode =
         root.copy(usages = root.usages + variants.map { VariantUsage(target = it) })
 
+    should("put a kit that is in one execution only into the block of this execution, not into the main part") {
+        val kit = PdmNode(
+            id = PdmNodeId(30),
+            kind = PdmNodeKind.Kit,
+            attributes = mapOf(
+                AttributeKey.Designation to AttributeValue.Text("КМП.30"),
+                AttributeKey.Name to AttributeValue.Text("Комплект 30"),
+            ),
+            usages = listOf(link(part(31), 1.0)),
+        )
+        val root = withVariants(
+            execution("ИЗД.001", link(part(2), 1.0)),
+            execution("ИЗД.001-02", link(part(2), 1.0), link(kit, 1.0)),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.kitBlocks.shouldBeEmpty()
+        data.variants.single().kitBlocks shouldBe listOf(
+            KitBlock(label = "Комплект 30", parts = listOf(PartItem(designation = "АБ.31", name = "Деталь 31", quantity = 1.0))),
+        )
+    }
+
+    should("put a kit that is in every execution with the same quantity into the main part") {
+        val kit = PdmNode(
+            id = PdmNodeId(30),
+            kind = PdmNodeKind.Kit,
+            attributes = mapOf(
+                AttributeKey.Designation to AttributeValue.Text("КМП.30"),
+                AttributeKey.Name to AttributeValue.Text("Комплект 30"),
+            ),
+            usages = listOf(link(part(31), 1.0)),
+        )
+        val root = withVariants(
+            execution("ИЗД.001", link(kit, 1.0)),
+            execution("ИЗД.001-02", link(kit, 1.0)),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.kitBlocks.map { it.label } shouldBe listOf("Комплект 30")
+        data.variants.shouldBeEmpty()
+    }
+
     should("have no variant blocks and keep every item when the root has no variants") {
         val root = execution("ИЗД.001", link(part(2), 1.0), link(part(3), 2.0))
 

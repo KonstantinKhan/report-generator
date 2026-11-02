@@ -216,7 +216,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 | Прочее изделие | `Other` | Прочие изделия (`others`) |
 | Материал по КД | `Material` | Материалы (`materials`) |
 | Форма материала | `MaterialForm` (id `MATERIAL_FORM`) | Материалы (`materials`) через материал по «Изготавливается из ...» (см. ниже) |
-| Комплект | `Kit` | Комплекты (`kits`), если есть Спецификация и нет назначения; с назначением — примечание в хвосте таблицы; без обоих — пропускается (часть C) |
+| Комплект | `Kit` | Комплекты (`kits`), если есть Спецификация и нет назначения; с назначением — примечание в хвосте таблицы; без обоих — блок состава комплекта в разделе «Комплекты» (состав дозапрашивается, см. ниже) |
 
 Связи: `relations` в YAML — список правил («Состоит из ...» → `COMPOSITION`, «Документы» → `DOCUMENT`,
 «Технологическая ДСЕ для» → `TECHNOLOGICAL_PART`; правила — в [«Правила связей»](#правила-связей-relations)). Состав идёт по `COMPOSITION`,
@@ -280,6 +280,14 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 в `link.attributes`): читается для членов производственных групп замен, см. [specification-table-format.md](specification-table-format.md) («Производственные группы»).
 Назначение комплекта — `LinkAttributeKey.KitPurpose` (атрибут связи «Назначение комплекта», relation COMPOSITION, ключ `kitPurpose`):
 комплект с непустым значением не выводится в разделах, а даёт примечание в хвосте таблицы (см. [specification-table-format.md](specification-table-format.md#хвост-таблицы-примечания-комплектов)).
+
+**Дозапрос состава комплектов.** Запрос дерева спецификации (`specificationQuery`) раскрывает состав на один уровень, поэтому
+состав комплекта в дереве корня и исполнений не приходит (документы комплекта приходят). Для каждого комплекта без
+назначения и без документа «Спецификация» (в корне и в каждом исполнении) `loadSpecificationStructure`
+(`reports/specification/SpecificationQuery.kt`) читает его отдельно: `specificationQuery(kitId, variants = false)` через
+`loadTrees` в той же сессии (`loadSession`). Комплект, общий для нескольких исполнений, читается один раз. Прочитанный узел
+подставляется копией в `CompositionUsage.target` узла комплекта. Состав комплекта внутри комплекта не читается.
+Вывод блоков — [specification-table-format.md](specification-table-format.md#блоки-комплектов-без-спецификации).
 Правила записи в колонки «Формат» и «Примечание» (сложный формат `*)`, единица материала первой строкой) — в
 [specification-table-format.md](specification-table-format.md#правила-формата-и-примечаний-спецификации).
 

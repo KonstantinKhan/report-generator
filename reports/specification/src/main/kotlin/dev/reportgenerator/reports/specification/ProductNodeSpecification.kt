@@ -20,7 +20,9 @@ import java.math.RoundingMode
 //
 // Kits (комплекты): a kit with the purpose («Назначение комплекта», link attribute) is not an item of any section, it
 // gives the note of the sheet instead (`kitNotes`, from the root and every execution). A kit without the purpose and with
-// a specification (a DOCUMENT usage of the kind Specification) is a row of the kits section.
+// a specification (a DOCUMENT usage of the kind Specification) is a row of the kits section. A kit without the purpose
+// and without a specification is a block of its composition (`kitBlocks`), in the main part or in the block of every
+// execution it is in, as the other items. A kit inside such a kit is not shown.
 //
 // Variants (исполнения, связь VariantUsage от корня): an item is common when every execution (the root and each
 // variant) has it with the same object id and the same quantity. Common items stay in the main part; every other item
@@ -61,6 +63,7 @@ fun PdmNode.toSpecificationData(): SpecificationData {
             others = sections.others,
             materials = sections.materials,
             kits = sections.kits,
+            kitBlocks = sections.kitBlocks,
         )
     }.filterNot { it.isEmpty() }
 
@@ -79,6 +82,7 @@ fun PdmNode.toSpecificationData(): SpecificationData {
         others = main.others,
         materials = main.materials,
         kits = main.kits,
+        kitBlocks = main.kitBlocks,
         variants = variants,
         kitNotes = kitNotes,
     )
@@ -93,6 +97,7 @@ private class Sections(
     val others: List<OtherItem>,
     val materials: List<MaterialItem>,
     val kits: List<KitItem>,
+    val kitBlocks: List<KitBlock>,
 )
 
 private fun PdmNode.sectionsOf(replacements: Map<Int, ReplacementNote>, keep: (ItemKey) -> Boolean): Sections {
@@ -109,9 +114,10 @@ private fun PdmNode.sectionsOf(replacements: Map<Int, ReplacementNote>, keep: (I
         others = composition.ofKind(PdmNodeKind.Other).map { it.toOtherItem(replacements) }.sortedByPosition(),
         materials = composition.filter { it.target.kind in materialKinds }
             .map { it.toMaterialItem(replacements) }.sortedByPosition(),
-        // TODO part C: a kit without a specification (and without the purpose) is skipped; its nested sections are not implemented.
         kits = composition.ofKind(PdmNodeKind.Kit).filter { it.target.hasSpecification() }
             .map { it.toKitItem(replacements) }.sortedByPosition(),
+        kitBlocks = composition.ofKind(PdmNodeKind.Kit).filterNot { it.target.hasSpecification() }
+            .sortedByUsagePosition().map { it.toKitBlock() }.filterNot { it.isEmpty() },
     )
 }
 
@@ -129,11 +135,11 @@ private fun PdmNode.specificationKeys(): Set<ItemKey> =
 
 // Purpose of a kit (link attribute «Назначение комплекта»): the text of the attribute, null for any other usage, a kit
 // without the purpose, or a blank purpose.
-private fun CompositionUsage.kitPurpose(): String? =
+internal fun CompositionUsage.kitPurpose(): String? =
     if (target.kind == PdmNodeKind.Kit) attributes[LinkAttributeKey.KitPurpose].textOrNull() else null
 
 // A kit has a specification when one of its documents is of the kind Specification.
-private fun PdmNode.hasSpecification(): Boolean =
+internal fun PdmNode.hasSpecification(): Boolean =
     usages.filterIsInstance<DocumentUsage>().any { it.target.kind == PdmNodeKind.Specification }
 
 // The note of a kit with the purpose: "Примечание - <обозначение> - <наименование> <значение>". A kit without
@@ -208,6 +214,14 @@ private fun <T : PositionedItem> List<T>.sortedByPosition(): List<T> {
 
 private fun List<CompositionUsage>.ofKind(kind: PdmNodeKind): List<CompositionUsage> =
     filter { it.target.kind == kind }
+
+// The same order as [sortedByPosition], for the usages: by position, then by designation or name.
+private fun List<CompositionUsage>.sortedByUsagePosition(): List<CompositionUsage> {
+    val (positioned, unpositioned) = partition { it.positionOf() != null }
+    return positioned.sortedBy { it.positionOf() } + unpositioned.sortedBy { usage ->
+        usage.target.designationAndName().let { (designation, name) -> designation ?: name }
+    }
+}
 
 private fun PdmNode.toDocumentationItem(): DocumentationItem {
     val (designation, name) = designationAndName()
@@ -290,6 +304,23 @@ private fun CompositionUsage.toKitItem(replacements: Map<Int, ReplacementNote>):
         zone = zone.column,
         format = format.column,
         notes = fields.notes(format.notes + zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf())),
+    )
+}
+
+// A kit without a specification as a block: the sections of its composition, with the replacement notes of the kit itself.
+// The kit's own kits are not read into the block (a kit inside a kit is not supported).
+private fun CompositionUsage.toKitBlock(): KitBlock {
+    val kit = target
+    val (_, name) = kit.designationAndName()
+    val sections = kit.sectionsOf(ReplacementNotes.of(kit)) { true }
+    return KitBlock(
+        label = name,
+        documentation = sections.documentation,
+        assemblies = sections.assemblies,
+        parts = sections.parts,
+        standards = sections.standards,
+        others = sections.others,
+        materials = sections.materials,
     )
 }
 

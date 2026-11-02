@@ -18,6 +18,7 @@ class KitsSectionTest : ShouldSpec({
         kits: List<KitItem> = emptyList(),
         kitNotes: List<String> = emptyList(),
         variants: List<SpecificationVariant> = emptyList(),
+        kitBlocks: List<KitBlock> = emptyList(),
     ) = SpecificationData(
         documentDesignation = "AAA.00.000",
         documentName = "Изделие",
@@ -25,7 +26,23 @@ class KitsSectionTest : ShouldSpec({
         kits = kits,
         variants = variants,
         kitNotes = kitNotes,
+        kitBlocks = kitBlocks,
     )
+
+    // The kit block of the tests: one part.
+    fun kitBlock(label: String) = KitBlock(
+        label = label,
+        parts = listOf(PartItem(position = 1, designation = "AAA.04.B1", name = "Деталь", quantity = 1.0)),
+    )
+
+    // One element as a short label: a blank row "_", a row of the name column, a group by its title, a span row by its text.
+    // The name column is the index 4 of the gost-spec columns (format, zone, position, designation, name, quantity, note).
+    fun IrTableElement.label(): String = when (this) {
+        is IrRow -> if (cells.all { it.text.isEmpty() }) "_" else cells[4].text
+        is IrGroup -> "group:$title"
+        is IrSpanRow -> "span:${cell.text}"
+    }
+
 
     fun kit(designation: String) = KitItem(designation = designation, name = "Комплект", quantity = 1.0)
 
@@ -36,6 +53,8 @@ class KitsSectionTest : ShouldSpec({
 
     fun content(data: SpecificationData): List<IrTableElement> =
         specification(data).elements.filterIsInstance<IrTable>().single().content
+
+    fun labels(data: SpecificationData): List<String> = content(data).map { it.label() }
 
     fun IrTableElement.isBlank() = this is IrRow && cells.all { it.text.isEmpty() }
 
@@ -71,5 +90,35 @@ class KitsSectionTest : ShouldSpec({
         noteIndex shouldBe elements.lastIndex
         (1..4).all { elements[noteIndex - it].isBlank() } shouldBe true
         elements[noteIndex - 5].shouldBeInstanceOf<IrGroup>()
+    }
+
+    should("put the kit blocks after the kits group: 3 blank rows, the name of the kit, a blank row, then its groups") {
+        labels(data(kits = listOf(kit("AAA.02.001")), kitBlocks = listOf(kitBlock("Комплект 2")))).takeLast(7) shouldBe
+            listOf("group:Комплекты", "_", "_", "_", "Комплект 2", "_", "group:Детали")
+    }
+
+    should("write the title Комплекты with the spacers of the group title before the blocks when there are no kit rows") {
+        labels(data(kitBlocks = listOf(kitBlock("Комплект 2")))).takeLast(10) shouldBe
+            listOf("_", "_", "Комплекты", "_", "_", "_", "_", "Комплект 2", "_", "group:Детали")
+    }
+
+    should("keep the spacers, the name of a kit block and its blank row with the first data line") {
+        val elements = content(data(kitBlocks = listOf(kitBlock("Комплект 2"))))
+        val label = elements.indexOfFirst { it is IrRow && it.cells[4].text == "Комплект 2" }
+
+        (label - 3..label + 1).forEach { (elements[it] as IrRow).constraints.keepWithNext shouldBe true }
+        (elements[label + 2] as IrGroup).title shouldBe "Детали"
+    }
+
+    should("put the kit blocks of an execution after its groups in its block, with the title when it has no kit rows") {
+        val variant = SpecificationVariant(
+            designation = "AAA.00.000-02",
+            parts = listOf(PartItem(position = 1, designation = "AAA.03.B1", name = "Вал", quantity = 1.0)),
+            kitBlocks = listOf(kitBlock("Комплект 3")),
+        )
+
+        labels(data(variants = listOf(variant))).takeLast(13) shouldBe listOf(
+            "group:Детали", "_", "_", "Комплекты", "_", "_", "_", "_", "Комплект 3", "_", "group:Детали", "_", "_",
+        )
     }
 })

@@ -7,6 +7,7 @@ import dev.reportgenerator.template.DataValue
 // groups of the block's rows (the groupBy of the table). Blank bordered rows are the spacers: `spacersBeforeTitle`
 // before the title, `spacersBeforeLabel` between the title and a label, `spacersAfterBlock` after each block.
 // The title, the label and the spacers between them stay with the first data line of the block (keep chain).
+// A block may carry the kits blocks of its execution (`kits`), drawn after its groups and before its spacers.
 data class FlowAppendix(
     val title: String,
     val titleFrom: String,
@@ -19,4 +20,4 @@ data class FlowAppendix(
 )
 
 // `rows` are `item` records of the table's schema, grouped like the main rows.
-data class FlowAppendixBlock(val label: String, val rows: List<DataValue.Record>)
+data class FlowAppendixBlock(val label: String, val rows: List<DataValue.Record>, val kits: FlowKits? = null)
