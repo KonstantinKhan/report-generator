@@ -216,7 +216,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 | Прочее изделие | `Other` | Прочие изделия (`others`) |
 | Материал по КД | `Material` | Материалы (`materials`) |
 | Форма материала | `MaterialForm` (id `MATERIAL_FORM`) | Материалы (`materials`) через материал по «Изготавливается из ...» (см. ниже) |
-| Комплект | `Kit` | — (раздела нет, пропускается) |
+| Комплект | `Kit` | Комплекты (`kits`), если есть Спецификация и нет назначения; с назначением — примечание в хвосте таблицы; без обоих — пропускается (часть C) |
 
 Связи: `relations` в YAML — список правил («Состоит из ...» → `COMPOSITION`, «Документы» → `DOCUMENT`,
 «Технологическая ДСЕ для» → `TECHNOLOGICAL_PART`; правила — в [«Правила связей»](#правила-связей-relations)). Состав идёт по `COMPOSITION`,
@@ -278,6 +278,8 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 документа, `Note` — атрибут связи состава. Примечание состава — `LinkAttributeKey.Note`, зона — `LinkAttributeKey.Zone` (атрибут связи «Зона», relation COMPOSITION) из `CompositionUsage.attributes`.
 Способ применения — `LinkAttributeKey.ApplicationMethod` (атрибут связи «Способ применения», relation COMPOSITION, ключ `applicationMethod`
 в `link.attributes`): читается для членов производственных групп замен, см. [specification-table-format.md](specification-table-format.md) («Производственные группы»).
+Назначение комплекта — `LinkAttributeKey.KitPurpose` (атрибут связи «Назначение комплекта», relation COMPOSITION, ключ `kitPurpose`):
+комплект с непустым значением не выводится в разделах, а даёт примечание в хвосте таблицы (см. [specification-table-format.md](specification-table-format.md#хвост-таблицы-примечания-комплектов)).
 Правила записи в колонки «Формат» и «Примечание» (сложный формат `*)`, единица материала первой строкой) — в
 [specification-table-format.md](specification-table-format.md#правила-формата-и-примечаний-спецификации).
 
@@ -366,10 +368,10 @@ kinds:                      # имя типа в PDM -> id вида (точно�
 relations:                  # правила связей: список (см. «Правила связей»)
   - link: "Состоит из ..."  # прямое имя типа связи в Loodsman
     as: COMPOSITION         # смысл в домене (Relation)
-    from: [Сборочная единица]
+    from: [Сборочная единица, Комплект]
   - link: "Документы"
     as: DOCUMENT
-    from: [Сборочная единица, Деталь, Прочее изделие]
+    from: [Сборочная единица, Деталь, Прочее изделие, Комплект]
   - link: "Технологическая ДСЕ для"
     direction: INVERSE      # по умолчанию FORWARD
     from: [Деталь]          # с каких типов узлов читать; пусто — любые
@@ -422,6 +424,9 @@ link:
     applicationMethod:
       - relation: COMPOSITION
         name: Способ применения
+    kitPurpose:
+      - relation: COMPOSITION
+        name: Назначение комплекта
 
 onUnmapped:
   kind: KEEP
@@ -471,7 +476,8 @@ onUnmapped:
 отсеивается до запроса: узел без подходящих правил не получает ни одного вызова `linkedObjects`.
 
 **Цена ошибки в `from` — тихая.** Дети типов вне списка не загружаются и в `usages` не попадают без единой ошибки.
-Пример: `from: [Сборочная единица]` на `COMPOSITION` отсекает состав комплексов, комплектов и тех. ДСЕ, а заодно
+Пример: `from: [Сборочная единица]` на `COMPOSITION` отсекал бы состав комплектов (сейчас в `from` добавлен «Комплект»;
+комплексы и тех. ДСЕ отсечены), а заодно
 лишает обход рёбер, через которые раньше находились циклы. Поэтому `from` сужают, только когда типы-носители связи
 заведомо известны; типовой случай — `from` на `DOCUMENT` (документы держат сборочные единицы и детали, а запрос
 документов у документов — почти всегда пустой). Валидатор проверяет каждый тип из `from`: существование в

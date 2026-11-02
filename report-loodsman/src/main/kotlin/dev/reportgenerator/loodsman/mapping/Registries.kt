@@ -52,7 +52,8 @@ object Registries {
             "position" to LinkAttributeKey.Position,
             "note" to LinkAttributeKey.Note,
             "zone" to LinkAttributeKey.Zone,
-            "applicationMethod" to LinkAttributeKey.ApplicationMethod
+            "applicationMethod" to LinkAttributeKey.ApplicationMethod,
+            "kitPurpose" to LinkAttributeKey.KitPurpose
         )
     )
 }

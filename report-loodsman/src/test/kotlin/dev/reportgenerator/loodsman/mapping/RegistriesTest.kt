@@ -73,10 +73,15 @@ class RegistriesTest : ShouldSpec({
             Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.Note)
             Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.Zone)
             Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.ApplicationMethod)
+            Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.KitPurpose)
         }
 
         should("resolve the application method id of the mapping to its domain key") {
             Registries.linkAttributeKeys.resolve("applicationMethod") shouldBe LinkAttributeKey.ApplicationMethod
+        }
+
+        should("resolve the kit purpose id of the mapping to its domain key") {
+            Registries.linkAttributeKeys.resolve("kitPurpose") shouldBe LinkAttributeKey.KitPurpose
         }
 
         should("throw error for unknown link attribute key") {

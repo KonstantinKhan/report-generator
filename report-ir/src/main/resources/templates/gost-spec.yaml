@@ -187,7 +187,7 @@ blocks:
   # titles, numbering, how a value is shown); how it is measured, wrapped and paginated is the layout engine's
   # job. The code (reports/specification) only supplies the typed row record `item` (raw values):
   #   item.position Integer (absent = empty), item.designation String (absent = empty), item.name String,
-  #   item.section Enum(DOCUMENTATION|ASSEMBLY|PART|STANDARD|OTHER|MATERIAL) = the section of the row,
+  #   item.section Enum(DOCUMENTATION|ASSEMBLY|PART|STANDARD|OTHER|MATERIAL|KIT) = the section of the row,
   #   item.quantity Decimal (absent for documentation and for a non-basic item of a replacement), item.format String (absent = empty), item.zone String (absent = empty),
   #   item.notes String (absent = empty, one note per line; a material has its unit as the first note).
   # Columns: 6+6+8+70+63+10+22 = 185 mm = the sheet's content width (checked, no tolerance).
@@ -202,10 +202,10 @@ blocks:
       styles: {head: tableHeader, data: tableText, groupTitle: groupHeader}
       # Sections in GOST R 2.106-2019 p.1 order. A section without items makes no group (skipEmpty). The rows come
       # in the order the code gives them: sorted by position inside each section, no sortBy here.
-      # Complex, software and kit sections are not in the model yet, so they have no title here.
+      # Complex and software sections are not in the model yet, so they have no title here.
       groupBy:
         field: section
-        order: [DOCUMENTATION, ASSEMBLY, PART, STANDARD, OTHER, MATERIAL]
+        order: [DOCUMENTATION, ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, KIT]
         titles:
           DOCUMENTATION: "Документация"
           ASSEMBLY: "Сборочные единицы"
@@ -213,6 +213,7 @@ blocks:
           STANDARD: "Стандартные изделия"
           OTHER: "Прочие изделия"
           MATERIAL: "Материалы"
+          KIT: "Комплекты"
         skipEmpty: true
       columns:
         - {id: format, width: 6, stick: first, align: center}

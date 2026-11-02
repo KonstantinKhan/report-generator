@@ -2,6 +2,7 @@ package dev.reportgenerator.reports.specification
 
 import dev.reportgenerator.ir.FlowAppendix
 import dev.reportgenerator.ir.FlowAppendixBlock
+import dev.reportgenerator.ir.FlowNotes
 import dev.reportgenerator.template.DataContext
 import dev.reportgenerator.template.DataValue
 import dev.reportgenerator.template.RecordBuilder
@@ -40,12 +41,19 @@ internal fun SpecificationData.variantAppendix(): FlowAppendix? {
 
 internal const val VARIANTS_TITLE = "Переменные данные для исполнений"
 
+// The notes of the kits with a purpose, after the variants part: the text of every note in its own row spanning the
+// designation and the name columns, null when there is no note.
+internal fun SpecificationData.kitNoteTail(): FlowNotes? {
+    if (kitNotes.isEmpty()) return null
+    return FlowNotes(texts = kitNotes, spanFrom = "designation", spanTo = "name")
+}
+
 private fun List<ItemRow>.records(): List<DataValue.Record> = map { row ->
     dataContext { item { itemFields(row) } }.get("item") as DataValue.Record
 }
 
 // Section of a row: the template groups the rows by it, in the order of GOST R 2.106-2019 p.1.
-private enum class SpecificationSection { DOCUMENTATION, ASSEMBLY, PART, STANDARD, OTHER, MATERIAL }
+private enum class SpecificationSection { DOCUMENTATION, ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, KIT }
 
 // One row of the sheet, the fields of all sections in one shape (the section tells which of them are set).
 private class ItemRow(
@@ -59,9 +67,9 @@ private class ItemRow(
     val notes: List<String> = emptyList(),
 )
 
-private fun SpecificationData.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials)
+private fun SpecificationData.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials, kits)
 
-private fun SpecificationVariant.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials)
+private fun SpecificationVariant.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials, kits)
 
 private fun sectionRows(
     documentation: List<DocumentationItem>,
@@ -70,6 +78,7 @@ private fun sectionRows(
     standards: List<StandardItem>,
     others: List<OtherItem>,
     materials: List<MaterialItem>,
+    kits: List<KitItem>,
 ): List<ItemRow> =
     documentation.map {
         ItemRow(SpecificationSection.DOCUMENTATION, designation = it.designation, name = it.name, format = it.format, notes = it.notes)
@@ -83,6 +92,8 @@ private fun sectionRows(
         ItemRow(SpecificationSection.OTHER, it.position, it.designation, it.name, it.quantity, zone = it.zone, notes = it.notes)
     } + materials.map {
         ItemRow(SpecificationSection.MATERIAL, it.position, it.designation, it.name, it.quantity, zone = it.zone, notes = it.notes)
+    } + kits.map {
+        ItemRow(SpecificationSection.KIT, it.position, it.designation, it.name, it.quantity, zone = it.zone, format = it.format, notes = it.notes)
     }
 
 private fun RecordBuilder.itemFields(row: ItemRow?) {

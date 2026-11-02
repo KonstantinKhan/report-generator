@@ -4,6 +4,7 @@ import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
 import dev.reportgenerator.domain.Field
+import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.PdmNodeKind
@@ -166,6 +167,53 @@ class ProductNodeVariantsTest : ShouldSpec({
 
         data.variants.map { it.designation } shouldBe listOf("ИЗД.001", "ИЗД.001-2", "ИЗД.001-2")
         data.variants.drop(1).map { it.parts.single().designation } shouldBe listOf("АБ.31", "АБ.32")
+    }
+
+    // A kit with the purpose («Назначение комплекта») of the usage: a note, not an item of the executions.
+    fun kitLink(kit: PdmNode, purpose: String) = CompositionUsage(
+        target = kit,
+        position = Field.Missing,
+        quantity = Quantity.Exact(1.0),
+        unit = Field.Missing,
+        attributes = mapOf(LinkAttributeKey.KitPurpose to AttributeValue.Text(purpose)),
+    )
+
+    fun kit(id: Int) = PdmNode(
+        id = PdmNodeId(id),
+        kind = PdmNodeKind.Kit,
+        attributes = mapOf(
+            AttributeKey.Designation to AttributeValue.Text("КМП.$id"),
+            AttributeKey.Name to AttributeValue.Text("Комплект $id"),
+        ),
+    )
+
+    should("not make an execution differ by a kit with the purpose: no variant block for it") {
+        val root = withVariants(
+            execution("ИЗД.001", link(part(2), 1.0), kitLink(kit(9), "Для сборки")),
+            execution("ИЗД.001-02", link(part(2), 1.0), link(part(3), 1.0)),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.variants.single().designation shouldBe "ИЗД.001-02"
+        data.variants.single().parts.map { it.designation } shouldBe listOf("АБ.3")
+        data.variants.single().kits shouldBe emptyList()
+        data.kitNotes shouldBe listOf("Примечание - КМП.9 - Комплект 9 Для сборки")
+    }
+
+    should("write one note per kit and purpose from the root and every execution, the root first") {
+        val root = withVariants(
+            execution("ИЗД.001", kitLink(kit(9), "Для сборки"), kitLink(kit(8), "Для ремонта")),
+            execution("ИЗД.001-02", kitLink(kit(9), "Для сборки"), kitLink(kit(9), "Для ремонта"), link(part(3), 1.0)),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.kitNotes shouldBe listOf(
+            "Примечание - КМП.9 - Комплект 9 Для сборки",
+            "Примечание - КМП.8 - Комплект 8 Для ремонта",
+            "Примечание - КМП.9 - Комплект 9 Для ремонта",
+        )
     }
 
     should("compare designations by number of the digit runs and ignore the case of the text") {

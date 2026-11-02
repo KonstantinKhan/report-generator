@@ -9,5 +9,7 @@ sealed interface LinkAttributeKey {
 
     data object ApplicationMethod : LinkAttributeKey
 
+    data object KitPurpose : LinkAttributeKey
+
     data class Unmapped(val pdmName: String) : LinkAttributeKey
 }

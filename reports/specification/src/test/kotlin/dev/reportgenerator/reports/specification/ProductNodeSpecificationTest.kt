@@ -71,6 +71,7 @@ private fun composition(
     note: AttributeValue? = null,
     zone: AttributeValue? = null,
     applicationMethod: AttributeValue? = null,
+    kitPurpose: AttributeValue? = null,
     linkId: Int? = null,
 ) = CompositionUsage(
     target = child,
@@ -81,6 +82,7 @@ private fun composition(
         note?.let { put(LinkAttributeKey.Note, it) }
         zone?.let { put(LinkAttributeKey.Zone, it) }
         applicationMethod?.let { put(LinkAttributeKey.ApplicationMethod, it) }
+        kitPurpose?.let { put(LinkAttributeKey.KitPurpose, it) }
     },
     linkId = linkId,
 )
@@ -157,7 +159,7 @@ class ProductNodeSpecificationTest : ShouldSpec({
         data.materials.map { it.name } shouldBe listOf("АБ.6")
     }
 
-    should("skip complex and kit usages without failing") {
+    should("skip a complex usage and a kit without a specification or a purpose without failing") {
         val data = root(
             composition(node(2, kind = PdmNodeKind.Complex)),
             composition(node(3, kind = PdmNodeKind.Kit)),
@@ -169,6 +171,54 @@ class ProductNodeSpecificationTest : ShouldSpec({
             "Изделие",
             parts = listOf(PartItem(designation = "АБ.4", name = "Имя 4", quantity = 1.0)),
         )
+    }
+
+    should("give a kit with the purpose a note and keep it out of the sections") {
+        val kit = node(
+            2,
+            kind = PdmNodeKind.Kit,
+            usages = listOf(documentWith(PdmNodeKind.Specification, AttributeValue.Text("А4"))),
+        )
+        val data = root(composition(kit, kitPurpose = AttributeValue.Text("Для сборки"))).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.kitNotes shouldBe listOf("Примечание - АБ.2 - Имя 2 Для сборки")
+    }
+
+    should("write the note of a kit without designation with the name only") {
+        val kit = node(2, kind = PdmNodeKind.Kit, designation = AttributeValue.Empty)
+        val data = root(composition(kit, kitPurpose = AttributeValue.Text("Для сборки"))).toSpecificationData()
+
+        data.kitNotes shouldBe listOf("Примечание - Имя 2 Для сборки")
+    }
+
+    should("treat a blank kit purpose as no purpose: no note and no row for a kit without specification") {
+        val data = root(composition(node(2, kind = PdmNodeKind.Kit), kitPurpose = AttributeValue.Text("   "))).toSpecificationData()
+
+        data shouldBe SpecificationData("ИЗД.001", "Изделие")
+    }
+
+    should("put a kit with a specification and no purpose into the kits section with its format and position") {
+        val kit = node(
+            2,
+            kind = PdmNodeKind.Kit,
+            usages = listOf(documentWith(PdmNodeKind.Specification, AttributeValue.Text("А4"))),
+        )
+        val data = root(composition(kit, Quantity.Exact(2.0), position = Field.Value(3), zone = AttributeValue.Text("1А"))).toSpecificationData()
+
+        data.kits shouldBe listOf(KitItem(position = 3, designation = "АБ.2", name = "Имя 2", quantity = 2.0, zone = "1А", format = "А4"))
+        data.kitNotes shouldBe emptyList()
+    }
+
+    should("take the notes of a kit item like the notes of an assembly unit") {
+        val kit = node(
+            2,
+            kind = PdmNodeKind.Kit,
+            usages = listOf(documentWith(PdmNodeKind.Specification, AttributeValue.Text("2хА0"))),
+        )
+        val data = root(composition(kit, Quantity.Range(1.0, 3.0), note = AttributeValue.Text("Прим."))).toSpecificationData()
+
+        data.kits.single().notes shouldBe listOf("*)2хА0", "Наиб. кол. 3", "Прим.")
     }
 
     should("drop specification and detail drawings from the composition and from the documents") {

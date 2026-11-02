@@ -11,9 +11,13 @@ data class SpecificationData(
     val standards: List<StandardItem> = emptyList(),
     val others: List<OtherItem> = emptyList(),
     val materials: List<MaterialItem> = emptyList(),
+    val kits: List<KitItem> = emptyList(),
     // Переменные данные исполнений: блоки в порядке связи, основное исполнение первым. Пусто, если исполнений нет
     // или ни в одном исполнении нет уникальных элементов.
     val variants: List<SpecificationVariant> = emptyList(),
+    // Notes of the kits with a purpose (link attribute "Назначение комплекта"): one text per kit and purpose, from the
+    // root and every execution. They go to the tail of the table, after the variants part.
+    val kitNotes: List<String> = emptyList(),
 )
 
 // One execution (исполнение) of the product in the "Переменные данные для исполнений" section: its designation and the
@@ -26,9 +30,10 @@ data class SpecificationVariant(
     val standards: List<StandardItem> = emptyList(),
     val others: List<OtherItem> = emptyList(),
     val materials: List<MaterialItem> = emptyList(),
+    val kits: List<KitItem> = emptyList(),
 ) {
     fun isEmpty(): Boolean = documentation.isEmpty() && assemblies.isEmpty() && parts.isEmpty() &&
-        standards.isEmpty() && others.isEmpty() && materials.isEmpty()
+        standards.isEmpty() && others.isEmpty() && materials.isEmpty() && kits.isEmpty()
 }
 
 // Common part of the items that take a row of a section. `position` = null when the item has no position.
@@ -94,5 +99,16 @@ data class MaterialItem(
     override val name: String,
     val quantity: Double?,
     val zone: String? = null,
+    val notes: List<String> = emptyList(),
+) : PositionedItem
+
+// A kit with a specification: the same cells as an assembly unit; the format is the format of the kit's specification.
+data class KitItem(
+    override val position: Int? = null,
+    override val designation: String? = null,
+    override val name: String,
+    val quantity: Double?,
+    val zone: String? = null,
+    val format: String? = null,
     val notes: List<String> = emptyList(),
 ) : PositionedItem

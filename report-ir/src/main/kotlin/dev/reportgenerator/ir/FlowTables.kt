@@ -41,7 +41,8 @@ object FlowTables {
         schema: DataSchema,
         rows: List<DataValue.Record>,
         path: String = "table",
-        appendix: FlowAppendix? = null
+        appendix: FlowAppendix? = null,
+        notes: FlowNotes? = null
     ): IrTable {
         TemplateContract.requireFlowTable(spec, schema, path)
         val shaped = FlowShaper.shapeTable(spec, schema, rows)
@@ -133,12 +134,13 @@ object FlowTables {
 
         fun groupElement(g: ShapedGroup) = IrGroup(requireNotNull(g.title), g.rows.map(::row), footer = g.totals.map(::totalRow))
 
+        fun blank(constraints: LayoutConstraints = LayoutConstraints.Default) = IrRow(columns.map { IrCell("") }, constraints)
+
         // The appendix: the same groups per block (its own rows), spacers and a title/label kept with the first data line.
         fun appendixElements(a: FlowAppendix): List<IrTableElement> {
             require(spec.groupBy != null) { "$path: a flow table with an appendix needs groupBy" }
             val keep = LayoutConstraints(keepWithNext = true)
             val titleStyle = groupTitle.style
-            fun blank(constraints: LayoutConstraints = LayoutConstraints.Default) = IrRow(columns.map { IrCell("") }, constraints)
             fun labelRow(text: String) = IrRow(
                 spec.columns.map { column ->
                     if (column.id == a.labelColumn) IrCell(text, style = titleStyle, align = groupTitle.align)
@@ -159,13 +161,22 @@ object FlowTables {
             return out
         }
 
+        // The notes after the appendix: blank rows, then one spanning row per text in the data style of the span's first column.
+        fun notesElements(n: FlowNotes): List<IrTableElement> {
+            val textStyle = rowStyles.getValue(n.spanFrom)
+            val out = mutableListOf<IrTableElement>()
+            repeat(n.blankRows) { out += blank() }
+            n.texts.forEach { out += IrSpanRow(IrCell(it, style = textStyle, align = TextAlign.LEFT), n.spanFrom, n.spanTo) }
+            return out
+        }
+
         val mainContent: List<IrTableElement> = if (spec.groupBy == null) shaped.groups.flatMap { it.rows }.map(::row)
         else shaped.groups.map(::groupElement)
 
         return IrTable(
             columns = columns,
             header = header,
-            content = mainContent + appendix?.let(::appendixElements).orEmpty(),
+            content = mainContent + appendix?.let(::appendixElements).orEmpty() + notes?.let(::notesElements).orEmpty(),
             rowHeight = spec.rowHeight.mm,
             groupTitle = groupTitle,
             fillBlank = spec.fill == FlowFill.BLANK,

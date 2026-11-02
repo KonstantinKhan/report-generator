@@ -14,13 +14,16 @@ kinds:
 relations:
   - link: "Состоит из ..."
     as: COMPOSITION
-    from: [Сборочная единица]
+    from:
+      - Сборочная единица
+      - Комплект
   - link: "Документы"
     as: DOCUMENT
     from:
       - Сборочная единица
       - Деталь
       - Прочее изделие
+      - Комплект
   - link: "Технологическая ДСЕ для"
     direction: INVERSE
     from: [Деталь]
@@ -81,6 +84,9 @@ link:
     applicationMethod:
       - relation: COMPOSITION
         name: Способ применения
+    kitPurpose:
+      - relation: COMPOSITION
+        name: Назначение комплекта
 
 onUnmapped:
   kind: KEEP
