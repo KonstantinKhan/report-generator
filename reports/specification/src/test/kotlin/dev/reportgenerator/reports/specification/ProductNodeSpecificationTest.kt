@@ -1,18 +1,20 @@
 package dev.reportgenerator.reports.specification
 
+import dev.reportgenerator.domain.AttributeKey
+import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
-import dev.reportgenerator.domain.Designation
 import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
-import dev.reportgenerator.domain.ItemKind
-import dev.reportgenerator.domain.Name
-import dev.reportgenerator.domain.ProductId
-import dev.reportgenerator.domain.ProductKind
-import dev.reportgenerator.domain.ProductNode
+import dev.reportgenerator.domain.LinkAttributeKey
+import dev.reportgenerator.domain.MadeFromUsage
+import dev.reportgenerator.domain.PdmNodeId
+import dev.reportgenerator.domain.PdmNodeKind
+import dev.reportgenerator.domain.PdmNode
 import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.Relation
-import dev.reportgenerator.domain.SpecificationData
-import dev.reportgenerator.domain.SpecificationItem
+import dev.reportgenerator.domain.ReplacementGroup
+import dev.reportgenerator.domain.ReplacementType
+import dev.reportgenerator.domain.ReplacementVariant
 import dev.reportgenerator.domain.Usage
 import dev.reportgenerator.domain.UnmappedUsage
 import io.kotest.assertions.throwables.shouldThrow
@@ -20,209 +22,699 @@ import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 
+// Designation, product designation and name are read from attributes; null means the key was not requested (NotLoaded).
 private fun node(
-    id: String,
-    kind: ProductKind = ProductKind.Part,
-    designation: Designation = Designation.Value("АБ.$id"),
-    name: Name = Name.Value("Имя $id"),
+    id: Int,
+    kind: PdmNodeKind = PdmNodeKind.Part,
+    designation: AttributeValue? = AttributeValue.Text("АБ.$id"),
+    productDesignation: AttributeValue? = null,
+    name: AttributeValue? = AttributeValue.Text("Имя $id"),
     usages: List<Usage> = emptyList(),
-) = ProductNode(ProductId(id), kind, designation, name, usages = usages)
-
-private fun root(vararg usages: Usage) = node(
-    id = "1",
-    kind = ProductKind.Assembly,
-    designation = Designation.Value("ИЗД.001"),
-    name = Name.Value("Изделие"),
-    usages = usages.toList(),
+) = PdmNode(
+    id = PdmNodeId(id),
+    kind = kind,
+    attributes = attributesOf(designation, productDesignation, name),
+    usages = usages,
 )
 
+private fun attributesOf(
+    designation: AttributeValue?,
+    productDesignation: AttributeValue?,
+    name: AttributeValue?,
+): Map<AttributeKey, AttributeValue> = buildMap {
+    designation?.let { put(AttributeKey.Designation, it) }
+    productDesignation?.let { put(AttributeKey.ProductDesignation, it) }
+    name?.let { put(AttributeKey.Name, it) }
+}
+
+private fun rootNode(
+    designation: AttributeValue? = AttributeValue.Text("ИЗД.001"),
+    name: AttributeValue? = AttributeValue.Text("Изделие"),
+    usages: List<Usage> = emptyList(),
+    replacements: List<ReplacementGroup> = emptyList(),
+) = node(
+    id = 1,
+    kind = PdmNodeKind.Assembly,
+    designation = designation,
+    name = name,
+    usages = usages,
+).copy(replacements = replacements)
+
+private fun root(vararg usages: Usage) = rootNode(usages = usages.toList())
+
+// The note is the link attribute; null: the note is not requested (not loaded).
 private fun composition(
-    child: ProductNode,
+    child: PdmNode,
     quantity: Quantity = Quantity.Exact(1.0),
     unit: Field<String> = Field.Missing,
-) = CompositionUsage(child = child, position = Field.Missing, quantity = quantity, unit = unit)
-
-private fun document(child: ProductNode) = DocumentUsage(child)
-
-private fun unmapped(child: ProductNode) = UnmappedUsage(
-    relation = Relation.Unmapped("Неведомая связь"),
-    child = child,
+    position: Field<Int> = Field.Missing,
+    note: AttributeValue? = null,
+    zone: AttributeValue? = null,
+    applicationMethod: AttributeValue? = null,
+    kitPurpose: AttributeValue? = null,
+    linkId: Int? = null,
+) = CompositionUsage(
+    target = child,
+    position = position,
+    quantity = quantity,
+    unit = unit,
+    attributes = buildMap {
+        note?.let { put(LinkAttributeKey.Note, it) }
+        zone?.let { put(LinkAttributeKey.Zone, it) }
+        applicationMethod?.let { put(LinkAttributeKey.ApplicationMethod, it) }
+        kitPurpose?.let { put(LinkAttributeKey.KitPurpose, it) }
+    },
+    linkId = linkId,
 )
 
-private fun SpecificationData.single(): SpecificationItem = items.single()
+private fun document(child: PdmNode) = DocumentUsage(child)
+
+private fun madeFrom(child: PdmNode) = MadeFromUsage(child)
+
+// A material form with the materials it is made from (the made-from usages of the form).
+private fun materialFormOf(id: Int, vararg materials: PdmNode) = node(
+    id = id,
+    kind = PdmNodeKind.MaterialForm,
+    usages = materials.map { madeFrom(it) },
+)
+
+private fun unmapped(child: PdmNode) = UnmappedUsage(
+    relation = Relation.Unmapped("Неведомая связь"),
+    target = child,
+)
+
+// The item of the section of a standard or other product (the two share the shape, not the type).
+private fun itemOf(kind: PdmNodeKind, designation: String?, name: String, quantity: Double): PositionedItem = when (kind) {
+    PdmNodeKind.Standard -> StandardItem(designation = designation, name = name, quantity = quantity)
+    PdmNodeKind.Other -> OtherItem(designation = designation, name = name, quantity = quantity)
+    else -> error("no standard or other section for $kind")
+}
+
+private fun SpecificationData.onlyOf(kind: PdmNodeKind): PositionedItem = when (kind) {
+    PdmNodeKind.Standard -> standards.single()
+    PdmNodeKind.Other -> others.single()
+    else -> error("no standard or other section for $kind")
+}
 
 class ProductNodeSpecificationTest : ShouldSpec({
     should("map the header from the root designation and name") {
         val data = root().toSpecificationData()
 
-        data shouldBe SpecificationData("ИЗД.001", "Изделие", emptyList())
+        data shouldBe SpecificationData("ИЗД.001", "Изделие")
     }
 
     should("use the root designation as document name when the name is missing") {
-        val data = root().copy(name = Name.Missing).toSpecificationData()
+        val data = rootNode(name = AttributeValue.Empty).toSpecificationData()
 
         data.documentName shouldBe "ИЗД.001"
     }
 
     should("fail when the root designation is missing or not loaded") {
-        val missing = root().copy(designation = Designation.Missing)
-        val notLoaded = root().copy(designation = Designation.NotLoaded)
+        val missing = rootNode(designation = AttributeValue.Empty)
+        val notLoaded = rootNode(designation = null)
 
         shouldThrow<SpecificationDataException> { missing.toSpecificationData() }.message shouldContain "1"
         shouldThrow<SpecificationDataException> { notLoaded.toSpecificationData() }.message shouldContain "1"
     }
 
     should("fail when the root name is not loaded") {
-        val node = root().copy(name = Name.NotLoaded)
+        val node = rootNode(name = null)
 
         shouldThrow<SpecificationDataException> { node.toSpecificationData() }.message shouldContain "1"
     }
 
-    should("map each product kind to its item kind") {
-        val expected = listOf(
-            ProductKind.Assembly to ItemKind.ASSEMBLY,
-            ProductKind.Part to ItemKind.PART,
-            ProductKind.Standard to ItemKind.STANDARD,
-            ProductKind.Other to ItemKind.OTHER,
-            ProductKind.Material to ItemKind.MATERIAL,
-            ProductKind.Complex to ItemKind.COMPLEX,
-            ProductKind.Kit to ItemKind.SET,
-        )
+    should("route each product kind to its own section") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Assembly)),
+            composition(node(3, kind = PdmNodeKind.Part)),
+            composition(node(4, kind = PdmNodeKind.Standard)),
+            composition(node(5, kind = PdmNodeKind.Other)),
+            composition(node(6, kind = PdmNodeKind.Material)),
+        ).toSpecificationData()
 
-        expected.forEach { (productKind, itemKind) ->
-            val data = root(composition(node("2", kind = productKind))).toSpecificationData()
-
-            data.single().kind shouldBe itemKind
-        }
+        data.assemblies.map { it.designation } shouldBe listOf("АБ.2")
+        data.parts.map { it.designation } shouldBe listOf("АБ.3")
+        data.standards.map { it.name } shouldBe listOf("АБ.4")
+        data.others.map { it.name } shouldBe listOf("АБ.5")
+        data.materials.map { it.name } shouldBe listOf("АБ.6")
     }
 
-    should("map exact quantity amount and usage unit to the item") {
-        val child = node("2", kind = ProductKind.Part)
-        val data = root(composition(child, Quantity.Exact(2.5), Field.Value("кг"))).toSpecificationData()
+    should("skip a complex usage and a kit without a specification or a purpose without failing") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Complex)),
+            composition(node(3, kind = PdmNodeKind.Kit)),
+            composition(node(4)),
+        ).toSpecificationData()
 
-        data.single() shouldBe SpecificationItem("АБ.2", "Имя 2", ItemKind.PART, 2.5, "кг")
+        data shouldBe SpecificationData(
+            "ИЗД.001",
+            "Изделие",
+            parts = listOf(PartItem(designation = "АБ.4", name = "Имя 4", quantity = 1.0)),
+        )
+    }
+
+    should("give a kit with the purpose a note and keep it out of the sections") {
+        val kit = node(
+            2,
+            kind = PdmNodeKind.Kit,
+            usages = listOf(documentWith(PdmNodeKind.Specification, AttributeValue.Text("А4"))),
+        )
+        val data = root(composition(kit, kitPurpose = AttributeValue.Text("Для сборки"))).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.kitNotes shouldBe listOf("Примечание - АБ.2 - Имя 2 Для сборки")
+    }
+
+    should("write the note of a kit without designation with the name only") {
+        val kit = node(2, kind = PdmNodeKind.Kit, designation = AttributeValue.Empty)
+        val data = root(composition(kit, kitPurpose = AttributeValue.Text("Для сборки"))).toSpecificationData()
+
+        data.kitNotes shouldBe listOf("Примечание - Имя 2 Для сборки")
+    }
+
+    should("treat a blank kit purpose as no purpose: no note and no row for a kit without specification") {
+        val data = root(composition(node(2, kind = PdmNodeKind.Kit), kitPurpose = AttributeValue.Text("   "))).toSpecificationData()
+
+        data shouldBe SpecificationData("ИЗД.001", "Изделие")
+    }
+
+    should("put a kit with a specification and no purpose into the kits section with its format and position") {
+        val kit = node(
+            2,
+            kind = PdmNodeKind.Kit,
+            usages = listOf(documentWith(PdmNodeKind.Specification, AttributeValue.Text("А4"))),
+        )
+        val data = root(composition(kit, Quantity.Exact(2.0), position = Field.Value(3), zone = AttributeValue.Text("1А"))).toSpecificationData()
+
+        data.kits shouldBe listOf(KitItem(position = 3, designation = "АБ.2", name = "Имя 2", quantity = 2.0, zone = "1А", format = "А4"))
+        data.kitNotes shouldBe emptyList()
+    }
+
+    should("take the notes of a kit item like the notes of an assembly unit") {
+        val kit = node(
+            2,
+            kind = PdmNodeKind.Kit,
+            usages = listOf(documentWith(PdmNodeKind.Specification, AttributeValue.Text("2хА0"))),
+        )
+        val data = root(composition(kit, Quantity.Range(1.0, 3.0), note = AttributeValue.Text("Прим."))).toSpecificationData()
+
+        data.kits.single().notes shouldBe listOf("*)2хА0", "Наиб. кол. 3", "Прим.")
+    }
+
+    should("give a kit without the purpose and without a specification a block of its composition") {
+        val kit = node(2, kind = PdmNodeKind.Kit, usages = listOf(composition(node(5), Quantity.Exact(2.0))))
+        val data = root(composition(kit)).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.kitBlocks shouldBe listOf(
+            KitBlock(label = "Имя 2", parts = listOf(PartItem(designation = "АБ.5", name = "Имя 5", quantity = 2.0))),
+        )
+    }
+
+    should("give no kit block to a kit with the purpose or with a specification") {
+        val withPurpose = node(2, kind = PdmNodeKind.Kit, usages = listOf(composition(node(5))))
+        val withSpecification = node(
+            3,
+            kind = PdmNodeKind.Kit,
+            usages = listOf(documentWith(PdmNodeKind.Specification, AttributeValue.Text("А4")), composition(node(6))),
+        )
+        val data = root(
+            composition(withPurpose, kitPurpose = AttributeValue.Text("Для сборки")),
+            composition(withSpecification),
+        ).toSpecificationData()
+
+        data.kitBlocks shouldBe emptyList()
+        data.kits.map { it.designation } shouldBe listOf("АБ.3")
+    }
+
+    should("give no kit block to a kit without any composition") {
+        val data = root(composition(node(2, kind = PdmNodeKind.Kit))).toSpecificationData()
+
+        data.kitBlocks shouldBe emptyList()
+    }
+
+    should("skip a kit inside a kit and keep the other items of the kit") {
+        val inner = node(3, kind = PdmNodeKind.Kit, usages = listOf(composition(node(4))))
+        val outer = node(2, kind = PdmNodeKind.Kit, usages = listOf(composition(node(5)), composition(inner)))
+        val data = root(composition(outer)).toSpecificationData()
+
+        data.kitBlocks.single().parts.map { it.designation } shouldBe listOf("АБ.5")
+    }
+
+    should("sort the kit blocks by position, then by name") {
+        val second = node(7, kind = PdmNodeKind.Kit, usages = listOf(composition(node(20))))
+        val first = node(3, kind = PdmNodeKind.Kit, usages = listOf(composition(node(21))))
+        val data = root(
+            composition(second, position = Field.Value(2)),
+            composition(first, position = Field.Value(1)),
+        ).toSpecificationData()
+
+        data.kitBlocks.map { it.label } shouldBe listOf("Имя 3", "Имя 7")
+    }
+
+    // A document set (комплект документов) with its operational documents list (ведомость); the quantity is the link attribute.
+    // A null designation is an empty attribute (the list has no designation), the name is always set.
+    fun operationalList(id: Int, designation: String?, name: String, format: String? = null) = PdmNode(
+        id = PdmNodeId(id),
+        kind = PdmNodeKind.OperationalDocumentsList,
+        attributes = buildMap {
+            put(AttributeKey.Designation, designation?.let { AttributeValue.Text(it) } ?: AttributeValue.Empty)
+            put(AttributeKey.Name, AttributeValue.Text(name))
+            format?.let { put(AttributeKey.Format, AttributeValue.Text(it)) }
+        },
+    )
+
+    fun documentSet(id: Int, list: PdmNode?) = node(
+        id = id,
+        kind = PdmNodeKind.DocumentSet,
+        designation = AttributeValue.Text("КД.$id"),
+        name = AttributeValue.Text("Комплект документов $id"),
+        usages = listOfNotNull(list?.let { document(it) }),
+    )
+
+    should("put a document set with an operational documents list into the kits section as a row without position, zone and notes") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие", format = "А4")
+        val data = root(
+            composition(documentSet(3, list), quantity = Quantity.Exact(2.0)),
+        ).toSpecificationData()
+
+        data.kits shouldBe listOf(
+            KitItem(position = null, designation = "ВЭ.1", name = "Изделие", quantity = 2.0, zone = null, format = "А4", notes = emptyList()),
+        )
+        data.assemblies shouldBe emptyList()
+        data.kitNotes shouldBe emptyList()
+    }
+
+    should("take the quantity of a document set from the composition link, a range gives its lower bound without a note") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val data = root(
+            composition(documentSet(3, list), quantity = Quantity.Exact(2.5)),
+            composition(documentSet(5, list), quantity = Quantity.Range(1.5, 3.0)),
+        ).toSpecificationData()
+
+        data.kits.map { it.quantity } shouldBe listOf(2.5, 1.5)
+        data.kits.map { it.notes } shouldBe listOf(emptyList(), emptyList())
+    }
+
+    should("give no row to a document set without an operational documents list and do not read its quantity") {
+        val data = root(
+            composition(documentSet(3, list = null), quantity = Quantity.NotLoaded),
+        ).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+    }
+
+    should("take the name of the operational documents list, not the name of the document set") {
+        val list = operationalList(4, designation = null, name = "Изделие")
+        val data = root(composition(documentSet(3, list), quantity = Quantity.Exact(1.0))).toSpecificationData()
+
+        data.kits.single().designation shouldBe null
+        data.kits.single().name shouldBe "Изделие"
+    }
+
+    should("sort the document set rows without position after the kits with a position") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val kit = node(7, kind = PdmNodeKind.Kit, usages = listOf(document(node(8, kind = PdmNodeKind.Specification))))
+        val data = root(
+            composition(documentSet(3, list), quantity = Quantity.Exact(1.0)),
+            composition(kit, position = Field.Value(5)),
+        ).toSpecificationData()
+
+        data.kits.map { it.designation } shouldBe listOf("АБ.7", "ВЭ.1")
+    }
+
+    should("fail with a message on a missing or not loaded quantity of a document set") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val missing = root(composition(documentSet(3, list), quantity = Quantity.Missing))
+        val notLoaded = root(composition(documentSet(3, list), quantity = Quantity.NotLoaded))
+
+        shouldThrow<SpecificationDataException> { missing.toSpecificationData() }.message shouldContain "quantity is missing"
+        shouldThrow<SpecificationDataException> { notLoaded.toSpecificationData() }.message shouldContain "quantity is not loaded"
+    }
+
+    should("skip a document set inside a kit and keep the other items of the kit") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val kit = node(2, kind = PdmNodeKind.Kit, usages = listOf(
+            composition(node(5)),
+            composition(documentSet(3, list), quantity = Quantity.NotLoaded),
+        ))
+        val data = root(composition(kit)).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.kitBlocks.single().parts.map { it.designation } shouldBe listOf("АБ.5")
+    }
+
+    should("give a document set with the purpose a note with its own designation and name and keep it out of the kits section") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val data = root(composition(documentSet(3, list), kitPurpose = AttributeValue.Text("Для сборки"))).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.kitNotes shouldBe listOf("Примечание - КД.3 - Комплект документов 3 Для сборки")
+    }
+
+    should("give a note to a document set with the purpose and without an operational documents list") {
+        val data = root(composition(documentSet(3, list = null), kitPurpose = AttributeValue.Text("Для сборки"))).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.kitNotes shouldBe listOf("Примечание - КД.3 - Комплект документов 3 Для сборки")
+    }
+
+    should("give no row and no note to a document set without the purpose and without an operational documents list") {
+        val data = root(composition(documentSet(3, list = null))).toSpecificationData()
+
+        data shouldBe SpecificationData("ИЗД.001", "Изделие")
+    }
+
+    should("write the note of a document set without designation with the name only") {
+        val set = node(3, kind = PdmNodeKind.DocumentSet, designation = AttributeValue.Empty)
+        val data = root(composition(set, kitPurpose = AttributeValue.Text("Для сборки"))).toSpecificationData()
+
+        data.kitNotes shouldBe listOf("Примечание - Имя 3 Для сборки")
+    }
+
+    should("treat a blank purpose of a document set as no purpose: its operational documents list stays a row") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val data = root(composition(documentSet(3, list), kitPurpose = AttributeValue.Text("   "))).toSpecificationData()
+
+        data.kits.map { it.designation } shouldBe listOf("ВЭ.1")
+        data.kitNotes shouldBe emptyList()
+    }
+
+    should("write the notes of a kit and a document set with the purpose in the order of the composition") {
+        val data = root(
+            composition(documentSet(3, list = null), kitPurpose = AttributeValue.Text("Для ремонта")),
+            composition(node(2, kind = PdmNodeKind.Kit), kitPurpose = AttributeValue.Text("Для сборки")),
+        ).toSpecificationData()
+
+        data.kitNotes shouldBe listOf(
+            "Примечание - КД.3 - Комплект документов 3 Для ремонта",
+            "Примечание - АБ.2 - Имя 2 Для сборки",
+        )
+    }
+
+    should("drop specification and detail drawings from the composition and from the documents") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Specification)),
+            composition(node(3, kind = PdmNodeKind.DetailDrawing)),
+            document(node(4, kind = PdmNodeKind.Specification)),
+        ).toSpecificationData()
+
+        data shouldBe SpecificationData("ИЗД.001", "Изделие")
+    }
+
+    should("map exact quantity amount to the item") {
+        val child = node(2, kind = PdmNodeKind.Part)
+        val data = root(composition(child, Quantity.Exact(2.5))).toSpecificationData()
+
+        data.parts.single() shouldBe PartItem(designation = "АБ.2", name = "Имя 2", quantity = 2.5)
+    }
+
+    should("map the position of a composition usage to the item") {
+        val child = node(2, kind = PdmNodeKind.Part)
+        val data = root(composition(child, position = Field.Value(7))).toSpecificationData()
+
+        data.parts.single().position shouldBe 7
     }
 
     should("show a material designation in the name column and leave the designation empty") {
-        val child = node("2", kind = ProductKind.Material, designation = Designation.Value("Сталь 09Г2С"), name = Name.Value("Лист"))
+        val child = node(
+            2,
+            kind = PdmNodeKind.Material,
+            designation = AttributeValue.Text("Сталь 09Г2С"),
+            name = AttributeValue.Text("Лист"),
+        )
         val data = root(composition(child, Quantity.Exact(2.5), Field.Value("кг"))).toSpecificationData()
 
-        data.single() shouldBe SpecificationItem(null, "Сталь 09Г2С", ItemKind.MATERIAL, 2.5, "кг")
+        data.materials.single() shouldBe MaterialItem(designation = null, name = "Сталь 09Г2С", quantity = 2.5, notes = listOf("кг"))
     }
 
     should("fail on a material with a missing designation") {
-        val child = node("2", kind = ProductKind.Material, designation = Designation.Missing)
+        val child = node(2, kind = PdmNodeKind.Material, designation = AttributeValue.Empty)
 
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
     should("fail on a material with a not loaded designation") {
-        val child = node("2", kind = ProductKind.Material, designation = Designation.NotLoaded)
+        val child = node(2, kind = PdmNodeKind.Material, designation = null)
 
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
-    should("map missing usage unit to null") {
-        val data = root(composition(node("2"), Quantity.Exact(1.0), Field.Missing)).toSpecificationData()
+    listOf(PdmNodeKind.Standard, PdmNodeKind.Other).forEach { productKind ->
+        should("take the designation column from the product designation and the name column from the designation for a $productKind") {
+            val child = node(
+                2,
+                kind = productKind,
+                designation = AttributeValue.Text("ГОСТ 7798-70"),
+                productDesignation = AttributeValue.Text("БОЛТ-1"),
+                name = AttributeValue.Text("Болт"),
+            )
+            val data = root(composition(child, Quantity.Exact(2.0), Field.Value("шт"))).toSpecificationData()
 
-        data.single().unit shouldBe null
+            data.onlyOf(productKind) shouldBe itemOf(productKind, "БОЛТ-1", "ГОСТ 7798-70", 2.0)
+        }
+
+        should("leave the designation column empty for a $productKind when the product designation is missing") {
+            val child = node(
+                2,
+                kind = productKind,
+                designation = AttributeValue.Text("ГОСТ 7798-70"),
+                productDesignation = AttributeValue.Empty,
+            )
+            val data = root(composition(child)).toSpecificationData()
+
+            data.onlyOf(productKind) shouldBe itemOf(productKind, null, "ГОСТ 7798-70", 1.0)
+        }
+
+        should("leave the designation column empty for a $productKind when the product designation is not loaded") {
+            val child = node(2, kind = productKind, designation = AttributeValue.Text("ГОСТ 7798-70"), productDesignation = null)
+            val data = root(composition(child)).toSpecificationData()
+
+            data.onlyOf(productKind) shouldBe itemOf(productKind, null, "ГОСТ 7798-70", 1.0)
+        }
+
+        should("fail on a $productKind when the designation is missing") {
+            val child = node(2, kind = productKind, designation = AttributeValue.Empty, productDesignation = AttributeValue.Text("БОЛТ-1"))
+
+            shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+        }
+
+        should("fail on a $productKind with a not loaded designation") {
+            val child = node(2, kind = productKind, designation = null, productDesignation = AttributeValue.Text("БОЛТ-1"))
+
+            shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+        }
+
+        should("not take the name attribute into account for a $productKind") {
+            val child = node(2, kind = productKind, designation = AttributeValue.Text("ГОСТ 7798-70"), name = AttributeValue.Text("Болт"))
+            val data = root(composition(child)).toSpecificationData()
+
+            data.onlyOf(productKind) shouldBe itemOf(productKind, null, "ГОСТ 7798-70", 1.0)
+        }
     }
 
-    should("fail on a quantity range because it is not supported") {
-        val usage = composition(node("2"), Quantity.Range(1.0, 3.0))
+    should("not read the product designation for a part") {
+        val child = node(2, kind = PdmNodeKind.Part, productDesignation = AttributeValue.Text("ОБЗ-1"))
+        val data = root(composition(child)).toSpecificationData()
 
-        shouldThrow<SpecificationDataException> { root(usage).toSpecificationData() }.message shouldContain "2"
+        data.parts.single() shouldBe PartItem(designation = "АБ.2", name = "Имя 2", quantity = 1.0)
+    }
+
+    should("leave the notes of a material empty when its usage has no unit") {
+        val data = root(composition(node(2, kind = PdmNodeKind.Material), Quantity.Exact(1.0), Field.Missing))
+            .toSpecificationData()
+
+        data.materials.single().notes shouldBe emptyList()
+    }
+
+    should("show the lower bound of a quantity range and the upper bound in the notes") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Part), Quantity.Range(1.0, 3.0), note = AttributeValue.Text("Закалить")),
+            composition(
+                node(3, kind = PdmNodeKind.Material),
+                Quantity.Range(0.5, 1.25),
+                unit = Field.Value("кг"),
+                zone = AttributeValue.Text("1A,2B"),
+            ),
+        ).toSpecificationData()
+
+        data.parts.single().quantity shouldBe 1.0
+        data.parts.single().notes shouldBe listOf("Наиб. кол. 3", "Закалить")
+        data.materials.single().quantity shouldBe 0.5
+        data.materials.single().notes shouldBe listOf("кг", "*)1A,2B", "Наиб. кол. 1,25")
+    }
+
+    should("round the upper bound of a range to a whole count outside the materials") {
+        val data = root(composition(node(2, kind = PdmNodeKind.Standard), Quantity.Range(2.0, 4.5))).toSpecificationData()
+
+        data.standards.single().notes shouldBe listOf("Наиб. кол. 5")
+    }
+
+    should("give no maximum note for an exact quantity") {
+        val data = root(composition(node(2, kind = PdmNodeKind.Part), Quantity.Exact(3.0))).toSpecificationData()
+
+        data.parts.single().notes shouldBe emptyList()
     }
 
     should("fail on a missing or not loaded quantity") {
-        val missing = composition(node("2"), Quantity.Missing)
-        val notLoaded = composition(node("3"), Quantity.NotLoaded)
+        val missing = composition(node(2), Quantity.Missing)
+        val notLoaded = composition(node(3), Quantity.NotLoaded)
 
         shouldThrow<SpecificationDataException> { root(missing).toSpecificationData() }.message shouldContain "2"
         shouldThrow<SpecificationDataException> { root(notLoaded).toSpecificationData() }.message shouldContain "3"
     }
 
     should("fail on a not loaded usage unit") {
-        val usage = composition(node("2"), unit = Field.NotLoaded)
+        val usage = composition(node(2), unit = Field.NotLoaded)
 
         shouldThrow<SpecificationDataException> { root(usage).toSpecificationData() }.message shouldContain "2"
     }
 
-    should("map a document usage to zero quantity and no unit") {
-        val data = root(document(node("2", kind = ProductKind.AssemblyDrawing))).toSpecificationData()
+    should("fail on a not loaded usage position") {
+        val usage = composition(node(2), position = Field.NotLoaded)
 
-        data.single() shouldBe SpecificationItem("АБ.2", "Имя 2", ItemKind.DOCUMENTATION, 0.0, null)
+        shouldThrow<SpecificationDataException> { root(usage).toSpecificationData() }.message shouldContain "position"
+    }
+
+    should("map a missing usage position to null") {
+        val data = root(composition(node(2))).toSpecificationData()
+
+        data.parts.single().position shouldBe null
+    }
+
+    should("map a document usage to the documentation section without quantity") {
+        val data = root(document(node(2, kind = PdmNodeKind.AssemblyDrawing))).toSpecificationData()
+
+        data.documentation.single() shouldBe DocumentationItem("АБ.2", "Имя 2")
+    }
+
+    should("take the format of an assembly drawing and mark a complex one with a note") {
+        val data = root(
+            documentWith(PdmNodeKind.AssemblyDrawing, AttributeValue.Text("2хА0")),
+            documentWith(PdmNodeKind.AssemblyDrawing, AttributeValue.Text("А1")),
+        ).toSpecificationData()
+
+        data.documentation.map { it.format to it.notes } shouldBe listOf(
+            "*)" to listOf("*)2хА0"),
+            "А1" to emptyList(),
+        )
     }
 
     should("drop assembly drawings from the composition") {
-        val drawing = node("2", kind = ProductKind.AssemblyDrawing)
-        val data = root(composition(drawing), composition(node("3"))).toSpecificationData()
+        val drawing = node(2, kind = PdmNodeKind.AssemblyDrawing)
+        val data = root(composition(drawing), composition(node(3))).toSpecificationData()
 
-        data.items.map { it.designation } shouldBe listOf("АБ.3")
+        data.parts.map { it.designation } shouldBe listOf("АБ.3")
+        data.documentation shouldBe emptyList()
     }
 
     should("drop documents that are not assembly drawings") {
-        val data = root(document(node("2", kind = ProductKind.Part))).toSpecificationData()
+        val data = root(document(node(2, kind = PdmNodeKind.Part))).toSpecificationData()
 
-        data.items shouldBe emptyList()
+        data.documentation shouldBe emptyList()
     }
 
-    should("put composition items first and documents after them in usage order") {
+    should("sort documentation by designation and by name when there is no designation") {
         val data = root(
-            document(node("10", kind = ProductKind.AssemblyDrawing)),
-            composition(node("2")),
-            document(node("11", kind = ProductKind.AssemblyDrawing)),
-            composition(node("3")),
+            document(node(12, kind = PdmNodeKind.AssemblyDrawing, designation = AttributeValue.Text("АБ.20"))),
+            document(node(13, kind = PdmNodeKind.AssemblyDrawing, designation = AttributeValue.Text("АБ.03"))),
+            document(node(14, kind = PdmNodeKind.AssemblyDrawing, designation = AttributeValue.Empty, name = AttributeValue.Text("Аа"))),
         ).toSpecificationData()
 
-        data.items.map { it.designation } shouldBe listOf("АБ.2", "АБ.3", "АБ.10", "АБ.11")
+        data.documentation shouldBe listOf(
+            DocumentationItem("АБ.03", "Имя 13"),
+            DocumentationItem("АБ.20", "Имя 12"),
+            DocumentationItem(null, "Аа"),
+        )
+    }
+
+    should("sort the items of a section by position and put the items without position last") {
+        val data = root(
+            composition(node(2), position = Field.Value(2)),
+            composition(node(3), position = Field.Missing),
+            composition(node(4), position = Field.Value(1)),
+            composition(node(5, designation = AttributeValue.Empty, name = AttributeValue.Text("Аа")), position = Field.Missing),
+            composition(node(6), position = Field.Missing),
+        ).toSpecificationData()
+
+        data.parts.map { it.designation } shouldBe listOf("АБ.4", "АБ.2", "АБ.3", "АБ.6", null)
+    }
+
+    should("keep the usage order of items with the same position") {
+        val data = root(
+            composition(node(8), position = Field.Value(1)),
+            composition(node(7), position = Field.Value(1)),
+        ).toSpecificationData()
+
+        data.parts.map { it.designation } shouldBe listOf("АБ.8", "АБ.7")
     }
 
     should("skip usages whose kind is unmapped") {
         val data = root(
-            composition(node("2", kind = ProductKind.Unmapped("Неведомый тип"))),
-            composition(node("3")),
+            composition(node(2, kind = PdmNodeKind.Unmapped("Неведомый тип"))),
+            composition(node(3)),
         ).toSpecificationData()
 
-        data.items.map { it.designation } shouldBe listOf("АБ.3")
+        data.parts.map { it.designation } shouldBe listOf("АБ.3")
     }
 
     should("skip unmapped usages") {
-        val data = root(unmapped(node("2")), composition(node("3"))).toSpecificationData()
+        val data = root(unmapped(node(2)), composition(node(3))).toSpecificationData()
 
-        data.items.map { it.designation } shouldBe listOf("АБ.3")
+        data.parts.map { it.designation } shouldBe listOf("АБ.3")
     }
 
     should("map a missing designation to null") {
-        val child = node("2", designation = Designation.Missing)
+        val child = node(2, designation = AttributeValue.Empty)
         val data = root(composition(child)).toSpecificationData()
 
-        data.single().designation shouldBe null
+        data.parts.single().designation shouldBe null
     }
 
     should("fail on a not loaded designation") {
-        val child = node("2", designation = Designation.NotLoaded)
+        val child = node(2, designation = null)
 
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
     should("use the designation as item name when the name is missing") {
-        val child = node("2", designation = Designation.Value("ГОСТ 7798-70"), name = Name.Missing)
+        val child = node(2, designation = AttributeValue.Text("ГОСТ 7798-70"), name = AttributeValue.Empty)
         val data = root(composition(child)).toSpecificationData()
 
-        data.single().name shouldBe "ГОСТ 7798-70"
+        data.parts.single().name shouldBe "ГОСТ 7798-70"
     }
 
     should("fail when the name and designation of an item are both missing") {
-        val child = node("2", designation = Designation.Missing, name = Name.Missing)
+        val child = node(2, designation = AttributeValue.Empty, name = AttributeValue.Empty)
 
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
     }
 
     should("fail on a not loaded item name") {
-        val child = node("2", name = Name.NotLoaded)
+        val child = node(2, name = null)
 
         shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }.message shouldContain "2"
+    }
+
+    should("read a text attribute as a value") {
+        val child = node(2, designation = AttributeValue.Text("АБ.7"), name = AttributeValue.Text("Вал"))
+        val data = root(composition(child)).toSpecificationData()
+
+        data.parts.single() shouldBe PartItem(designation = "АБ.7", name = "Вал", quantity = 1.0)
+    }
+
+    should("read an empty attribute as missing") {
+        val child = node(2, designation = AttributeValue.Empty, name = AttributeValue.Text("Вал"))
+        val data = root(composition(child)).toSpecificationData()
+
+        data.parts.single() shouldBe PartItem(designation = null, name = "Вал", quantity = 1.0)
+    }
+
+    should("fail as not loaded when the attribute key was not requested") {
+        val child = node(2, designation = null, name = AttributeValue.Text("Вал"))
+
+        shouldThrow<SpecificationDataException> { root(composition(child)).toSpecificationData() }
+            .message shouldContain "designation is not loaded"
     }
 
     should("not treat a data error as an IllegalStateException so the generic handler does not catch it") {
@@ -230,4 +722,382 @@ class ProductNodeSpecificationTest : ShouldSpec({
 
         (exception is IllegalStateException) shouldBe false
     }
+
+    should("take the format of an assembly from its first specification that has a format") {
+        val assembly = node(2, kind = PdmNodeKind.Assembly)
+        val data = root(
+            composition(withDocuments(assembly, specificationOf(format = AttributeValue.Empty), specificationOf("A4"), specificationOf("A3"))),
+        ).toSpecificationData()
+
+        data.assemblies.single().format shouldBe "A4"
+    }
+
+    should("take the format of a part from its detail drawing, not from a specification") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val data = root(
+            composition(withDocuments(part, specificationOf("A3"), detailDrawingOf("A4"))),
+        ).toSpecificationData()
+
+        data.parts.single().format shouldBe "A4"
+    }
+
+    should("give a simple format as is, without notes") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val data = root(composition(withDocuments(part, detailDrawingOf("A4")))).toSpecificationData()
+
+        data.parts.single() shouldBe PartItem(designation = "АБ.2", name = "Имя 2", quantity = 1.0, format = "A4")
+    }
+
+    should("mark a complex format with the mark and put its value into the first note") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val assembly = node(3, kind = PdmNodeKind.Assembly)
+        val data = root(
+            composition(withDocuments(part, detailDrawingOf("А3х3"))),
+            composition(withDocuments(assembly, specificationOf("A3x3"))),
+        ).toSpecificationData()
+
+        data.parts.single() shouldBe PartItem(
+            designation = "АБ.2", name = "Имя 2", quantity = 1.0, format = "*)", notes = listOf("*)А3х3"),
+        )
+        data.assemblies.single() shouldBe AssemblyItem(
+            designation = "АБ.3", name = "Имя 3", quantity = 1.0, format = "*)", notes = listOf("*)A3x3"),
+        )
+    }
+
+    should("treat the capital and the Latin x as a complex format too") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val data = root(composition(withDocuments(part, detailDrawingOf("A3X3")))).toSpecificationData()
+
+        data.parts.single().format shouldBe "*)"
+        data.parts.single().notes shouldBe listOf("*)A3X3")
+    }
+
+    should("give no format when the item has no document of its kind") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val data = root(composition(withDocuments(part, specificationOf("A4")))).toSpecificationData()
+
+        data.parts.single().format shouldBe null
+    }
+
+    should("give no format when the document has no format or the format is not loaded") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val assembly = node(3, kind = PdmNodeKind.Assembly)
+        val data = root(
+            composition(withDocuments(part, detailDrawingOf(AttributeValue.Empty))),
+            composition(withDocuments(assembly, specificationOf(format = null))),
+        ).toSpecificationData()
+
+        data.parts.single().format shouldBe null
+        data.assemblies.single().format shouldBe null
+    }
+
+    should("put the note of the composition link into the notes of every section") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Assembly), note = AttributeValue.Text("Сварка")),
+            composition(node(3, kind = PdmNodeKind.Part), note = AttributeValue.Text("Закалить")),
+            composition(node(4, kind = PdmNodeKind.Standard), note = AttributeValue.Text("Окрасить")),
+            composition(node(5, kind = PdmNodeKind.Other), note = AttributeValue.Text("Проверить")),
+            composition(node(6, kind = PdmNodeKind.Material), note = AttributeValue.Text("Лист")),
+        ).toSpecificationData()
+
+        data.assemblies.single().notes shouldBe listOf("Сварка")
+        data.parts.single().notes shouldBe listOf("Закалить")
+        data.standards.single().notes shouldBe listOf("Окрасить")
+        data.others.single().notes shouldBe listOf("Проверить")
+        data.materials.single().notes shouldBe listOf("Лист")
+    }
+
+    should("take the zone of the composition link for every section") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Assembly), zone = AttributeValue.Text("А1")),
+            composition(node(3, kind = PdmNodeKind.Part), zone = AttributeValue.Text("Б2")),
+            composition(node(4, kind = PdmNodeKind.Standard), zone = AttributeValue.Text("В3")),
+            composition(node(5, kind = PdmNodeKind.Other), zone = AttributeValue.Text("Г4")),
+            composition(node(6, kind = PdmNodeKind.Material), zone = AttributeValue.Text("Д5")),
+        ).toSpecificationData()
+
+        data.assemblies.single().zone shouldBe "А1"
+        data.parts.single().zone shouldBe "Б2"
+        data.standards.single().zone shouldBe "В3"
+        data.others.single().zone shouldBe "Г4"
+        data.materials.single().zone shouldBe "Д5"
+    }
+
+    should("mark a complex zone with several zones and put its value into the notes") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Part), zone = AttributeValue.Text("7B, 8C")),
+            composition(node(3, kind = PdmNodeKind.Material), zone = AttributeValue.Text("1A,2B"), note = AttributeValue.Text("Лист")),
+        ).toSpecificationData()
+
+        data.parts.single().zone shouldBe "*)"
+        data.parts.single().notes shouldBe listOf("*)7B, 8C")
+        data.materials.single().zone shouldBe "*)"
+        data.materials.single().notes shouldBe listOf("*)1A,2B", "Лист")
+    }
+
+    should("put the complex format before the complex zone in the notes") {
+        val data = root(
+            composition(
+                withDocuments(node(2, kind = PdmNodeKind.Part), detailDrawingOf("А3х3")),
+                zone = AttributeValue.Text("7B,8C"),
+                note = AttributeValue.Text("Закалить"),
+            ),
+        ).toSpecificationData()
+
+        data.parts.single().format shouldBe "*)"
+        data.parts.single().zone shouldBe "*)"
+        data.parts.single().notes shouldBe listOf("*)А3х3", "*)7B,8C", "Закалить")
+    }
+
+    should("leave the zone empty when the link has none or it is blank") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Part)),
+            composition(node(3, kind = PdmNodeKind.Part), zone = AttributeValue.Text(" ")),
+        ).toSpecificationData()
+
+        data.parts.map { it.zone } shouldBe listOf(null, null)
+    }
+
+    should("put the complex format before the note of the link") {
+        val part = node(2, kind = PdmNodeKind.Part)
+        val data = root(
+            composition(withDocuments(part, detailDrawingOf("А3х3")), note = AttributeValue.Text("Прим.")),
+        ).toSpecificationData()
+
+        data.parts.single().notes shouldBe listOf("*)А3х3", "Прим.")
+    }
+
+    should("put the application method of a production member after the note of the link") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), Quantity.Exact(4.0), position = Field.Value(5), note = AttributeValue.Text("Прим."), applicationMethod = AttributeValue.Text("Окраска"), linkId = 1),
+            ),
+            replacements = listOf(group(1, ReplacementType.Production, listOf(1))),
+        ).toSpecificationData()
+
+        data.standards.single().notes shouldBe listOf("Прим.", "Окраска")
+    }
+
+    should("put the application method before the replacement text and keep the text lowercase") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), Quantity.Exact(4.0), position = Field.Value(5), applicationMethod = AttributeValue.Text("Окраска"), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Гайка")), position = Field.Value(7), linkId = 2),
+            ),
+            replacements = listOf(
+                group(1, ReplacementType.Permissible, listOf(1), listOf(2)),
+                group(2, ReplacementType.Production, listOf(1)),
+            ),
+        ).toSpecificationData()
+
+        data.standards.first().notes shouldBe listOf("Окраска", "допуск. замена на поз. 7")
+    }
+
+    should("put the unit of a material first and the note of the link second") {
+        val child = node(2, kind = PdmNodeKind.Material)
+        val data = root(
+            composition(child, Quantity.Exact(2.5), Field.Value("кг"), note = AttributeValue.Text("Лист")),
+        ).toSpecificationData()
+
+        data.materials.single().notes shouldBe listOf("кг", "Лист")
+    }
+
+    should("show the material of a material form with the position, quantity, unit and note of the composition link") {
+        val material = node(7, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Пенополиуретан ППУ 202-1"))
+        val form = materialFormOf(5, material)
+        val data = root(
+            composition(form, Quantity.Exact(2.5), Field.Value("мл"), position = Field.Value(3), note = AttributeValue.Text("Вспенить")),
+        ).toSpecificationData()
+
+        data.materials.single() shouldBe MaterialItem(
+            position = 3,
+            designation = null,
+            name = "Пенополиуретан ППУ 202-1",
+            quantity = 2.5,
+            notes = listOf("мл", "Вспенить"),
+        )
+    }
+
+    should("take the name of a material form from its material, not from the form itself") {
+        val material = node(7, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Пенополиуретан"))
+        val form = node(5, kind = PdmNodeKind.MaterialForm, designation = AttributeValue.Text("ФОРМА 001"), name = AttributeValue.Text("Форма"), usages = listOf(madeFrom(material)))
+        val data = root(composition(form)).toSpecificationData()
+
+        data.materials.single().name shouldBe "Пенополиуретан"
+    }
+
+    should("fail on a material form without a material") {
+        val form = node(5, kind = PdmNodeKind.MaterialForm)
+
+        shouldThrow<SpecificationDataException> { root(composition(form)).toSpecificationData() }.message shouldContain "5"
+    }
+
+    should("fail on a material form whose usages have no material") {
+        val form = node(5, kind = PdmNodeKind.MaterialForm, usages = listOf(madeFrom(node(6, kind = PdmNodeKind.Part))))
+
+        shouldThrow<SpecificationDataException> { root(composition(form)).toSpecificationData() }.message shouldContain "5"
+    }
+
+    should("take the first material of a material form that has several") {
+        val first = node(7, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Первый"))
+        val second = node(8, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Второй"))
+        val data = root(composition(materialFormOf(5, first, second))).toSpecificationData()
+
+        data.materials.map { it.name } shouldBe listOf("Первый")
+    }
+
+    should("sort material forms and plain materials together by position, then by name") {
+        val data = root(
+            composition(materialFormOf(5, node(15, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Вата"))), position = Field.Value(2)),
+            composition(node(2, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Сталь")), position = Field.Value(1)),
+            composition(materialFormOf(6, node(16, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Ааа"))), position = Field.Missing),
+            composition(node(3, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Лак")), position = Field.Missing),
+        ).toSpecificationData()
+
+        data.materials.map { it.name } shouldBe listOf("Сталь", "Вата", "Ааа", "Лак")
+    }
+
+    should("skip an empty or missing note and a not loaded one") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Standard), note = AttributeValue.Empty),
+            composition(node(3, kind = PdmNodeKind.Standard), note = null),
+            composition(node(4, kind = PdmNodeKind.Standard), note = AttributeValue.Text("   ")),
+        ).toSpecificationData()
+
+        data.standards.forEach { it.notes shouldBe emptyList() }
+    }
+
+    should("give replacement notes to the permissible members and keep the other groups ordinary") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт М12x25")), Quantity.Exact(4.0), position = Field.Value(5), linkId = 10045),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт 2М12x25")), Quantity.Exact(4.0), position = Field.Value(7), linkId = 10037),
+                composition(node(4, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Шплинт 3,2x28.4")), Quantity.Exact(4.0), position = Field.Value(8), linkId = 10046),
+                composition(node(5, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Шайба 80")), position = Field.Value(9), linkId = 10035),
+                composition(node(6, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Supporting ring DIN")), position = Field.Value(10), linkId = 10036),
+            ),
+            replacements = listOf(
+                group(1, ReplacementType.Permissible, listOf(10045), listOf(10037, 10046)),
+                group(2, ReplacementType.Production, listOf(10035), listOf(10036)),
+            ),
+        ).toSpecificationData()
+
+        data.standards shouldBe listOf(
+            StandardItem(position = 5, name = "Болт М12x25", quantity = 4.0, notes = listOf("Допуск. замена на поз. 7 совместно с поз. 8")),
+            StandardItem(position = 7, name = "Болт 2М12x25", quantity = null, notes = listOf("4 шт.", "примен. с поз. 8 взамен поз. 5")),
+            StandardItem(position = 8, name = "Шплинт 3,2x28.4", quantity = null, notes = listOf("4 шт.", "примен. с поз. 7 взамен поз. 5")),
+            StandardItem(position = 9, name = "Шайба 80", quantity = 1.0),
+            StandardItem(position = 10, name = "Supporting ring DIN", quantity = 1.0),
+        )
+    }
+
+    should("show the lower bound of a non-basic range as the count and keep the upper bound note") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), Quantity.Exact(4.0), position = Field.Value(5), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Гайка")), Quantity.Range(2.0, 4.5), position = Field.Value(7), linkId = 2),
+            ),
+            replacements = listOf(group(1, ReplacementType.Permissible, listOf(1), listOf(2))),
+        ).toSpecificationData()
+
+        data.standards shouldBe listOf(
+            StandardItem(position = 5, name = "Болт", quantity = 4.0, notes = listOf("Допуск. замена на поз. 7")),
+            StandardItem(position = 7, name = "Гайка", quantity = null, notes = listOf("2 шт.", "Наиб. кол. 5", "примен. взамен поз. 5")),
+        )
+    }
+
+    should("keep the replacement text of a basic item lowercase when a note comes before it") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), Quantity.Range(2.0, 4.5), position = Field.Value(5), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Гайка")), position = Field.Value(7), linkId = 2),
+            ),
+            replacements = listOf(group(1, ReplacementType.Permissible, listOf(1), listOf(2))),
+        ).toSpecificationData()
+
+        data.standards.first().notes shouldBe listOf("Наиб. кол. 5", "допуск. замена на поз. 7")
+    }
+
+    should("give a non-basic material its count with the unit and no repeated unit note") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Сталь 45")), Quantity.Exact(1.0), Field.Value("кг"), position = Field.Value(5), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Сталь 09Г2С")), Quantity.Exact(2.5), Field.Value("кг"), position = Field.Value(7), linkId = 2),
+            ),
+            replacements = listOf(group(1, ReplacementType.Permissible, listOf(1), listOf(2))),
+        ).toSpecificationData()
+
+        data.materials shouldBe listOf(
+            MaterialItem(position = 5, name = "Сталь 45", quantity = 1.0, notes = listOf("кг", "допуск. замена на поз. 7")),
+            MaterialItem(position = 7, name = "Сталь 09Г2С", quantity = null, notes = listOf("2,5 кг", "примен. взамен поз. 5")),
+        )
+    }
+
+    should("skip a permissible group with a member outside the composition and keep its members ordinary") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), Quantity.Exact(4.0), position = Field.Value(5), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Гайка")), Quantity.Exact(2.0), position = Field.Value(7), linkId = 2),
+            ),
+            replacements = listOf(group(1, ReplacementType.Permissible, listOf(1), listOf(99))),
+        ).toSpecificationData()
+
+        data.standards shouldBe listOf(
+            StandardItem(position = 5, name = "Болт", quantity = 4.0),
+            StandardItem(position = 7, name = "Гайка", quantity = 2.0),
+        )
+    }
+
+    should("fail when a member of a permissible group has no position") {
+        val data = rootNode(
+            usages = listOf(
+                composition(node(2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт")), position = Field.Value(5), linkId = 1),
+                composition(node(3, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Гайка")), position = Field.Missing, linkId = 2),
+            ),
+            replacements = listOf(group(1, ReplacementType.Permissible, listOf(1), listOf(2))),
+        )
+
+        shouldThrow<SpecificationDataException> { data.toSpecificationData() }.message shouldContain "member 2"
+    }
 })
+
+// A replacement group of the root: the basic variant, then one non-basic variant per list, the ids by the group id.
+private fun group(id: Int, type: ReplacementType, basic: List<Int>, vararg nonBasic: List<Int>): ReplacementGroup =
+    ReplacementGroup(
+        id = id,
+        name = null,
+        type = type,
+        variants = listOf(ReplacementVariant(id = id * 10, name = null, basic = true, linkIds = basic, inCurrentConfiguration = true)) +
+            nonBasic.mapIndexed { index, linkIds ->
+                ReplacementVariant(
+                    id = id * 10 + index + 1, name = null, basic = false, linkIds = linkIds, inCurrentConfiguration = true,
+                )
+            },
+        inCurrentConfiguration = true,
+    )
+
+// A document usage of the item with the format attribute (null: the format key is not requested).
+private fun documentWith(kind: PdmNodeKind, format: AttributeValue?): DocumentUsage = DocumentUsage(
+    target = PdmNode(
+        id = PdmNodeId(100),
+        kind = kind,
+        attributes = buildMap {
+            put(AttributeKey.Designation, AttributeValue.Text("ДОК"))
+            put(AttributeKey.Name, AttributeValue.Text("Документ"))
+            format?.let { put(AttributeKey.Format, it) }
+        },
+    ),
+)
+
+private fun specificationOf(format: String) = documentWith(PdmNodeKind.Specification, AttributeValue.Text(format))
+
+private fun specificationOf(format: AttributeValue?) = documentWith(PdmNodeKind.Specification, format)
+
+private fun detailDrawingOf(format: String) = documentWith(PdmNodeKind.DetailDrawing, AttributeValue.Text(format))
+
+private fun detailDrawingOf(format: AttributeValue?) = documentWith(PdmNodeKind.DetailDrawing, format)
+
+// Adds the documents to the item: the item keeps its usages, the documents are the usages of the child.
+private fun withDocuments(child: PdmNode, vararg documents: DocumentUsage): PdmNode =
+    child.copy(usages = documents.toList())
+

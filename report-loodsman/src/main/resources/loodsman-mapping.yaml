@@ -7,47 +7,66 @@ kinds:
   Прочее изделие: OTHER
   Материал по КД: MATERIAL
   Комплект: KIT
+  Спецификация: SPECIFICATION
+  Чертеж детали: DETAIL_DRAWING
+  Форма материала: MATERIAL_FORM
+  Комплект документов: DOCUMENT_SET
+  Ведомость эксплуатационных документов: OPERATIONAL_DOCUMENTS_LIST
 
 relations:
-  Состоит из ...: COMPOSITION
-  Документы: DOCUMENT
+  - link: "Состоит из ..."
+    as: COMPOSITION
+    from:
+      - Сборочная единица
+      - Комплект
+  - link: "Документы"
+    as: DOCUMENT
+    from:
+      - Сборочная единица
+      - Деталь
+      - Прочее изделие
+      - Комплект
+      - Комплект документов
+  - link: "Технологическая ДСЕ для"
+    direction: INVERSE
+    from: [Деталь]
+    as: TECHNOLOGICAL_PART
+  - link: "Изготавливается из ..."
+    as: MADE_FROM
+    from: [Форма материала]
+  # Исполнения: FORWARD от основного исполнения к остальным (обратное имя «Базовое исполнение», id 7).
+  # from = Сборочная единица: ПРЕДПОЛОЖЕНИЕ, id типа в types-links не проверен на сервере (см. wiki).
+  - link: "Исполнения"
+    as: VARIANT
+    from: [Сборочная единица]
 
 requiredRelations:
   - COMPOSITION
   - DOCUMENT
 
-identity:
-  designation:
-    type: prop
-    field: PRODUCT
-  name:
-    type: attribute
-    name: Наименование
-  byKind:
-    STANDARD:
-      designation:
-        type: attribute
-        name: Обозначение изделия
-      name:
-        type: prop
-        field: PRODUCT
-    OTHER:
-      designation:
-        type: attribute
-        name: Обозначение изделия
-      name:
-        type: prop
-        field: PRODUCT
-
 attributes:
+  designation:
+    name: Обозначение
+  productDesignation:
+    byKind:
+      STANDARD: Обозначение изделия
+      OTHER: Обозначение изделия
+  name:
+    name: Наименование
+    byKind:
+      OPERATIONAL_DOCUMENTS_LIST: Наименование изделия
   mass:
     name: Масса
-  material:
-    name: Материал
   companyName:
     byKind:
       ASSEMBLY: Наименование предприятия
       PART: Наименование предприятия
+  format:
+    byKind:
+      SPECIFICATION: Формат
+      DETAIL_DRAWING: Формат
+      ASSEMBLY_DRAWING: Формат
+      OPERATIONAL_DOCUMENTS_LIST: Формат
 
 properties:
   version: VERSION
@@ -65,6 +84,15 @@ link:
     note:
       - relation: COMPOSITION
         name: Примечание
+    zone:
+      - relation: COMPOSITION
+        name: Зона
+    applicationMethod:
+      - relation: COMPOSITION
+        name: Способ применения
+    kitPurpose:
+      - relation: COMPOSITION
+        name: Назначение комплекта
 
 onUnmapped:
   kind: KEEP

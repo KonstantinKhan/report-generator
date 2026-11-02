@@ -1,10 +1,10 @@
 package dev.reportgenerator.server
 
-import dev.reportgenerator.domain.ProductStructureClient
 import dev.reportgenerator.layout.DefaultFontRegistry
 import io.github.konstantinkhan.loodsman.LoodsmanApi
 import io.github.konstantinkhan.loodsman.LoodsmanConfig
-import dev.reportgenerator.loodsman.LoodsmanProductStructureClient
+import dev.reportgenerator.loodsman.LoodsmanContext
+import dev.reportgenerator.loodsman.mapping.MappingConfigLoader
 import io.github.konstantinkhan.loodsman.loodsmanHttpClient
 import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.log
@@ -29,7 +29,10 @@ fun main() {
         ),
         loodsmanHttpClient(),
     )
-    val structureClient: ProductStructureClient = LoodsmanProductStructureClient(loodsmanApi)
+    // Структурная проверка конфига маппинга при старте; семантическая проверка — в LoodsmanContext.bootstrap.
+    val mapping = MappingConfigLoader.load()
+    // Fail-fast: без метаданных и при несовпадении маппинга с Loodsman сервер не стартует.
+    val context = runBlocking { LoodsmanContext.bootstrap(loodsmanApi, mapping) }
 
     val outputDir = File(config.outputDir).apply { mkdirs() }
     val fonts = DefaultFontRegistry.load()
@@ -38,7 +41,7 @@ fun main() {
         factory = Netty,
         port = config.serverPort,
         module = {
-            reportServerModule(structureClient, outputDir, fonts)
+            reportServerModule(context.client, outputDir, fonts, context.metadata)
             // Closes the Loodsman session on shutdown. A failed logout must not break the stop.
             monitor.subscribe(ApplicationStopped) {
                 runBlocking {

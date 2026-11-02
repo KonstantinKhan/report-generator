@@ -15,6 +15,7 @@ class LoodsmanApi(
     val auth = AuthApi(httpClient, http, baseUrl)
     val objectInfo = ObjectInfoApi(http, baseUrl)
     val metaData = MetaDataApi(http, baseUrl)
+    val metaDataCustom = MetaDataCustomApi(http, baseUrl)
 
     suspend fun logout() = sessions.close()
 }

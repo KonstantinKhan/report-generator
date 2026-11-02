@@ -1,40 +1,31 @@
 package dev.reportgenerator.loodsman.mapping
 
-import kotlinx.serialization.Serializable
+import io.github.konstantinkhan.loodsman.PropField
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 @Serializable
 enum class OnUnmapped {
     KEEP, SKIP, FAIL
 }
 
+/** Направление чтения связи: FORWARD — от родителя к потомку, INVERSE — от потомка к родителю. */
 @Serializable
-enum class PropField {
-    PRODUCT, VERSION, STATE, TYPE
+enum class LinkDirection {
+    FORWARD, INVERSE
 }
 
+/**
+ * Правило чтения связи Loodsman.
+ * [link] — прямое имя типа связи; [relation] — id смысла из [Registries.relations] (в YAML ключ `as`);
+ * [from] — имена типов Loodsman, с узлов которых читается связь; пусто — любые типы.
+ */
 @Serializable
-sealed interface FieldSource {
-    @Serializable
-    @SerialName("prop")
-    data class Prop(val field: PropField) : FieldSource
-
-    @Serializable
-    @SerialName("attribute")
-    data class Attribute(val name: String) : FieldSource
-}
-
-@Serializable
-data class KindIdentity(
-    val designation: FieldSource? = null,
-    val name: FieldSource? = null
-)
-
-@Serializable
-data class IdentityMapping(
-    val designation: FieldSource,
-    val name: FieldSource,
-    val byKind: Map<String, KindIdentity> = emptyMap()
+data class RelationRule(
+    val link: String,
+    @SerialName("as") val relation: String,
+    val direction: LinkDirection = LinkDirection.FORWARD,
+    val from: List<String> = emptyList()
 )
 
 @Serializable
@@ -92,9 +83,8 @@ data class LinkMapping(
 @Serializable
 data class MappingConfig(
     val kinds: Map<String, String>,
-    val relations: Map<String, String>,
+    val relations: List<RelationRule>,
     val requiredRelations: Set<String> = emptySet(),
-    val identity: IdentityMapping,
     val attributes: Map<String, AttributeRule> = emptyMap(),
     val properties: PropertiesMapping = PropertiesMapping(),
     val link: LinkMapping = LinkMapping(),
@@ -117,21 +107,23 @@ data class MappingConfig(
             }
         }
 
-        relations.forEach { (_, value) ->
-            Registries.relations.resolve(value)
+        relations.forEach { rule ->
+            Registries.relations.resolve(rule.relation)
+            if (rule.from.distinct().size != rule.from.size) {
+                throw IllegalArgumentException(
+                    "Relation rule '${rule.link}' has duplicate types in from: ${rule.from.joinToString()}"
+                )
+            }
         }
+        validateRelationRules()
 
         requiredRelations.forEach { relName ->
             Registries.relations.resolve(relName)
-            if (!relations.containsValue(relName)) {
+            if (relations.none { it.relation == relName }) {
                 throw IllegalArgumentException(
                     "Required relation '$relName' not found in relations mapping"
                 )
             }
-        }
-
-        identity.byKind.forEach { (kindKey, _) ->
-            Registries.itemKinds.resolve(kindKey)
         }
 
         require(link.fields.quantityMin.numeric) {
@@ -147,6 +139,23 @@ data class MappingConfig(
         link.attributes.forEach { (key, rules) ->
             Registries.linkAttributeKeys.resolve(key)
             rules.validateRules()
+        }
+    }
+
+    /** Два правила с одинаковыми link и direction не должны пересекаться по from (пустой from пересекается со всем). */
+    private fun validateRelationRules() {
+        for (i in relations.indices) {
+            for (j in i + 1 until relations.size) {
+                val a = relations[i]
+                val b = relations[j]
+                if (a.link != b.link || a.direction != b.direction) continue
+                val overlap = a.from.isEmpty() || b.from.isEmpty() || a.from.any { it in b.from }
+                if (overlap) {
+                    throw IllegalArgumentException(
+                        "Relation rules at indices $i and $j overlap for link '${a.link}' in direction ${a.direction}"
+                    )
+                }
+            }
         }
     }
 

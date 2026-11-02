@@ -3,7 +3,6 @@ package dev.reportgenerator.loodsman.mapping
 import com.charleskorn.kaml.Yaml
 import com.charleskorn.kaml.YamlConfiguration
 import com.charleskorn.kaml.PolymorphismStyle
-import kotlinx.serialization.decodeFromString
 import java.io.File
 
 object MappingConfigLoader {

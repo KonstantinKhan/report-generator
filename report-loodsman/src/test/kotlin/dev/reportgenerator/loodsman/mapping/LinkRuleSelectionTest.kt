@@ -1,6 +1,6 @@
 package dev.reportgenerator.loodsman.mapping
 
-import dev.reportgenerator.domain.ProductKind
+import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Relation
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.nulls.shouldBeNull
@@ -10,7 +10,7 @@ class LinkRuleSelectionTest : ShouldSpec({
     context("LinkAttributeRule.select") {
         should("return null when no rules match") {
             val rules = emptyList<LinkAttributeRule>()
-            rules.select(Relation.Composition, ProductKind.Assembly, ProductKind.Part)
+            rules.select(Relation.Composition, PdmNodeKind.Assembly, PdmNodeKind.Part)
                 .shouldBeNull()
         }
 
@@ -18,7 +18,7 @@ class LinkRuleSelectionTest : ShouldSpec({
             val rules = listOf(
                 LinkAttributeRule(relation = "COMPOSITION", name = "Позиция")
             )
-            val selected = rules.select(Relation.Composition, ProductKind.Assembly, ProductKind.Part)
+            val selected = rules.select(Relation.Composition, PdmNodeKind.Assembly, PdmNodeKind.Part)
             selected?.name shouldBe "Позиция"
         }
 
@@ -27,7 +27,7 @@ class LinkRuleSelectionTest : ShouldSpec({
                 LinkAttributeRule(relation = "COMPOSITION", name = "Generic"),
                 LinkAttributeRule(relation = "COMPOSITION", child = setOf("PART"), name = "SpecificChild")
             )
-            val selected = rules.select(Relation.Composition, ProductKind.Assembly, ProductKind.Part)
+            val selected = rules.select(Relation.Composition, PdmNodeKind.Assembly, PdmNodeKind.Part)
             selected?.name shouldBe "SpecificChild"
         }
 
@@ -36,7 +36,7 @@ class LinkRuleSelectionTest : ShouldSpec({
                 LinkAttributeRule(relation = "COMPOSITION", name = "Generic"),
                 LinkAttributeRule(relation = "COMPOSITION", parent = setOf("ASSEMBLY"), name = "SpecificParent")
             )
-            val selected = rules.select(Relation.Composition, ProductKind.Assembly, ProductKind.Part)
+            val selected = rules.select(Relation.Composition, PdmNodeKind.Assembly, PdmNodeKind.Part)
             selected?.name shouldBe "SpecificParent"
         }
 
@@ -46,7 +46,7 @@ class LinkRuleSelectionTest : ShouldSpec({
                 LinkAttributeRule(relation = "COMPOSITION", parent = setOf("ASSEMBLY"), name = "WithParent"),
                 LinkAttributeRule(relation = "COMPOSITION", parent = setOf("ASSEMBLY"), child = setOf("PART"), name = "WithBoth")
             )
-            val selected = rules.select(Relation.Composition, ProductKind.Assembly, ProductKind.Part)
+            val selected = rules.select(Relation.Composition, PdmNodeKind.Assembly, PdmNodeKind.Part)
             selected?.name shouldBe "WithBoth"
         }
 
@@ -54,7 +54,7 @@ class LinkRuleSelectionTest : ShouldSpec({
             val rules = listOf(
                 LinkAttributeRule(relation = "COMPOSITION", parent = setOf("PART"), name = "OnlyForPart")
             )
-            val selected = rules.select(Relation.Composition, ProductKind.Assembly, ProductKind.Material)
+            val selected = rules.select(Relation.Composition, PdmNodeKind.Assembly, PdmNodeKind.Material)
             selected.shouldBeNull()
         }
 
@@ -62,7 +62,7 @@ class LinkRuleSelectionTest : ShouldSpec({
             val rules = listOf(
                 LinkAttributeRule(relation = "COMPOSITION", child = setOf("PART"), name = "OnlyForPart")
             )
-            val selected = rules.select(Relation.Composition, ProductKind.Assembly, ProductKind.Material)
+            val selected = rules.select(Relation.Composition, PdmNodeKind.Assembly, PdmNodeKind.Material)
             selected.shouldBeNull()
         }
 
@@ -75,7 +75,7 @@ class LinkRuleSelectionTest : ShouldSpec({
                     name = "MultiKind"
                 )
             )
-            val selected = rules.select(Relation.Composition, ProductKind.Complex, ProductKind.Material)
+            val selected = rules.select(Relation.Composition, PdmNodeKind.Complex, PdmNodeKind.Material)
             selected?.name shouldBe "MultiKind"
         }
 
@@ -83,7 +83,7 @@ class LinkRuleSelectionTest : ShouldSpec({
             val rules = listOf(
                 LinkAttributeRule(relation = "COMPOSITION", child = setOf("PART"), name = "OnlyForPart")
             )
-            val selected = rules.select(Relation.Composition, ProductKind.Other, ProductKind.Other)
+            val selected = rules.select(Relation.Composition, PdmNodeKind.Other, PdmNodeKind.Other)
             selected.shouldBeNull()
         }
 
@@ -91,7 +91,7 @@ class LinkRuleSelectionTest : ShouldSpec({
             val rules = listOf(
                 LinkAttributeRule(relation = "COMPOSITION", name = "ForAll")
             )
-            val selected = rules.select(Relation.Composition, ProductKind.Other, ProductKind.Other)
+            val selected = rules.select(Relation.Composition, PdmNodeKind.Other, PdmNodeKind.Other)
             selected?.name shouldBe "ForAll"
         }
     }
@@ -99,7 +99,7 @@ class LinkRuleSelectionTest : ShouldSpec({
     context("AttributeRule.nameFor") {
         should("return name for known kind when byKind is empty") {
             val rule = AttributeRule(name = "DefaultName")
-            rule.nameFor(ProductKind.Assembly) shouldBe "DefaultName"
+            rule.nameFor(PdmNodeKind.Assembly) shouldBe "DefaultName"
         }
 
         should("return byKind override when present") {
@@ -107,7 +107,7 @@ class LinkRuleSelectionTest : ShouldSpec({
                 name = "DefaultName",
                 byKind = mapOf("STANDARD" to "StandardName")
             )
-            rule.nameFor(ProductKind.Standard) shouldBe "StandardName"
+            rule.nameFor(PdmNodeKind.Standard) shouldBe "StandardName"
         }
 
         should("return default name when byKind doesn't have the kind") {
@@ -115,26 +115,26 @@ class LinkRuleSelectionTest : ShouldSpec({
                 name = "DefaultName",
                 byKind = mapOf("STANDARD" to "StandardName")
             )
-            rule.nameFor(ProductKind.Part) shouldBe "DefaultName"
+            rule.nameFor(PdmNodeKind.Part) shouldBe "DefaultName"
         }
 
         should("return null when no name and byKind is empty") {
             val rule = AttributeRule()
-            rule.nameFor(ProductKind.Assembly).shouldBeNull()
+            rule.nameFor(PdmNodeKind.Assembly).shouldBeNull()
         }
 
         should("return null when no name and kind not in byKind") {
             val rule = AttributeRule(
                 byKind = mapOf("STANDARD" to "StandardName")
             )
-            rule.nameFor(ProductKind.Part).shouldBeNull()
+            rule.nameFor(PdmNodeKind.Part).shouldBeNull()
         }
 
         should("return byKind value even when name is null") {
             val rule = AttributeRule(
                 byKind = mapOf("STANDARD" to "StandardName")
             )
-            rule.nameFor(ProductKind.Standard) shouldBe "StandardName"
+            rule.nameFor(PdmNodeKind.Standard) shouldBe "StandardName"
         }
     }
 })

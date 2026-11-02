@@ -2,23 +2,29 @@ package dev.reportgenerator.loodsman.mapping
 
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.LinkAttributeKey
-import dev.reportgenerator.domain.ProductKind
+import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Relation
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 
 class RegistriesTest : ShouldSpec({
     context("itemKinds registry") {
         should("contain known ProductKind variants") {
-            Registries.itemKinds.values.shouldContain(ProductKind.Assembly)
-            Registries.itemKinds.values.shouldContain(ProductKind.Part)
-            Registries.itemKinds.values.shouldContain(ProductKind.Standard)
-            Registries.itemKinds.values.shouldContain(ProductKind.Other)
-            Registries.itemKinds.values.shouldContain(ProductKind.Material)
-            Registries.itemKinds.values.shouldContain(ProductKind.AssemblyDrawing)
-            Registries.itemKinds.values.shouldContain(ProductKind.Complex)
-            Registries.itemKinds.values.shouldContain(ProductKind.Kit)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Assembly)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Part)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Standard)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Other)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Material)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.AssemblyDrawing)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Complex)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Kit)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.Specification)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.DetailDrawing)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.MaterialForm)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.DocumentSet)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.OperationalDocumentsList)
         }
 
         should("throw error for unknown item kind") {
@@ -36,6 +42,7 @@ class RegistriesTest : ShouldSpec({
         should("contain known Relation variants") {
             Registries.relations.values.shouldContain(Relation.Composition)
             Registries.relations.values.shouldContain(Relation.Document)
+            Registries.relations.values.shouldContain(Relation.MadeFrom)
         }
 
         should("throw error for unknown relation") {
@@ -51,7 +58,6 @@ class RegistriesTest : ShouldSpec({
     context("attributeKeys registry") {
         should("contain known AttributeKey variants") {
             Registries.attributeKeys.values.shouldContain(AttributeKey.Mass)
-            Registries.attributeKeys.values.shouldContain(AttributeKey.Material)
         }
 
         should("throw error for unknown attribute key") {
@@ -67,6 +73,17 @@ class RegistriesTest : ShouldSpec({
     context("linkAttributeKeys registry") {
         should("contain known LinkAttributeKey variants") {
             Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.Note)
+            Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.Zone)
+            Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.ApplicationMethod)
+            Registries.linkAttributeKeys.values.shouldContain(LinkAttributeKey.KitPurpose)
+        }
+
+        should("resolve the application method id of the mapping to its domain key") {
+            Registries.linkAttributeKeys.resolve("applicationMethod") shouldBe LinkAttributeKey.ApplicationMethod
+        }
+
+        should("resolve the kit purpose id of the mapping to its domain key") {
+            Registries.linkAttributeKeys.resolve("kitPurpose") shouldBe LinkAttributeKey.KitPurpose
         }
 
         should("throw error for unknown link attribute key") {

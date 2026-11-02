@@ -9,6 +9,7 @@ import dev.reportgenerator.ir.IrDocument
 import dev.reportgenerator.ir.IrGroup
 import dev.reportgenerator.ir.IrGroupTitle
 import dev.reportgenerator.ir.IrRow
+import dev.reportgenerator.ir.IrSpanRow
 import dev.reportgenerator.ir.IrTable
 import dev.reportgenerator.ir.IrTableHeader
 import dev.reportgenerator.ir.PageSetup
@@ -93,6 +94,23 @@ class FlowTableLayoutTest {
         assertEquals("Детали", title.cells[0].text)
         assertEquals(style, title.cells[0].style)
         assertEquals(TextAlign.LEFT, title.cells[0].align)
+    }
+
+    @Test
+    fun `a span row merges only its column range and keeps the other columns as own bordered cells`() {
+        val three = listOf(IrColumn("a", 20.mm), IrColumn("b", 40.mm), IrColumn("c", 30.mm))
+        val table = IrTable(
+            columns = three,
+            header = null,
+            content = listOf(IrSpanRow(IrCell("Заголовок"), from = "a", to = "b")),
+            rowHeight = 8.mm,
+        )
+
+        val block = buildBlocks(table, columnOffsets(three, 20.mm), 90.mm, 20.mm, textMeasurer, "T").single() as BorderedRowBlock
+
+        assertEquals(listOf(60.mm, 30.mm), block.columns.map { it.width })
+        assertEquals(listOf(20.mm, 80.mm), block.offsets)
+        assertEquals(listOf("Заголовок", ""), block.cells.map { it.text })
     }
 
     @Test

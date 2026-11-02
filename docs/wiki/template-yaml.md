@@ -673,7 +673,7 @@ totals:
 отдельно. Кроме `where` и содержимого вариант других ключей не имеет (`align` и `style` общие для ячейки).
 
 **`format`** на Decimal-bind (как раньше): `{pattern: "0.##", locale: ru, rounding: HALF_UP}`. Количество в
-спецификации:
+спецификации (материалы без округления: `pattern` с 60 знаками `#` после точки):
 
 ```yaml
 quantity:
@@ -681,9 +681,9 @@ quantity:
   cases:
     - where: {field: kind, eq: DOCUMENTATION}         # документация: пусто
       text: ""
-    - where: {field: kind, eq: MATERIAL}              # материалы: до 2 знаков, хвостовые нули срезаны, запятая
+    - where: {field: kind, eq: MATERIAL}              # материалы: число как есть, хвостовые нули срезаны, запятая
       bind: "${item.quantity}"
-      format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
+      format: {pattern: "0.############################################################", locale: ru, rounding: HALF_UP}
   bind: "${item.quantity}"                            # остальные виды: целое, HALF_UP
   format: {pattern: "0", rounding: HALF_UP}
 note:                                                 # единица только у материалов
@@ -825,7 +825,7 @@ table:
       - {id: position, width: 8, stick: first, align: center}
       - {id: designation, width: 70}
       - {id: name, width: 63}
-      - {id: quantity, width: 10, stick: last, align: center}
+      - {id: quantity, width: 10, stick: first, align: center}
       - {id: note, width: 22, stick: last, align: center}
     header:
       height: 15
@@ -846,7 +846,8 @@ table:
         position: {bind: "${item.position}", style: data}
         designation: {bind: "${item.designation}", optional: true, style: data}
         name: {bind: "${item.name}", style: data}
-        # materials: up to 2 decimals, trailing zeros trimmed, decimal comma (1,5; 0,35; 3). Every other kind
+        # materials: the number as is, no rounding (up to 60 decimals: the pattern limit), trailing zeros trimmed,
+        # decimal comma (1,5; 0,35; 0,000002; 3). Every other kind
         # is a whole count (rounded half up): Loodsman counts them in pieces.
         quantity:
           style: data
@@ -855,7 +856,7 @@ table:
               text: ""
             - where: {field: kind, eq: MATERIAL}
               bind: "${item.quantity}"
-              format: {pattern: "0.##", locale: ru, rounding: HALF_UP}
+              format: {pattern: "0.############################################################", locale: ru, rounding: HALF_UP}
           bind: "${item.quantity}"
           format: {pattern: "0", rounding: HALF_UP}
         # the unit is shown for materials only (other kinds are pieces and get no unit)

@@ -6,6 +6,8 @@ plugins {
 dependencies {
     api(projects.reportDomain)
     api(projects.loodsmanClient)
+    implementation(projects.mapping)
+    implementation(projects.domainDsl)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kaml)
     implementation(libs.logback.classic)

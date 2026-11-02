@@ -1,7 +1,9 @@
 package dev.reportgenerator.loodsman.mapping
 
+import dev.reportgenerator.domain.PdmNodeKind
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.ShouldSpec
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.shouldBe
 
@@ -27,6 +29,53 @@ class LinkRuleValidationTest : ShouldSpec({
             val config = MappingConfigLoader.load(emptyMap())
 
             config.link.attributes.keys shouldContainAll Registries.linkAttributeKeys.ids
+        }
+
+        should("name the application method link attribute as the composition attribute Способ применения") {
+            val config = MappingConfigLoader.load(emptyMap())
+
+            val rule = config.link.attributes["applicationMethod"]?.single()
+
+            rule?.relation shouldBe "COMPOSITION"
+            rule?.name shouldBe "Способ применения"
+        }
+
+        should("name the kit purpose link attribute as the composition attribute Назначение комплекта") {
+            val config = MappingConfigLoader.load(emptyMap())
+
+            val rule = config.link.attributes["kitPurpose"]?.single()
+
+            rule?.relation shouldBe "COMPOSITION"
+            rule?.name shouldBe "Назначение комплекта"
+        }
+
+        should("allow a kit as the parent of the composition and of the document relations") {
+            val config = MappingConfigLoader.load(emptyMap())
+
+            config.relations.single { it.link == "Состоит из ..." }.from shouldContain "Комплект"
+            config.relations.single { it.link == "Документы" }.from shouldContain "Комплект"
+        }
+
+        should("not map a link attribute for the document set quantity: it is the quantity of the composition link") {
+            val config = MappingConfigLoader.load(emptyMap())
+
+            config.link.attributes.containsKey("documentSetQuantity") shouldBe false
+        }
+
+        should("allow a document set as the parent of the document relation") {
+            val config = MappingConfigLoader.load(emptyMap())
+
+            config.relations.single { it.link == "Документы" }.from shouldContain "Комплект документов"
+        }
+
+        should("map the operational documents list kind and its name and format by kind") {
+            val config = MappingConfigLoader.load(emptyMap())
+            val list = PdmNodeKind.OperationalDocumentsList
+
+            config.kinds["Ведомость эксплуатационных документов"] shouldBe "OPERATIONAL_DOCUMENTS_LIST"
+            config.attributes.getValue("name").nameFor(list) shouldBe "Наименование изделия"
+            config.attributes.getValue("name").nameFor(PdmNodeKind.Part) shouldBe "Наименование"
+            config.attributes.getValue("format").nameFor(list) shouldBe "Формат"
         }
 
         should("define a position rule for the composition relation") {

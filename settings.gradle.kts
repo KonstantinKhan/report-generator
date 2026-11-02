@@ -23,3 +23,6 @@ include(
     "report-loodsman",
     "report-server",
 )
+
+include("domain-dsl")
+include("mapping")

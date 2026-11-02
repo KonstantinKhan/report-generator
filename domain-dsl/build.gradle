@@ -1,0 +1,25 @@
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+}
+
+group = 'com.khan366kos.ai'
+version = 'unspecified'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation(projects.reportDomain)
+
+    testImplementation(libs.kotest.runner.junit5)
+    testImplementation(libs.kotest.assertions.core)
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+test {
+    useJUnitPlatform()
+}

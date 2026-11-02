@@ -1,13 +1,12 @@
 package dev.reportgenerator.loodsman.mapping
 
-import dev.reportgenerator.domain.AttributeKey
-import dev.reportgenerator.domain.ProductKind
+import dev.reportgenerator.domain.PdmNodeKind
 import dev.reportgenerator.domain.Relation
 
 fun List<LinkAttributeRule>.select(
     relation: Relation,
-    parentKind: ProductKind,
-    childKind: ProductKind
+    parentKind: PdmNodeKind,
+    childKind: PdmNodeKind
 ): LinkAttributeRule? {
     val relationId = Registries.relations.idOf(relation) ?: return null
     val parentKindId = Registries.itemKinds.idOf(parentKind)
@@ -26,7 +25,7 @@ fun List<LinkAttributeRule>.select(
     }
 }
 
-fun AttributeRule.nameFor(kind: ProductKind): String? {
+fun AttributeRule.nameFor(kind: PdmNodeKind): String? {
     val kindId = Registries.itemKinds.idOf(kind)
     return kindId?.let { byKind[it] } ?: name
 }

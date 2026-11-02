@@ -14,7 +14,7 @@ data class AppConfig(
     val serverPort: Int,
 ) {
     constructor(environment: ApplicationEnvironment) : this(
-        loodsmanBaseUrl = requiredEnv("LOODSMAN_BASE_URL"),
+        loodsmanBaseUrl = normalizeLoodsmanBaseUrl(requiredEnv("LOODSMAN_BASE_URL")),
         loodsmanDbName = requiredEnv("LOODSMAN_DB_NAME"),
         loodsmanUsername = requiredEnv("LOODSMAN_USERNAME"),
         loodsmanPassword = requiredEnv("LOODSMAN_PASSWORD"),
@@ -38,4 +38,13 @@ data class AppConfig(
 
         private fun optionalEnv(name: String): String? = System.getenv(name)?.takeIf { it.isNotBlank() }
     }
+}
+
+// Without a scheme Ktor parses "host:port/api/..." as protocol "host" and host "localhost", and "host/api/..."
+// as a path on localhost, so requests never reach the server. The project uses https (see .env.example).
+// An explicit scheme is kept as is.
+internal fun normalizeLoodsmanBaseUrl(raw: String): String {
+    val trimmed = raw.trim()
+    val hasScheme = trimmed.startsWith("https://", ignoreCase = true) || trimmed.startsWith("http://", ignoreCase = true)
+    return if (hasScheme) trimmed else "https://$trimmed"
 }

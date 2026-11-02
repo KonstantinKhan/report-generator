@@ -1,8 +1,5 @@
 package dev.reportgenerator.reports.specification
 
-import dev.reportgenerator.domain.ItemKind
-import dev.reportgenerator.domain.SpecificationData
-import dev.reportgenerator.domain.SpecificationItem
 import dev.reportgenerator.geometry.Length
 import dev.reportgenerator.geometry.PageFormat
 import dev.reportgenerator.geometry.Rect
@@ -40,13 +37,13 @@ class StaticBlocksGoldenTest {
     private fun data(items: Int) = SpecificationData(
         documentDesignation = "AAA.00.000",
         documentName = "Тестовое изделие",
-        items = buildList {
-            add(SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0))
-            add(SpecificationItem("AAA.02.001", "Вал", ItemKind.PART, 2.0))
-            add(SpecificationItem("AAA.02.003", "Втулка распределительная консольная весовая", ItemKind.PART, 5.0))
-            repeat(items) { add(SpecificationItem(null, "Болт М6 ГОСТ 7798-70", ItemKind.STANDARD, 8.0)) }
-            add(SpecificationItem(null, "Сталь 45", ItemKind.MATERIAL, 0.35, "кг"))
-        }
+        assemblies = listOf(AssemblyItem(position = 1, designation = "AAA.01.000", name = "Корпус", quantity = 1.0)),
+        parts = listOf(
+            PartItem(position = 2, designation = "AAA.02.001", name = "Вал", quantity = 2.0),
+            PartItem(position = 3, designation = "AAA.02.003", name = "Втулка распределительная консольная весовая", quantity = 5.0),
+        ),
+        standards = List(items) { StandardItem(position = 4 + it, name = "Болт М6 ГОСТ 7798-70", quantity = 8.0) },
+        materials = listOf(MaterialItem(position = 4 + items, name = "Сталь 45", quantity = 0.35, notes = listOf("кг"))),
     )
 
     // 1 assembly + 13 parts + 3 standard bolts: on A4 the first page holds exactly 26 flow rows, so
@@ -55,26 +52,24 @@ class StaticBlocksGoldenTest {
     private fun groupBoundaryData() = SpecificationData(
         documentDesignation = "AAA.00.000",
         documentName = "Тестовое изделие",
-        items = buildList {
-            add(SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0))
-            repeat(13) { add(SpecificationItem("AAA.02.${100 + it}", "Вал $it", ItemKind.PART, 2.0)) }
-            repeat(3) { add(SpecificationItem(null, "Болт М6 ГОСТ 7798-70", ItemKind.STANDARD, 8.0)) }
-        }
+        assemblies = listOf(AssemblyItem(position = 1, designation = "AAA.01.000", name = "Корпус", quantity = 1.0)),
+        parts = List(13) { PartItem(position = 2 + it, designation = "AAA.02.${100 + it}", name = "Вал $it", quantity = 2.0) },
+        standards = List(3) { StandardItem(position = 15 + it, name = "Болт М6 ГОСТ 7798-70", quantity = 8.0) },
     )
 
-    // All five groups; a designation too long for its 70mm column (hard-broken by characters), a
-    // name that word-wraps, a unit on a non-material (dropped) and on a material (shown in note).
+    // All five sections; a designation too long for its 70mm column (hard-broken by characters), a name that
+    // word-wraps, a material with its unit (shown in the note column).
     private fun allKindsData() = SpecificationData(
         documentDesignation = "AAA.00.000",
         documentName = "Тестовое изделие",
-        items = listOf(
-            SpecificationItem("AAA.01.000", "Корпус", ItemKind.ASSEMBLY, 1.0),
-            SpecificationItem("AAA.01.001-ОченьДлиннаяНеделимаяСтрокаОбозначенияБезПробеловИРазделителей", "Вал", ItemKind.PART, 2.0),
-            SpecificationItem("AAA.02.002", "Втулка распределительная  консольная весовая сборная", ItemKind.PART, 5.0),
-            SpecificationItem(null, "Болт М6 ГОСТ 7798-70", ItemKind.STANDARD, 8.0, "шт"),
-            SpecificationItem(null, "Пломба", ItemKind.OTHER, 1.0),
-            SpecificationItem(null, "Сталь 45", ItemKind.MATERIAL, 0.35, "кг")
-        )
+        assemblies = listOf(AssemblyItem(position = 1, designation = "AAA.01.000", name = "Корпус", quantity = 1.0)),
+        parts = listOf(
+            PartItem(position = 2, designation = "AAA.01.001-ОченьДлиннаяНеделимаяСтрокаОбозначенияБезПробеловИРазделителей", name = "Вал", quantity = 2.0),
+            PartItem(position = 3, designation = "AAA.02.002", name = "Втулка распределительная  консольная весовая сборная", quantity = 5.0),
+        ),
+        standards = listOf(StandardItem(position = 4, name = "Болт М6 ГОСТ 7798-70", quantity = 8.0)),
+        others = listOf(OtherItem(position = 5, name = "Пломба", quantity = 1.0)),
+        materials = listOf(MaterialItem(position = 6, name = "Сталь 45", quantity = 0.35, notes = listOf("кг"))),
     )
 
     private fun customStamp(width: Int) = FrameSpec(

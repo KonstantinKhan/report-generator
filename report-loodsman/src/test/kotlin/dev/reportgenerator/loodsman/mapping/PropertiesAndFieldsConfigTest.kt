@@ -1,5 +1,6 @@
 package dev.reportgenerator.loodsman.mapping
 
+import io.github.konstantinkhan.loodsman.PropField
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.shouldBe
@@ -54,10 +55,8 @@ class PropertiesAndFieldsConfigTest : ShouldSpec({
                 kinds:
                   Деталь: PART
                 relations:
-                  Состоит из ...: COMPOSITION
-                identity:
-                  designation: { type: prop, field: PRODUCT }
-                  name: { type: attribute, name: Наименование }
+                  - link: "Состоит из ..."
+                    as: COMPOSITION
             """.trimIndent()
 
             val config = MappingConfigLoader.parse(yaml)
@@ -71,10 +70,8 @@ class PropertiesAndFieldsConfigTest : ShouldSpec({
                 kinds:
                   Деталь: PART
                 relations:
-                  Состоит из ...: COMPOSITION
-                identity:
-                  designation: { type: prop, field: PRODUCT }
-                  name: { type: attribute, name: Наименование }
+                  - link: "Состоит из ..."
+                    as: COMPOSITION
                 properties:
                   state: NOPE
             """.trimIndent()
@@ -87,10 +84,8 @@ class PropertiesAndFieldsConfigTest : ShouldSpec({
                 kinds:
                   Деталь: PART
                 relations:
-                  Состоит из ...: COMPOSITION
-                identity:
-                  designation: { type: prop, field: PRODUCT }
-                  name: { type: attribute, name: Наименование }
+                  - link: "Состоит из ..."
+                    as: COMPOSITION
                 link:
                   fields:
                     unit: NOPE
