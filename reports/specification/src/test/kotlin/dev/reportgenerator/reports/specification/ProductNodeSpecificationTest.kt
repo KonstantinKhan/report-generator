@@ -272,6 +272,146 @@ class ProductNodeSpecificationTest : ShouldSpec({
         data.kitBlocks.map { it.label } shouldBe listOf("Имя 3", "Имя 7")
     }
 
+    // A document set (комплект документов) with its operational documents list (ведомость); the quantity is the link attribute.
+    // A null designation is an empty attribute (the list has no designation), the name is always set.
+    fun operationalList(id: Int, designation: String?, name: String, format: String? = null) = PdmNode(
+        id = PdmNodeId(id),
+        kind = PdmNodeKind.OperationalDocumentsList,
+        attributes = buildMap {
+            put(AttributeKey.Designation, designation?.let { AttributeValue.Text(it) } ?: AttributeValue.Empty)
+            put(AttributeKey.Name, AttributeValue.Text(name))
+            format?.let { put(AttributeKey.Format, AttributeValue.Text(it)) }
+        },
+    )
+
+    fun documentSet(id: Int, list: PdmNode?) = node(
+        id = id,
+        kind = PdmNodeKind.DocumentSet,
+        designation = AttributeValue.Text("КД.$id"),
+        name = AttributeValue.Text("Комплект документов $id"),
+        usages = listOfNotNull(list?.let { document(it) }),
+    )
+
+    should("put a document set with an operational documents list into the kits section as a row without position, zone and notes") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие", format = "А4")
+        val data = root(
+            composition(documentSet(3, list), quantity = Quantity.Exact(2.0)),
+        ).toSpecificationData()
+
+        data.kits shouldBe listOf(
+            KitItem(position = null, designation = "ВЭ.1", name = "Изделие", quantity = 2.0, zone = null, format = "А4", notes = emptyList()),
+        )
+        data.assemblies shouldBe emptyList()
+        data.kitNotes shouldBe emptyList()
+    }
+
+    should("take the quantity of a document set from the composition link, a range gives its lower bound without a note") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val data = root(
+            composition(documentSet(3, list), quantity = Quantity.Exact(2.5)),
+            composition(documentSet(5, list), quantity = Quantity.Range(1.5, 3.0)),
+        ).toSpecificationData()
+
+        data.kits.map { it.quantity } shouldBe listOf(2.5, 1.5)
+        data.kits.map { it.notes } shouldBe listOf(emptyList(), emptyList())
+    }
+
+    should("give no row to a document set without an operational documents list and do not read its quantity") {
+        val data = root(
+            composition(documentSet(3, list = null), quantity = Quantity.NotLoaded),
+        ).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+    }
+
+    should("take the name of the operational documents list, not the name of the document set") {
+        val list = operationalList(4, designation = null, name = "Изделие")
+        val data = root(composition(documentSet(3, list), quantity = Quantity.Exact(1.0))).toSpecificationData()
+
+        data.kits.single().designation shouldBe null
+        data.kits.single().name shouldBe "Изделие"
+    }
+
+    should("sort the document set rows without position after the kits with a position") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val kit = node(7, kind = PdmNodeKind.Kit, usages = listOf(document(node(8, kind = PdmNodeKind.Specification))))
+        val data = root(
+            composition(documentSet(3, list), quantity = Quantity.Exact(1.0)),
+            composition(kit, position = Field.Value(5)),
+        ).toSpecificationData()
+
+        data.kits.map { it.designation } shouldBe listOf("АБ.7", "ВЭ.1")
+    }
+
+    should("fail with a message on a missing or not loaded quantity of a document set") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val missing = root(composition(documentSet(3, list), quantity = Quantity.Missing))
+        val notLoaded = root(composition(documentSet(3, list), quantity = Quantity.NotLoaded))
+
+        shouldThrow<SpecificationDataException> { missing.toSpecificationData() }.message shouldContain "quantity is missing"
+        shouldThrow<SpecificationDataException> { notLoaded.toSpecificationData() }.message shouldContain "quantity is not loaded"
+    }
+
+    should("skip a document set inside a kit and keep the other items of the kit") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val kit = node(2, kind = PdmNodeKind.Kit, usages = listOf(
+            composition(node(5)),
+            composition(documentSet(3, list), quantity = Quantity.NotLoaded),
+        ))
+        val data = root(composition(kit)).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.kitBlocks.single().parts.map { it.designation } shouldBe listOf("АБ.5")
+    }
+
+    should("give a document set with the purpose a note with its own designation and name and keep it out of the kits section") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val data = root(composition(documentSet(3, list), kitPurpose = AttributeValue.Text("Для сборки"))).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.kitNotes shouldBe listOf("Примечание - КД.3 - Комплект документов 3 Для сборки")
+    }
+
+    should("give a note to a document set with the purpose and without an operational documents list") {
+        val data = root(composition(documentSet(3, list = null), kitPurpose = AttributeValue.Text("Для сборки"))).toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.kitNotes shouldBe listOf("Примечание - КД.3 - Комплект документов 3 Для сборки")
+    }
+
+    should("give no row and no note to a document set without the purpose and without an operational documents list") {
+        val data = root(composition(documentSet(3, list = null))).toSpecificationData()
+
+        data shouldBe SpecificationData("ИЗД.001", "Изделие")
+    }
+
+    should("write the note of a document set without designation with the name only") {
+        val set = node(3, kind = PdmNodeKind.DocumentSet, designation = AttributeValue.Empty)
+        val data = root(composition(set, kitPurpose = AttributeValue.Text("Для сборки"))).toSpecificationData()
+
+        data.kitNotes shouldBe listOf("Примечание - Имя 3 Для сборки")
+    }
+
+    should("treat a blank purpose of a document set as no purpose: its operational documents list stays a row") {
+        val list = operationalList(4, designation = "ВЭ.1", name = "Изделие")
+        val data = root(composition(documentSet(3, list), kitPurpose = AttributeValue.Text("   "))).toSpecificationData()
+
+        data.kits.map { it.designation } shouldBe listOf("ВЭ.1")
+        data.kitNotes shouldBe emptyList()
+    }
+
+    should("write the notes of a kit and a document set with the purpose in the order of the composition") {
+        val data = root(
+            composition(documentSet(3, list = null), kitPurpose = AttributeValue.Text("Для ремонта")),
+            composition(node(2, kind = PdmNodeKind.Kit), kitPurpose = AttributeValue.Text("Для сборки")),
+        ).toSpecificationData()
+
+        data.kitNotes shouldBe listOf(
+            "Примечание - КД.3 - Комплект документов 3 Для ремонта",
+            "Примечание - АБ.2 - Имя 2 Для сборки",
+        )
+    }
+
     should("drop specification and detail drawings from the composition and from the documents") {
         val data = root(
             composition(node(2, kind = PdmNodeKind.Specification)),

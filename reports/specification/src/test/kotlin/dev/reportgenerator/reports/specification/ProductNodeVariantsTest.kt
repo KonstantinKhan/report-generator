@@ -3,6 +3,7 @@ package dev.reportgenerator.reports.specification
 import dev.reportgenerator.domain.AttributeKey
 import dev.reportgenerator.domain.AttributeValue
 import dev.reportgenerator.domain.CompositionUsage
+import dev.reportgenerator.domain.DocumentUsage
 import dev.reportgenerator.domain.Field
 import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.PdmNode
@@ -231,6 +232,113 @@ class ProductNodeVariantsTest : ShouldSpec({
         ),
     )
 
+    // A document set («Комплект документов») with its operational documents list; the quantity is the one of the composition link.
+    fun documentSetLink(id: Int, quantity: Quantity = Quantity.Exact(1.0)) = CompositionUsage(
+        target = PdmNode(
+            id = PdmNodeId(id),
+            kind = PdmNodeKind.DocumentSet,
+            usages = listOf(
+                DocumentUsage(
+                    target = PdmNode(
+                        id = PdmNodeId(id + 1000),
+                        kind = PdmNodeKind.OperationalDocumentsList,
+                        attributes = mapOf(
+                            AttributeKey.Designation to AttributeValue.Text("ВЭ.$id"),
+                            AttributeKey.Name to AttributeValue.Text("Изделие $id"),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        position = Field.Missing,
+        quantity = quantity,
+        unit = Field.Missing,
+    )
+
+    // A document set («Комплект документов») with the purpose («Назначение комплекта») of the link and without an operational
+    // documents list: a note, not an item of the executions.
+    fun documentSetPurposeLink(id: Int, purpose: String) = CompositionUsage(
+        target = PdmNode(
+            id = PdmNodeId(id),
+            kind = PdmNodeKind.DocumentSet,
+            attributes = mapOf(
+                AttributeKey.Designation to AttributeValue.Text("КД.$id"),
+                AttributeKey.Name to AttributeValue.Text("Комплект документов $id"),
+            ),
+        ),
+        position = Field.Missing,
+        quantity = Quantity.Exact(1.0),
+        unit = Field.Missing,
+        attributes = mapOf(LinkAttributeKey.KitPurpose to AttributeValue.Text(purpose)),
+    )
+
+    should("put a document set that is in every execution with the same quantity into the main part") {
+        val root = withVariants(
+            execution("ИЗД.001", link(part(2), 1.0), documentSetLink(40, Quantity.Exact(2.0))),
+            execution("ИЗД.001-02", link(part(2), 1.0), documentSetLink(40, Quantity.Exact(2.0))),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.kits.map { it.designation } shouldBe listOf("ВЭ.40")
+        data.variants.shouldBeEmpty()
+    }
+
+    should("put a document set with another quantity into the block of every execution it is in") {
+        val root = withVariants(
+            execution("ИЗД.001", documentSetLink(40, Quantity.Exact(2.0))),
+            execution("ИЗД.001-02", documentSetLink(40, Quantity.Exact(3.0))),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.variants.map { it.kits.map { kit -> kit.quantity } } shouldBe listOf(listOf(2.0), listOf(3.0))
+    }
+
+    should("compare the document set by the whole quantity of its link: the same lower bound with another upper bound is another item") {
+        val root = withVariants(
+            execution("ИЗД.001", documentSetLink(40, Quantity.Range(1.0, 2.0))),
+            execution("ИЗД.001-02", documentSetLink(40, Quantity.Range(1.0, 3.0))),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.kits shouldBe emptyList()
+        data.variants.map { it.kits.map { kit -> kit.quantity } } shouldBe listOf(listOf(1.0), listOf(1.0))
+    }
+
+    should("put a document set with the same range in every execution into the main part") {
+        val root = withVariants(
+            execution("ИЗД.001", link(part(2), 1.0), documentSetLink(40, Quantity.Range(1.0, 2.0))),
+            execution("ИЗД.001-02", link(part(2), 1.0), documentSetLink(40, Quantity.Range(1.0, 2.0))),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.kits.map { it.quantity } shouldBe listOf(1.0)
+        data.variants.shouldBeEmpty()
+    }
+
+    should("not let a document set without an operational documents list take part in the comparison") {
+        val setWithoutList = CompositionUsage(
+            target = PdmNode(id = PdmNodeId(41), kind = PdmNodeKind.DocumentSet),
+            position = Field.Missing,
+            quantity = Quantity.Exact(1.0),
+            unit = Field.Missing,
+        )
+        val root = withVariants(
+            execution("ИЗД.001", link(part(2), 1.0), setWithoutList),
+            execution("ИЗД.001-02", link(part(2), 1.0)),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.parts.map { it.designation } shouldBe listOf("АБ.2")
+        data.kits.shouldBeEmpty()
+        data.variants.shouldBeEmpty()
+    }
+
     should("not make an execution differ by a kit with the purpose: no variant block for it") {
         val root = withVariants(
             execution("ИЗД.001", link(part(2), 1.0), kitLink(kit(9), "Для сборки")),
@@ -257,6 +365,49 @@ class ProductNodeVariantsTest : ShouldSpec({
             "Примечание - КМП.9 - Комплект 9 Для сборки",
             "Примечание - КМП.8 - Комплект 8 Для ремонта",
             "Примечание - КМП.9 - Комплект 9 Для ремонта",
+        )
+    }
+
+    should("not make an execution differ by a document set with the purpose: no variant block for it") {
+        val root = withVariants(
+            execution("ИЗД.001", link(part(2), 1.0), documentSetPurposeLink(43, "Для сборки")),
+            execution("ИЗД.001-02", link(part(2), 1.0), link(part(3), 1.0)),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.parts.map { it.designation } shouldBe listOf("АБ.2")
+        data.kits.shouldBeEmpty()
+        data.variants.single().designation shouldBe "ИЗД.001-02"
+        data.variants.single().parts.map { it.designation } shouldBe listOf("АБ.3")
+        data.variants.single().kits.shouldBeEmpty()
+        data.kitNotes shouldBe listOf("Примечание - КД.43 - Комплект документов 43 Для сборки")
+    }
+
+    should("write one note of a document set with the purpose for the root and the execution, not twice") {
+        val root = withVariants(
+            execution("ИЗД.001", link(part(2), 1.0), documentSetPurposeLink(43, "Для сборки")),
+            execution("ИЗД.001-02", link(part(2), 1.0), documentSetPurposeLink(43, "Для сборки"), link(part(3), 1.0)),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.kitNotes shouldBe listOf("Примечание - КД.43 - Комплект документов 43 Для сборки")
+        data.variants.single().parts.map { it.designation } shouldBe listOf("АБ.3")
+    }
+
+    should("write the notes of kits and document sets with the purpose, the root first, one per node and purpose") {
+        val root = withVariants(
+            execution("ИЗД.001", kitLink(kit(9), "Для сборки"), documentSetPurposeLink(43, "Для ремонта")),
+            execution("ИЗД.001-02", kitLink(kit(9), "Для сборки"), documentSetPurposeLink(43, "Для сборки"), link(part(3), 1.0)),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.kitNotes shouldBe listOf(
+            "Примечание - КМП.9 - Комплект 9 Для сборки",
+            "Примечание - КД.43 - Комплект документов 43 Для ремонта",
+            "Примечание - КД.43 - Комплект документов 43 Для сборки",
         )
     }
 

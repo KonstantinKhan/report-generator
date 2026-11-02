@@ -35,7 +35,12 @@ class SpecificationQueryTest : ShouldSpec({
 
     should("request the note, the zone, the application method and the kit purpose of the composition link") {
         specificationQuery(PdmNodeId(1)).linkAttributes shouldBe
-            setOf(LinkAttributeKey.Note, LinkAttributeKey.Zone, LinkAttributeKey.ApplicationMethod, LinkAttributeKey.KitPurpose)
+            setOf(
+                LinkAttributeKey.Note,
+                LinkAttributeKey.Zone,
+                LinkAttributeKey.ApplicationMethod,
+                LinkAttributeKey.KitPurpose,
+            )
     }
 
     should("keep the given root id") {

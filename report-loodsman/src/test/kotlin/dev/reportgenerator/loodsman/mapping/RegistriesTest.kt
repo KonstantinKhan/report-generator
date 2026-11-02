@@ -23,6 +23,8 @@ class RegistriesTest : ShouldSpec({
             Registries.itemKinds.values.shouldContain(PdmNodeKind.Specification)
             Registries.itemKinds.values.shouldContain(PdmNodeKind.DetailDrawing)
             Registries.itemKinds.values.shouldContain(PdmNodeKind.MaterialForm)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.DocumentSet)
+            Registries.itemKinds.values.shouldContain(PdmNodeKind.OperationalDocumentsList)
         }
 
         should("throw error for unknown item kind") {

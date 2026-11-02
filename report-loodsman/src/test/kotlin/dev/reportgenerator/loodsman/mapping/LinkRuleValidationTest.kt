@@ -1,5 +1,6 @@
 package dev.reportgenerator.loodsman.mapping
 
+import dev.reportgenerator.domain.PdmNodeKind
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.matchers.collections.shouldContain
@@ -53,6 +54,28 @@ class LinkRuleValidationTest : ShouldSpec({
 
             config.relations.single { it.link == "Состоит из ..." }.from shouldContain "Комплект"
             config.relations.single { it.link == "Документы" }.from shouldContain "Комплект"
+        }
+
+        should("not map a link attribute for the document set quantity: it is the quantity of the composition link") {
+            val config = MappingConfigLoader.load(emptyMap())
+
+            config.link.attributes.containsKey("documentSetQuantity") shouldBe false
+        }
+
+        should("allow a document set as the parent of the document relation") {
+            val config = MappingConfigLoader.load(emptyMap())
+
+            config.relations.single { it.link == "Документы" }.from shouldContain "Комплект документов"
+        }
+
+        should("map the operational documents list kind and its name and format by kind") {
+            val config = MappingConfigLoader.load(emptyMap())
+            val list = PdmNodeKind.OperationalDocumentsList
+
+            config.kinds["Ведомость эксплуатационных документов"] shouldBe "OPERATIONAL_DOCUMENTS_LIST"
+            config.attributes.getValue("name").nameFor(list) shouldBe "Наименование изделия"
+            config.attributes.getValue("name").nameFor(PdmNodeKind.Part) shouldBe "Наименование"
+            config.attributes.getValue("format").nameFor(list) shouldBe "Формат"
         }
 
         should("define a position rule for the composition relation") {

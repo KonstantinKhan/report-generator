@@ -10,6 +10,8 @@ kinds:
   Спецификация: SPECIFICATION
   Чертеж детали: DETAIL_DRAWING
   Форма материала: MATERIAL_FORM
+  Комплект документов: DOCUMENT_SET
+  Ведомость эксплуатационных документов: OPERATIONAL_DOCUMENTS_LIST
 
 relations:
   - link: "Состоит из ..."
@@ -24,6 +26,7 @@ relations:
       - Деталь
       - Прочее изделие
       - Комплект
+      - Комплект документов
   - link: "Технологическая ДСЕ для"
     direction: INVERSE
     from: [Деталь]
@@ -50,6 +53,8 @@ attributes:
       OTHER: Обозначение изделия
   name:
     name: Наименование
+    byKind:
+      OPERATIONAL_DOCUMENTS_LIST: Наименование изделия
   mass:
     name: Масса
   companyName:
@@ -61,6 +66,7 @@ attributes:
       SPECIFICATION: Формат
       DETAIL_DRAWING: Формат
       ASSEMBLY_DRAWING: Формат
+      OPERATIONAL_DOCUMENTS_LIST: Формат
 
 properties:
   version: VERSION

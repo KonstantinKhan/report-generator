@@ -24,6 +24,12 @@ import java.math.RoundingMode
 // and without a specification is a block of its composition (`kitBlocks`), in the main part or in the block of every
 // execution it is in, as the other items. A kit inside such a kit is not shown.
 //
+// Document sets (комплекты документов, child of the composition): a document set with the purpose is a note too, the same
+// as a kit with the purpose, and it needs no operational documents list for the note. Without the purpose, a document set
+// with an operational documents list (ведомость эксплуатационных документов, a document of the set) is a row of the kits
+// section; without the list it is not shown and takes no part in the comparison of the executions. A document set inside
+// a kit is not shown.
+//
 // Variants (исполнения, связь VariantUsage от корня): an item is common when every execution (the root and each
 // variant) has it with the same object id and the same quantity. Common items stay in the main part; every other item
 // goes to the block of each execution it is in (the root's block first, then the variants in link order). An execution
@@ -100,9 +106,13 @@ private class Sections(
     val kitBlocks: List<KitBlock>,
 )
 
-private fun PdmNode.sectionsOf(replacements: Map<Int, ReplacementNote>, keep: (ItemKey) -> Boolean): Sections {
-    // A kit with the purpose is a note, not an item: it is left out of every section.
-    val composition = usages.filterIsInstance<CompositionUsage>().filter { it.kitPurpose() == null && keep(it.itemKey()) }
+private fun PdmNode.sectionsOf(
+    replacements: Map<Int, ReplacementNote>,
+    documentSets: Boolean = true,
+    keep: (ItemKey) -> Boolean,
+): Sections {
+    // A kit or a document set with the purpose is a note, not an item: it is left out of every section.
+    val composition = usages.filterIsInstance<CompositionUsage>().filter { it.isShown(documentSets) && keep(it.itemKey()) }
     return Sections(
         documentation = usages.filterIsInstance<DocumentUsage>()
             .filter { it.isSpecificationDocument() && keep(ItemKey(it.target.id.asInt(), null)) }
@@ -114,36 +124,69 @@ private fun PdmNode.sectionsOf(replacements: Map<Int, ReplacementNote>, keep: (I
         others = composition.ofKind(PdmNodeKind.Other).map { it.toOtherItem(replacements) }.sortedByPosition(),
         materials = composition.filter { it.target.kind in materialKinds }
             .map { it.toMaterialItem(replacements) }.sortedByPosition(),
-        kits = composition.ofKind(PdmNodeKind.Kit).filter { it.target.hasSpecification() }
-            .map { it.toKitItem(replacements) }.sortedByPosition(),
+        kits = (composition.ofKind(PdmNodeKind.Kit).filter { it.target.hasSpecification() }
+            .map { it.toKitItem(replacements) } +
+            composition.ofKind(PdmNodeKind.DocumentSet).mapNotNull { usage ->
+                usage.target.operationalDocumentsList()?.let { usage.toDocumentSetItem(it) }
+            }).sortedByPosition(),
         kitBlocks = composition.ofKind(PdmNodeKind.Kit).filterNot { it.target.hasSpecification() }
             .sortedByUsagePosition().map { it.toKitBlock() }.filterNot { it.isEmpty() },
     )
 }
 
-// Identity of an item for the comparison of the executions: the object id and the quantity (null for a document).
+// Identity of an item for the comparison of the executions: the object id and the quantity of the composition link
+// (null for a document).
 private data class ItemKey(val targetId: Int, val quantity: Quantity?)
 
 private fun CompositionUsage.itemKey(): ItemKey = ItemKey(target.id.asInt(), quantity)
 
-// The keys of every item of the execution: its composition and its specification documents. A kit with the purpose is
-// a note, so it does not take part in the comparison of the executions.
+// The composition usage gets into the sheet: a kit or a document set with the purpose is a note, and a document set gets in
+// only in the root and the executions (`documentSets`) with an operational documents list.
+private fun CompositionUsage.isShown(documentSets: Boolean): Boolean = kitPurpose() == null &&
+    (target.kind != PdmNodeKind.DocumentSet || (documentSets && target.operationalDocumentsList() != null))
+
+// The keys of every item of the execution: its composition and its specification documents. A kit or a document set with
+// the purpose is a note, so it does not take part in the comparison of the executions.
 private fun PdmNode.specificationKeys(): Set<ItemKey> =
-    usages.filterIsInstance<CompositionUsage>().filter { it.kitPurpose() == null }.mapTo(HashSet()) { it.itemKey() } +
+    usages.filterIsInstance<CompositionUsage>().filter { it.isShown(documentSets = true) }.mapTo(HashSet()) { it.itemKey() } +
         usages.filterIsInstance<DocumentUsage>().filter { it.isSpecificationDocument() }
             .mapTo(HashSet()) { ItemKey(it.target.id.asInt(), null) }
 
-// Purpose of a kit (link attribute «Назначение комплекта»): the text of the attribute, null for any other usage, a kit
-// without the purpose, or a blank purpose.
-internal fun CompositionUsage.kitPurpose(): String? =
-    if (target.kind == PdmNodeKind.Kit) attributes[LinkAttributeKey.KitPurpose].textOrNull() else null
+// Purpose of a kit or a document set (link attribute «Назначение комплекта», the same for both kinds): the text of the
+// attribute, null for any other usage, a kit or a document set without the purpose, or a blank purpose.
+internal fun CompositionUsage.kitPurpose(): String? = when (target.kind) {
+    PdmNodeKind.Kit, PdmNodeKind.DocumentSet -> attributes[LinkAttributeKey.KitPurpose].textOrNull()
+    else -> null
+}
 
 // A kit has a specification when one of its documents is of the kind Specification.
 internal fun PdmNode.hasSpecification(): Boolean =
     usages.filterIsInstance<DocumentUsage>().any { it.target.kind == PdmNodeKind.Specification }
 
-// The note of a kit with the purpose: "Примечание - <обозначение> - <наименование> <значение>". A kit without
-// designation gives "Примечание - <наименование> <значение>".
+// The operational documents list (ведомость эксплуатационных документов) of a document set: the first document of the kind
+// that the set has, null when there is none.
+internal fun PdmNode.operationalDocumentsList(): PdmNode? = usages.filterIsInstance<DocumentUsage>()
+    .firstOrNull { it.target.kind == PdmNodeKind.OperationalDocumentsList }?.target
+
+// A document set with its operational documents list: a row of the kits section. The designation and the name are the
+// attributes of the list, the format is its format; the quantity is the quantity of the composition link (the lower bound
+// of a range, as the other items). The row has no position, zone or notes.
+private fun CompositionUsage.toDocumentSetItem(list: PdmNode): KitItem {
+    val (designation, name) = list.designationAndName()
+    return KitItem(
+        position = null,
+        designation = designation,
+        name = name,
+        quantity = quantityOf(),
+        zone = null,
+        format = list.attributes[AttributeKey.Format].textOrNull(),
+        notes = emptyList(),
+    )
+}
+
+// The note of a kit or a document set with the purpose: "Примечание - <обозначение> - <наименование> <значение>". The
+// designation and the name are the attributes of the kit or the document set itself (not of its operational documents
+// list). Without designation: "Примечание - <наименование> <значение>".
 private class KitNote(val kitId: Int, val purpose: String, val text: String)
 
 private fun PdmNode.notesOfKits(): List<KitNote> = usages.filterIsInstance<CompositionUsage>().mapNotNull { usage ->
@@ -312,7 +355,7 @@ private fun CompositionUsage.toKitItem(replacements: Map<Int, ReplacementNote>):
 private fun CompositionUsage.toKitBlock(): KitBlock {
     val kit = target
     val (_, name) = kit.designationAndName()
-    val sections = kit.sectionsOf(ReplacementNotes.of(kit)) { true }
+    val sections = kit.sectionsOf(ReplacementNotes.of(kit), documentSets = false) { true }
     return KitBlock(
         label = name,
         documentation = sections.documentation,

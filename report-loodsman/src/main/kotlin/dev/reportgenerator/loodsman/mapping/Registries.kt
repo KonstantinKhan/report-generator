@@ -20,6 +20,8 @@ object Registries {
             "SPECIFICATION" to PdmNodeKind.Specification,
             "DETAIL_DRAWING" to PdmNodeKind.DetailDrawing,
             "MATERIAL_FORM" to PdmNodeKind.MaterialForm,
+            "DOCUMENT_SET" to PdmNodeKind.DocumentSet,
+            "OPERATIONAL_DOCUMENTS_LIST" to PdmNodeKind.OperationalDocumentsList,
         )
     )
 

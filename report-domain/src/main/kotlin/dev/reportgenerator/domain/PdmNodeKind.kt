@@ -23,5 +23,9 @@ sealed interface PdmNodeKind {
 
     data object MaterialForm : PdmNodeKind
 
+    data object DocumentSet : PdmNodeKind
+
+    data object OperationalDocumentsList : PdmNodeKind
+
     data class Unmapped(val pdmName: String) : PdmNodeKind
 }

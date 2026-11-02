@@ -15,7 +15,7 @@ data class SpecificationData(
     // Переменные данные исполнений: блоки в порядке связи, основное исполнение первым. Пусто, если исполнений нет
     // или ни в одном исполнении нет уникальных элементов.
     val variants: List<SpecificationVariant> = emptyList(),
-    // Notes of the kits with a purpose (link attribute "Назначение комплекта"): one text per kit and purpose, from the
+    // Notes of the kits and document sets with a purpose (link attribute "Назначение комплекта"): one text per node and purpose, from the
     // root and every execution. They go to the tail of the table, after the variants part.
     val kitNotes: List<String> = emptyList(),
     // Блоки комплектов без назначения и без Спецификации: состав каждого комплекта, после строк комплектов со
