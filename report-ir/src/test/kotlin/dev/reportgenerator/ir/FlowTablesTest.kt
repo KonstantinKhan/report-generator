@@ -230,10 +230,10 @@ ${groups(grouped, titleStyle)}
 
     @Test
     fun `gost-spec flow block is the specification table`() {
-        val spec = GostSpecTemplate.flowTable
+        val spec = GostSpecTemplate.PORTRAIT.flowTable
         assertEquals(8.0, spec.rowHeight)
         assertEquals(listOf("format", "zone", "position", "designation", "name", "quantity", "note"), spec.columns.map { it.id })
-        assertEquals("blocks[${GostSpecTemplate.template.blocks.indexOfFirst { it is FlowBlock }}].table", GostSpecTemplate.flowTablePath)
+        assertEquals("blocks[${GostSpecTemplate.PORTRAIT.template.blocks.indexOfFirst { it is FlowBlock }}].table", GostSpecTemplate.PORTRAIT.flowTablePath)
     }
 
     private fun numberedSpec(lines: String = "") = spec(

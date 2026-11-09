@@ -16,18 +16,18 @@ fun specification(data: SpecificationData, customerRepresentative: Boolean = tru
         title(data.documentName)
 
         pageSetup(
-            frame = FrameSpecs.firstPageStamp,
+            frame = FrameSpecs.SPECIFICATION.firstPageStamp,
             dataContext = dataContext,
-            continuationFrame = FrameSpecs.continuationPageStamp,
-            leftMarginFrame = FrameSpecs.leftMarginTable,
-            specLeftTable = FrameSpecs.specLeftTable,
-            mainTitleRightTable = if (customerRepresentative) FrameSpecs.mainTitleRightTable else null,
-            belowFrame = FrameSpecs.belowFrameNotes
+            continuationFrame = FrameSpecs.SPECIFICATION.continuationPageStamp,
+            leftMarginFrame = FrameSpecs.SPECIFICATION.leftMarginTable,
+            specLeftTable = FrameSpecs.SPECIFICATION.specLeftTable,
+            mainTitleRightTable = if (customerRepresentative) FrameSpecs.SPECIFICATION.mainTitleRightTable else null,
+            belowFrame = FrameSpecs.SPECIFICATION.belowFrameNotes
         )
 
         table(
             FlowTables.build(
-                GostSpecTemplate.flowTable, dataContext.schema, data.itemRecords(), GostSpecTemplate.flowTablePath,
+                GostSpecTemplate.PORTRAIT.flowTable, dataContext.schema, data.itemRecords(), GostSpecTemplate.PORTRAIT.flowTablePath,
                 appendix = data.variantAppendix(), notes = data.kitNoteTail(), kits = data.kitsFlow()
             )
         )

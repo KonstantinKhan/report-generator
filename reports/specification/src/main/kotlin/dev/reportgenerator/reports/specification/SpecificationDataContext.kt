@@ -74,10 +74,10 @@ private fun List<ItemRow>.records(): List<DataValue.Record> = map { row ->
 }
 
 // Section of a row: the template groups the rows by it, in the order of GOST R 2.106-2019 p.1.
-private enum class SpecificationSection { DOCUMENTATION, ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, KIT }
+enum class SpecificationSection { DOCUMENTATION, ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, KIT }
 
 // One row of the sheet, the fields of all sections in one shape (the section tells which of them are set).
-private class ItemRow(
+class ItemRow(
     val section: SpecificationSection,
     val position: Int? = null,
     val designation: String? = null,
@@ -90,14 +90,14 @@ private class ItemRow(
     val subgroup: String? = null,
 )
 
-private fun SpecificationData.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials, kits)
+internal fun SpecificationData.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials, kits)
 
 private fun SpecificationVariant.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials, kits)
 
 // The rows of a kit block: its sections (without kits: a kit inside a kit is not shown).
 private fun KitBlock.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials, emptyList())
 
-private fun sectionRows(
+internal fun sectionRows(
     documentation: List<DocumentationItem>,
     assemblies: List<AssemblyItem>,
     parts: List<PartItem>,
@@ -122,7 +122,7 @@ private fun sectionRows(
         ItemRow(SpecificationSection.KIT, it.position, it.designation, it.name, it.quantity, zone = it.zone, format = it.format, notes = it.notes)
     }
 
-private fun RecordBuilder.itemFields(row: ItemRow?) {
+internal fun RecordBuilder.itemFields(row: ItemRow?) {
     integer("position", row?.position?.toLong())
     string("designation", row?.designation)
     string("name", row?.name)

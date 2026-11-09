@@ -24,7 +24,7 @@ class PageSetupTest {
         val doc = document {
             pageSetup(
                 format = PageFormat.A3,
-                frame = FrameSpecs.firstPageStamp,
+                frame = FrameSpecs.SPECIFICATION.firstPageStamp,
                 dataContext = FrameBindings(designation = "X.001", name = "Test")
             )
             table { columns { } }

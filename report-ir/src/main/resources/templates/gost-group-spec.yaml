@@ -1,0 +1,286 @@
+# Static blocks and the flow table of a GROUP specification sheet ("Групповая спецификация"): A4 landscape, the
+# same title blocks as the specification sheet (gost-spec.yaml), the body with ten execution columns.
+# Units: mm. Read by report-ir (GostSpecTemplate.GROUP_LANDSCAPE): content -> FrameSpec, placement/reservation -> LayoutEngine.
+#
+# Slots (block ids) are bound to PageSetup fields by report-ir StaticSlot:
+#   stamp = frame, continuationStamp = continuationFrame, leftMargin = leftMarginFrame,
+#   belowFrame, specLeft = specLeftTable, mainTitleRight = mainTitleRightTable.
+#
+# Geometry of the landscape sheet (the margins are PageSetup's; the layout takes them from there, this block is the
+# same as the PageSetup the group report passes):
+#   sheet 297 x 210, margins top 20 / right 5 / bottom 5 / left 5 -> frame (working area) 287 x 185 at (5, 20).
+# Left of the frame there is no room (5 mm), so the strips that hung along the left edge of the portrait sheet
+# (specLeft, leftMargin) are placed in the TOP margin (20 mm), above the frame, with their labels in a horizontal row.
+# belowFrame ("Копировал" / "Формат") stays under the frame in the bottom margin (5 mm, exactly its height).
+# Anything else (stamp, continuationStamp, mainTitleRight) is the same as on the portrait sheet, anchored to the frame's corners.
+name: gost-group-spec
+
+sheet:
+  format: A4
+  orientation: landscape
+  margins: {top: 20, right: 5, bottom: 5, left: 5}
+
+blocksets:
+  # 65 x 15 header strip: Изм / Лист / № докум. / Подп. / Дата on the 3rd of 3 physical rows.
+  headerStrip:
+    blocks:
+      - id: grid
+        type: table
+        columns: [7, 10, 23, 15, 10]
+        rows:
+          - {height: 5, cells: [~, ~, ~, ~, ~]}
+          - {height: 5, cells: [~, ~, ~, ~, ~]}
+          - height: 5
+            cells:
+              - {text: "Изм", align: center}
+              - {text: "Лист", align: center}
+              - {text: "№ докум.", align: center}
+              - {text: "Подп.", align: center}
+              - {text: "Дата", align: center}
+
+  # 185 x 40 first-page title block: header strip + merged designation (120 x 15) + 5 signature rows.
+  # (The same as gost-spec.yaml: the title block is not changed for the landscape sheet.)
+  firstStamp:
+    blocks:
+      - {id: head, use: headerStrip}
+      - id: designation
+        type: table
+        columns: [120]
+        rows:
+          - height: 15
+            cells: [{bind: "${doc.designation}", align: center, style: frameText, fontSize: 7}]
+        attach: {self: topLeft, to: head.topRight}
+      - id: signatures
+        type: table
+        columns: [7, 10, 23, 15, 10, 70, 5, 5, 5, 15, 20]
+        rows:
+          - height: 5
+            cells:
+              - {text: "Разраб.", span: 2, borders: {bottom: thin}}
+              - {borders: {bottom: thin}}
+              - {borders: {bottom: thin}}
+              - {borders: {bottom: thin}}
+              - {bind: "${doc.name}", rowSpan: 5, align: center, style: frameText, fontSize: 7}
+              - {text: "Лит.", span: 3, align: center}
+              - {text: "Лист", align: center}
+              - {text: "Листов", align: center}
+          - height: 5
+            cells:
+              - {text: "Пров.", span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - ~
+              - ~
+              - ~
+              - {bind: "${page.number}", align: center}
+              - {bind: "${page.total}", align: center}
+          - height: 5
+            cells:
+              - {span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {span: 5, rowSpan: 3}
+          - height: 5
+            cells:
+              - {text: "Н. контр.", span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+          - height: 5
+            cells:
+              - {text: "Утв.", span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+        attach: {self: topLeft, to: head.bottomLeft}
+
+  # 185 x 15 continuation stamp (ESKD 2.104 §34.3): header strip + designation + sheet number column.
+  restStamp:
+    blocks:
+      - {id: head, use: headerStrip}
+      - id: designation
+        type: table
+        columns: [120]
+        rows:
+          - height: 15
+            cells: [{bind: "${doc.designation}", align: center, style: frameText, fontSize: 7}]
+        attach: {self: topLeft, to: head.topRight}
+      - id: sheetColumn
+        type: table
+        columns: [10]
+        rows:
+          - {height: 5, cells: [{text: "Лист", align: center}]}
+          - {height: 10, cells: [{bind: "${page.number}", align: center}]}
+        attach: {self: topRight, to: designation.topRight}
+
+blocks:
+  # first-page stamp nests into the frame's bottom-right corner
+  - id: stamp
+    use: firstStamp
+    when: first
+    reserves: true
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  # continuation stamp (pages 2+)
+  - id: continuationStamp
+    use: restStamp
+    when: rest
+    reserves: true
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  # 135 x 12 strip in the TOP margin, above the frame's right end (its bottom on the frame's top edge). The labels
+  # run left to right in the same order as the portrait strip (top to bottom): Подп. и дата / Инв. № дубл. /
+  # Взам. инв. № / Подл. и дата / Инв. № подл. (the last one is nearest to the frame's right edge). Labelled row 5 mm
+  # (outer), blank row 7 mm (next to the frame).
+  - id: leftMargin
+    type: table
+    reserves: true
+    columns: [35, 25, 25, 25, 25]
+    rows:
+      - height: 5
+        cells:
+          - {text: "Подп. и дата", align: center, fontSize: 2.5}
+          - {text: "Инв. № дубл.", align: center, fontSize: 2.5}
+          - {text: "Взам. инв. №", align: center, fontSize: 2.5}
+          - {text: "Подл. и дата", align: center, fontSize: 2.5}
+          - {text: "Инв. № подл.", align: center, fontSize: 2.5}
+      - {height: 7, cells: [~, ~, ~, ~, ~]}
+    attach: {self: bottomRight, to: sheet.contentTopRight}
+
+  # 120 x 12 strip in the TOP margin, above the frame's left end (its bottom on the frame's top edge): two columns
+  # of 60 mm, each a labelled row (5 mm, outer) over a blank row (7 mm, next to the frame).
+  - id: specLeft
+    type: table
+    when: first
+    reserves: true
+    columns: [60, 60]
+    rows:
+      - height: 5
+        cells:
+          - {text: "Справ. №", align: center}
+          - {text: "Перв. примен.", align: center}
+      - {height: 7, cells: [~, ~]}
+    attach: {self: bottomLeft, to: sheet.contentTopLeft}
+
+  # 120 x 22 table in the frame's bottom-right corner, 40mm up (above the first-page stamp).
+  - id: mainTitleRight
+    type: table
+    when: first
+    reserves: true
+    columns: [14, 53, 53]
+    rows:
+      - {height: 14, cells: [~, ~, ~]}
+      - {height: 8, cells: [{span: 3}]}
+    attach: {self: bottomRight, to: sheet.contentBottomRight, offset: {x: 0, y: -40}}
+
+  # "Копировал" / "Формат" captions in the sheet's bottom-right gutter, below the frame (borderless). The bottom margin
+  # is 5 mm, the block is 5 mm high: it fits exactly. Anchored to the SHEET corner.
+  - id: belowFrame
+    type: table
+    when: first
+    reserves: true
+    borders: none
+    columns: [10, 40, 25, 30, 15]
+    rows:
+      - height: 5
+        cells: [~, {text: "Копировал", align: center}, ~, {text: "Формат", align: center}, ~]
+    attach: {self: bottomRight, to: sheet.bottomRight}
+
+  # The main (flow) table of the group specification: the paginated body, filling the flow region. The sections, the
+  # order of the rows and the fields are the same as in the specification (gost-spec.yaml); the ten columns c1..c10 are
+  # the executions of one block (the values are text, set by the code: "х", "-" or the quantity).
+  # The header is two levels (7 + 8 mm): the top row holds "Кол. на исполнение" with the designation of the root object,
+  # the bottom row the number of every execution column. Both texts are set by the code (they differ per block);
+  # the cells here are the structure and the style only.
+  # Columns: 6+6+8+70+63 + 10*10 + 34 = 287 mm = the sheet's content width (checked, no tolerance).
+  - id: body
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank                  # cover each page down to the frame with blank bordered rows
+      remainder: {first: gap, rest: stretch}
+      keep: {titleChain: true}     # spacers + title + first data line are never split by a page break
+      styles: {head: tableHeader, data: tableText, groupTitle: groupHeader}
+      # Sections in GOST R 2.106-2019 p.1 order. A section without items makes no group (skipEmpty).
+      groupBy:
+        field: section
+        order: [DOCUMENTATION, ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, KIT]
+        titles:
+          DOCUMENTATION: "Документация"
+          ASSEMBLY: "Сборочные единицы"
+          PART: "Детали"
+          STANDARD: "Стандартные изделия"
+          OTHER: "Прочие изделия"
+          MATERIAL: "Материалы"
+          KIT: "Комплекты"
+        skipEmpty: true
+      columns:
+        - {id: format, width: 6, stick: first, align: center}
+        - {id: zone, width: 6, stick: first, align: center}
+        - {id: position, width: 8, stick: first, align: center}
+        - {id: designation, width: 70}
+        - {id: name, width: 63}
+        - {id: c1, width: 10, stick: first, align: center}
+        - {id: c2, width: 10, stick: first, align: center}
+        - {id: c3, width: 10, stick: first, align: center}
+        - {id: c4, width: 10, stick: first, align: center}
+        - {id: c5, width: 10, stick: first, align: center}
+        - {id: c6, width: 10, stick: first, align: center}
+        - {id: c7, width: 10, stick: first, align: center}
+        - {id: c8, width: 10, stick: first, align: center}
+        - {id: c9, width: 10, stick: first, align: center}
+        - {id: c10, width: 10, stick: first, align: center}
+        - {id: note, width: 34, stick: last, align: left}
+      header:
+        repeat: true               # on every page; the height is the sum of the two rows (7 + 8 = 15)
+        rows:
+          - height: 7
+            cells:
+              - {text: "Формат", rotate: 90, style: head, rowSpan: 2}
+              - {text: "Зона", rotate: 90, style: head, rowSpan: 2}
+              - {text: "Поз.", rotate: 90, style: head, rowSpan: 2}
+              - {text: "Обозначение", style: head, rowSpan: 2}
+              - {text: "Наименование", style: head, rowSpan: 2}
+              - {text: "Кол. на исполнение", align: left, style: head, span: 10}
+              - {text: "Примечание", style: head, rowSpan: 2}
+          - height: 8
+            cells:
+              - {text: "", style: head}
+              - {text: "", style: head}
+              - {text: "", style: head}
+              - {text: "", style: head}
+              - {text: "", style: head}
+              - {text: "", style: head}
+              - {text: "", style: head}
+              - {text: "", style: head}
+              - {text: "", style: head}
+              - {text: "", style: head}
+      groupTitle: {column: name, style: groupTitle, align: center, spacerBefore: 2, spacerAfter: 1}
+      # sub-title "вид изделия" (item.subgroup, set for standard / other items only): a compact underlined row, no spacers
+      subTitle: {field: subgroup, column: name, style: groupTitle, align: center}
+      row:
+        cells:
+          format: {bind: "${item.format}", optional: true, style: data}
+          zone: {bind: "${item.zone}", optional: true, style: data}
+          position: {bind: "${item.position}", optional: true, style: data}
+          designation: {bind: "${item.designation}", optional: true, style: data}
+          name: {bind: "${item.name}", style: data}
+          # the value of the row in an execution column: "х" (documentation), "-" (no item), or the quantity; empty
+          # when the block has no such execution (the last block of a sheet)
+          c1: {bind: "${item.c1}", style: data}
+          c2: {bind: "${item.c2}", style: data}
+          c3: {bind: "${item.c3}", style: data}
+          c4: {bind: "${item.c4}", style: data}
+          c5: {bind: "${item.c5}", style: data}
+          c6: {bind: "${item.c6}", style: data}
+          c7: {bind: "${item.c7}", style: data}
+          c8: {bind: "${item.c8}", style: data}
+          c9: {bind: "${item.c9}", style: data}
+          c10: {bind: "${item.c10}", style: data}
+          # the notes of the item, one per line (a material: the unit first, then the note of the link)
+          note:
+            bind: "${item.notes}"
+            style: data
+            optional: true

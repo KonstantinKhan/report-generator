@@ -38,7 +38,8 @@ import dev.reportgenerator.reports.specification.SpecificationOrder.sortedByStan
 // variant) has it with the same object id and the same quantity. Common items stay in the main part; every other item
 // goes to the block of each execution it is in (the root's block first, then the variants in link order). An execution
 // without such items has no block.
-fun PdmNode.toSpecificationData(): SpecificationData {
+// The designation and the name of the root object (the stamp and the header of the sheet). A missing name is the designation.
+internal fun PdmNode.documentNames(): Pair<String, String> {
     val documentDesignation = when (val value = attributeText(AttributeKey.Designation)) {
         is TextState.Value -> value.text
         is TextState.Missing -> throw SpecificationDataException("Root node ${id.asInt()}: designation is missing")
@@ -49,6 +50,11 @@ fun PdmNode.toSpecificationData(): SpecificationData {
         is TextState.Missing -> documentDesignation
         is TextState.NotLoaded -> throw SpecificationDataException("Root node ${id.asInt()}: name is not loaded")
     }
+    return documentDesignation to documentName
+}
+
+fun PdmNode.toSpecificationData(): SpecificationData {
+    val (documentDesignation, documentName) = documentNames()
     val executions = listOf(this) + usages.filterIsInstance<VariantUsage>().map { it.target }
     val keysOf = executions.map { it.specificationKeys() }
     val common = keysOf.reduce { acc, keys -> acc intersect keys }
@@ -140,13 +146,13 @@ private fun PdmNode.sectionsOf(
 
 // Identity of an item for the comparison of the executions: the object id and the quantity of the composition link
 // (null for a document).
-private data class ItemKey(val targetId: Int, val quantity: Quantity?)
+internal data class ItemKey(val targetId: Int, val quantity: Quantity?)
 
-private fun CompositionUsage.itemKey(): ItemKey = ItemKey(target.id.asInt(), quantity)
+internal fun CompositionUsage.itemKey(): ItemKey = ItemKey(target.id.asInt(), quantity)
 
 // The composition usage gets into the sheet: a kit or a document set with the purpose is a note, and a document set gets in
 // only in the root and the executions (`documentSets`) with an operational documents list.
-private fun CompositionUsage.isShown(documentSets: Boolean): Boolean = kitPurpose() == null &&
+internal fun CompositionUsage.isShown(documentSets: Boolean): Boolean = kitPurpose() == null &&
     (target.kind != PdmNodeKind.DocumentSet || (documentSets && target.operationalDocumentsList() != null))
 
 // The keys of every item of the execution: its composition and its specification documents. A kit or a document set with
@@ -175,7 +181,7 @@ internal fun PdmNode.operationalDocumentsList(): PdmNode? = usages.filterIsInsta
 // A document set with its operational documents list: a row of the kits section. The designation and the name are the
 // attributes of the list, the format is its format; the quantity is the quantity of the composition link (the lower bound
 // of a range, as the other items). The row has no position, zone or notes.
-private fun CompositionUsage.toDocumentSetItem(list: PdmNode): KitItem {
+internal fun CompositionUsage.toDocumentSetItem(list: PdmNode): KitItem {
     val (designation, name) = list.designationAndName()
     return KitItem(
         position = null,
@@ -191,9 +197,9 @@ private fun CompositionUsage.toDocumentSetItem(list: PdmNode): KitItem {
 // The note of a kit or a document set with the purpose: "Примечание - <обозначение> - <наименование> <значение>". The
 // designation and the name are the attributes of the kit or the document set itself (not of its operational documents
 // list). Without designation: "Примечание - <наименование> <значение>".
-private class KitNote(val kitId: Int, val purpose: String, val text: String)
+internal class KitNote(val kitId: Int, val purpose: String, val text: String)
 
-private fun PdmNode.notesOfKits(): List<KitNote> = usages.filterIsInstance<CompositionUsage>().mapNotNull { usage ->
+internal fun PdmNode.notesOfKits(): List<KitNote> = usages.filterIsInstance<CompositionUsage>().mapNotNull { usage ->
     val purpose = usage.kitPurpose() ?: return@mapNotNull null
     val (designation, name) = usage.target.designationAndName()
     KitNote(
@@ -204,17 +210,17 @@ private fun PdmNode.notesOfKits(): List<KitNote> = usages.filterIsInstance<Compo
 }
 
 // Designation of an execution: the label of its block in the variants section.
-private fun PdmNode.designationLabel(): String = when (val value = attributeText(AttributeKey.Designation)) {
+internal fun PdmNode.designationLabel(): String = when (val value = attributeText(AttributeKey.Designation)) {
     is TextState.Value -> value.text
     is TextState.Missing -> throw SpecificationDataException("Node ${id.asInt()}: designation is missing for an execution")
     is TextState.NotLoaded -> throw SpecificationDataException("Node ${id.asInt()}: designation is not loaded")
 }
 
 // Which documents get into the documentation section. Kept as a named function: the rule will be refined later.
-private fun DocumentUsage.isSpecificationDocument(): Boolean = target.kind == PdmNodeKind.AssemblyDrawing
+internal fun DocumentUsage.isSpecificationDocument(): Boolean = target.kind == PdmNodeKind.AssemblyDrawing
 
 // Order of the documentation section: by designation, without one by name.
-private val documentationOrder: Comparator<DocumentationItem> = compareBy { it.designation ?: it.name }
+internal val documentationOrder: Comparator<DocumentationItem> = compareBy { it.designation ?: it.name }
 
 // Natural order of designations: a run of digits compares as a number ("-2" < "-10"), the rest of the text compares
 // ignoring case. Texts equal in this order compare as 0 (the caller's stable sort keeps their order).
@@ -254,12 +260,12 @@ internal object NaturalOrder : Comparator<String> {
 
 // Items with a position go first in position order (equal positions keep the usage order); items without one go
 // after them, by designation or, without a designation, by name.
-private fun <T : PositionedItem> List<T>.sortedByPosition(): List<T> {
+internal fun <T : PositionedItem> List<T>.sortedByPosition(): List<T> {
     val (positioned, unpositioned) = partition { it.position != null }
     return positioned.sortedBy { it.position } + unpositioned.sortedBy { it.designation ?: it.name }
 }
 
-private fun List<CompositionUsage>.ofKind(kind: PdmNodeKind): List<CompositionUsage> =
+internal fun List<CompositionUsage>.ofKind(kind: PdmNodeKind): List<CompositionUsage> =
     filter { it.target.kind == kind }
 
 // The same order as [sortedByPosition], for the usages: by position, then by designation or name.
@@ -270,7 +276,7 @@ private fun List<CompositionUsage>.sortedByUsagePosition(): List<CompositionUsag
     }
 }
 
-private fun PdmNode.toDocumentationItem(): DocumentationItem {
+internal fun PdmNode.toDocumentationItem(): DocumentationItem {
     val (designation, name) = designationAndName()
     val format = formatCell(attributes[AttributeKey.Format].textOrNull())
     return DocumentationItem(designation = designation, name = name, format = format.column, notes = format.notes)
@@ -321,7 +327,7 @@ private fun CompositionUsage.fields(replacements: Map<Int, ReplacementNote>, mat
     )
 }
 
-private fun CompositionUsage.toAssemblyItem(replacements: Map<Int, ReplacementNote>): AssemblyItem {
+internal fun CompositionUsage.toAssemblyItem(replacements: Map<Int, ReplacementNote>): AssemblyItem {
     val fields = fields(replacements)
     val (designation, name) = target.designationAndName()
     val format = formatCell(target.formatOf(PdmNodeKind.Specification))
@@ -338,7 +344,7 @@ private fun CompositionUsage.toAssemblyItem(replacements: Map<Int, ReplacementNo
 }
 
 // A kit with a specification: the same cells as an assembly unit; its format is the format of its specification.
-private fun CompositionUsage.toKitItem(replacements: Map<Int, ReplacementNote>): KitItem {
+internal fun CompositionUsage.toKitItem(replacements: Map<Int, ReplacementNote>): KitItem {
     val fields = fields(replacements)
     val (designation, name) = target.designationAndName()
     val format = formatCell(target.formatOf(PdmNodeKind.Specification))
@@ -371,7 +377,7 @@ private fun CompositionUsage.toKitBlock(): KitBlock {
     )
 }
 
-private fun CompositionUsage.toPartItem(replacements: Map<Int, ReplacementNote>): PartItem {
+internal fun CompositionUsage.toPartItem(replacements: Map<Int, ReplacementNote>): PartItem {
     val fields = fields(replacements)
     val (designation, name) = target.designationAndName()
     val format = formatCell(target.formatOf(PdmNodeKind.DetailDrawing))
@@ -387,7 +393,7 @@ private fun CompositionUsage.toPartItem(replacements: Map<Int, ReplacementNote>)
     )
 }
 
-private fun CompositionUsage.toStandardItem(replacements: Map<Int, ReplacementNote>): StandardItem {
+internal fun CompositionUsage.toStandardItem(replacements: Map<Int, ReplacementNote>): StandardItem {
     val fields = fields(replacements)
     val (designation, name) = target.standardDesignationAndName()
     val zone = zoneCell(zoneOf())
@@ -404,7 +410,7 @@ private fun CompositionUsage.toStandardItem(replacements: Map<Int, ReplacementNo
     )
 }
 
-private fun CompositionUsage.toOtherItem(replacements: Map<Int, ReplacementNote>): OtherItem {
+internal fun CompositionUsage.toOtherItem(replacements: Map<Int, ReplacementNote>): OtherItem {
     val fields = fields(replacements)
     val (designation, name) = target.standardDesignationAndName()
     val zone = zoneCell(zoneOf())
@@ -422,12 +428,12 @@ private fun CompositionUsage.toOtherItem(replacements: Map<Int, ReplacementNote>
 }
 
 // Kinds of the materials section: a material itself, or a material form whose material is read from its usages.
-private val materialKinds = setOf(PdmNodeKind.Material, PdmNodeKind.MaterialForm)
+internal val materialKinds = setOf(PdmNodeKind.Material, PdmNodeKind.MaterialForm)
 
 // The unit of a material is the first note, the note of the composition link follows it. A non-basic material shows its
 // count with the unit instead ("2,5 кг" is the first note, the unit is not repeated). A material form takes its
 // name and designation from its material, the position, quantity, unit and note come from the composition link.
-private fun CompositionUsage.toMaterialItem(replacements: Map<Int, ReplacementNote>): MaterialItem {
+internal fun CompositionUsage.toMaterialItem(replacements: Map<Int, ReplacementNote>): MaterialItem {
     val fields = fields(replacements, material = true)
     val (designation, name) = target.materialNode().designationAndName()
     val zone = zoneCell(zoneOf())
@@ -493,7 +499,7 @@ internal fun CompositionUsage.positionOf(): Int? = when (val value = position) {
     is Field.NotLoaded -> throw SpecificationDataException("Node ${target.id.asInt()}: position is not loaded")
 }
 
-private fun CompositionUsage.quantityOf(): Double = when (val value = quantity) {
+internal fun CompositionUsage.quantityOf(): Double = when (val value = quantity) {
     is Quantity.Exact -> value.amount
     is Quantity.Range -> value.min
     is Quantity.Missing -> throw SpecificationDataException("Node ${target.id.asInt()}: quantity is missing")
@@ -518,7 +524,7 @@ private const val PIECE_UNIT = "шт."
 
 // A material shows the number as is (decimal comma, no trailing zeros), the other sections show a whole count (rounded
 // half up), as the quantity column does.
-private fun formatQuantity(value: Double, material: Boolean): String {
+internal fun formatQuantity(value: Double, material: Boolean): String {
     val decimal = BigDecimal.valueOf(value)
     return if (material) {
         decimal.stripTrailingZeros().toPlainString().replace('.', ',')
@@ -534,7 +540,7 @@ private fun CompositionUsage.unitOf(): String? = when (val value = unit) {
 }
 
 // Designation and name of an item of the sheet (the rules of the name column).
-private fun PdmNode.designationAndName(): Pair<String?, String> {
+internal fun PdmNode.designationAndName(): Pair<String?, String> {
     if (kind == PdmNodeKind.Material) {
         // In the specification the material designation is shown in the name column, the designation column stays empty.
         val materialName = when (val value = attributeText(AttributeKey.Designation)) {
@@ -575,14 +581,14 @@ private fun PdmNode.standardDesignationAndName(): Pair<String?, String> {
 }
 
 // Intermediate state of a text attribute: file-private, used only while building the specification.
-private sealed interface TextState {
+internal sealed interface TextState {
     data class Value(val text: String) : TextState
     data object Missing : TextState
     data object NotLoaded : TextState
 }
 
 // Attribute reading: Text -> Value, Empty -> Missing, key not in the map (not requested) -> NotLoaded.
-private fun PdmNode.attributeText(key: AttributeKey): TextState = when (val value = attributes[key]) {
+internal fun PdmNode.attributeText(key: AttributeKey): TextState = when (val value = attributes[key]) {
     null -> TextState.NotLoaded
     is AttributeValue.Text -> TextState.Value(value.value)
     is AttributeValue.Number -> TextState.Value(value.value.toString())

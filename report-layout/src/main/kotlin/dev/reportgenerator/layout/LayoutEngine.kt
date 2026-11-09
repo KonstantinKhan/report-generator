@@ -91,10 +91,10 @@ fun layOut(
     fontResolver: (TextStyle) -> FontRef
 ): LaidOutDocument {
     val setup = document.pageSetup
-    val table = document.elements.filterIsInstance<IrTable>().firstOrNull()
+    val tables = document.elements.filterIsInstance<IrTable>()
     val staticBlocks = layOutStaticBlocks(setup)
 
-    if (table == null) {
+    if (tables.isEmpty()) {
         val metrics = PageLayoutMetrics(setup.format, setup.margins, Length.ZERO, staticBlocks.firstReserved, staticBlocks.continuationReserved)
         val elements = mutableListOf<PageElement>()
         elements += frameRectangle(metrics, setup.frameStyle)
@@ -106,25 +106,47 @@ fun layOut(
 
     val contentLeft = setup.margins.left
     val contentWidth = setup.format.width - setup.margins.left - setup.margins.right
-    val offsets = columnOffsets(table.columns, contentLeft)
+    // Every table is laid out from a new page on (see paginate); the static blocks and the page numbers cover the document.
+    val segments = tables.map { table ->
+        val offsets = columnOffsets(table.columns, contentLeft)
+        val headerLayout = buildHeaderLayout(table.header, table.columns, offsets, setup.margins.top, textMeasurer, fontResolver)
+        val blocks = buildBlocks(table, offsets, contentWidth, contentLeft, textMeasurer, "Document/Table")
+        TableSegment(
+            table = table,
+            offsets = offsets,
+            headerElements = headerLayout.elements,
+            metrics = PageLayoutMetrics(
+                format = setup.format,
+                margins = setup.margins,
+                headerHeight = headerLayout.height,
+                firstPageBlocks = staticBlocks.firstReserved,
+                continuationPageBlocks = staticBlocks.continuationReserved,
+                repeatHeader = table.header?.repeat ?: true
+            ),
+            units = groupIntoUnits(blocks),
+        )
+    }
 
-    val headerLayout = buildHeaderLayout(table.header, table.columns, offsets, setup.margins.top, textMeasurer, fontResolver)
-
-    val blocks = buildBlocks(table, offsets, contentWidth, contentLeft, textMeasurer, "Document/Table")
-    val units = groupIntoUnits(blocks)
-
-    val metrics = PageLayoutMetrics(
-        format = setup.format,
-        margins = setup.margins,
-        headerHeight = headerLayout.height,
-        firstPageBlocks = staticBlocks.firstReserved,
-        continuationPageBlocks = staticBlocks.continuationReserved,
-        repeatHeader = table.header?.repeat ?: true
-    )
-
-    return renderPages(units, metrics, staticBlocks, headerLayout.elements, setup, textMeasurer, fontResolver, table, offsets)
+    return renderPages(paginate(segments), setup, staticBlocks, textMeasurer, fontResolver)
 }
 
+// One IrTable of the document with its own column offsets, header and pagination metrics.
+private class TableSegment(
+    val table: IrTable,
+    val offsets: List<Length>,
+    val headerElements: List<PageElement>,
+    val metrics: PageLayoutMetrics,
+    val units: List<List<LayoutBlock>>,
+)
+
+// A page of the plan: the table it belongs to, the blocks placed on it with their y, the y where its content ends, and
+// whether it is the first page of its table (the table header and the remainder rule of the first page apply to it).
+private class PlannedPage(
+    val segment: TableSegment,
+    val placed: List<Pair<LayoutBlock, Length>>,
+    val finalY: Length,
+    val firstOfSegment: Boolean,
+)
 private data class HeaderLayout(val elements: List<PageElement>, val height: Length)
 
 private fun buildHeaderLayout(
@@ -149,71 +171,85 @@ private fun buildHeaderLayout(
 // Two passes: content first, chrome (frame/header/stamp) second. The stamp's page.number/
 // page.total bindings need the final page count, which isn't known until pagination finishes —
 // drawing chrome per-page as each page closed (the old approach) couldn't supply that on page 1.
-private fun renderPages(
-    units: List<List<LayoutBlock>>,
-    metrics: PageLayoutMetrics,
-    staticBlocks: StaticLayout,
-    headerElements: List<PageElement>,
-    setup: PageSetup,
-    textMeasurer: TextMeasurer,
-    fontResolver: (TextStyle) -> FontRef,
-    table: IrTable,
-    offsets: List<Length>
-): LaidOutDocument {
-    // Pagination only decides WHERE every block goes (page, y); the elements are drawn afterwards, page by page in
-    // document order, so the line numbers (IrTable.lineNumbers) follow the final placement, not the order the
-    // units were tried in.
-    val placements = mutableListOf(mutableListOf<Pair<LayoutBlock, Length>>())
-    // Final `y` of each page at the moment it closes — needed after the loop to know how much
-    // space is left to fill with blank bordered rows (fixed-rowHeight tables only, see below).
-    val pageFinalY = mutableListOf<Length>()
-    var y = metrics.contentTop(isFirstPage = true)
+//
+// Pagination: the tables go one after another, each from a new page on, so no page holds the blocks of two tables.
+// Pagination only decides WHERE every block goes (page, y); the elements are drawn afterwards, page by page in
+// document order, so the line numbers (IrTable.lineNumbers) follow the final placement, not the order the
+// units were tried in.
+private fun paginate(segments: List<TableSegment>): List<PlannedPage> {
+    val planned = mutableListOf<PlannedPage>()
+    for (segment in segments) {
+        val metrics = segment.metrics
+        var placed = mutableListOf<Pair<LayoutBlock, Length>>()
+        var y = metrics.contentTop(isFirstPage = true)
+        var firstOfSegment = true
 
-    fun isFirstPage() = placements.size == 1
+        // Closes the current page of the table; the next page of the table starts at the top of its content.
+        fun startNewPage() {
+            planned += PlannedPage(segment, placed, y, firstOfSegment)
+            placed = mutableListOf()
+            firstOfSegment = false
+            y = metrics.contentTop(isFirstPage = false)
+        }
 
-    fun startNewPage() {
-        pageFinalY += y
-        placements.add(mutableListOf())
-        y = metrics.contentTop(isFirstPage = false)
-    }
-    for (unit in units) {
-        val unitHeight = unit.fold(Length.ZERO) { acc, block -> acc + block.height }
+        for (unit in segment.units) {
+            val unitHeight = unit.fold(Length.ZERO) { acc, block -> acc + block.height }
 
-        if (y + unitHeight > metrics.contentBottom(isFirstPage())) {
-            if (placements.last().isNotEmpty() || isFirstPage()) {
-                startNewPage()
+            // the document's first page is the one no page is closed for yet
+            if (y + unitHeight > metrics.contentBottom(isFirstPage = planned.isEmpty())) {
+                if (placed.isNotEmpty() || planned.isEmpty()) {
+                    startNewPage()
+                }
+            }
+
+            if (y + unitHeight > metrics.contentBottom(isFirstPage = planned.isEmpty())) {
+                val first = unit.first()
+                throw LayoutOverflowException(
+                    elementPath = first.path,
+                    constraint = describeConstraint(first.constraints),
+                    pageNumber = planned.size + 1,
+                    message = "Block '${first.path}' height ${unitHeight.toMillimeters()}mm exceeds available content height on page ${planned.size + 1}"
+                )
+            }
+
+            for (block in unit) {
+                placed.add(block to y)
+                y += block.height
             }
         }
 
-        if (y + unitHeight > metrics.contentBottom(isFirstPage())) {
-            val first = unit.first()
-            throw LayoutOverflowException(
-                elementPath = first.path,
-                constraint = describeConstraint(first.constraints),
-                pageNumber = placements.size,
-                message = "Block '${first.path}' height ${unitHeight.toMillimeters()}mm exceeds available content height on page ${placements.size}"
-            )
-        }
-
-        for (block in unit) {
-            placements.last() += block to y
-            y += block.height
-        }
+        planned += PlannedPage(segment, placed, y, firstOfSegment)
     }
+    return planned
+}
 
-    pageFinalY += y
+private fun renderPages(
+    planned: List<PlannedPage>,
+    setup: PageSetup,
+    staticBlocks: StaticLayout,
+    textMeasurer: TextMeasurer,
+    fontResolver: (TextStyle) -> FontRef
+): LaidOutDocument {
+    val totalPages = planned.size
+    // the running line number of the table being drawn (restarts with every table)
+    var counter = 0L
 
-    // IrTable.lineNumbers: the running number, written into the numbered column of every data line (and, with
-    // fillBlank, of every filler row) in document order; PAGE scope restarts it on each page.
-    val numbers = table.lineNumbers
-    val numberColumn = numbers?.let { n -> table.columns.indexOfFirst { it.id == n.column } } ?: -1
-    var counter = numbers?.start ?: 0L
-
-    val pageContents = placements.mapIndexed { index, placed ->
+    val pageContents = planned.mapIndexed { index, page ->
+        val table = page.segment.table
+        val offsets = page.segment.offsets
+        val metrics = page.segment.metrics
+        val isDocumentFirst = index == 0
         val content = mutableListOf<PageElement>()
-        if (numbers != null && numbers.scope == IrLineScope.PAGE) counter = numbers.start
+
+        // IrTable.lineNumbers: the running number, written into the numbered column of every data line (and, with
+        // fillBlank, of every filler row) in document order; PAGE scope restarts it on each page.
+        val numbers = table.lineNumbers
+        val numberColumn = numbers?.let { n -> table.columns.indexOfFirst { it.id == n.column } } ?: -1
+        if (numbers != null && (page.firstOfSegment || numbers.scope == IrLineScope.PAGE)) counter = numbers.start
+
+        val placed = page.placed
         val lastIndex = placed.lastIndex
-        val stretchBy = lastRowStretch(table, index, metrics.contentBottom(index == 0) - pageFinalY[index])
+        val stretchBy = lastRowStretch(table, page.firstOfSegment, metrics.contentBottom(isDocumentFirst) - page.finalY)
         for ((blockIndex, placedBlock) in placed.withIndex()) {
             val (placedRaw, top) = placedBlock
             // STRETCH without whole filler rows: the page's last row absorbs the leftover so its bottom meets the flow bottom
@@ -235,8 +271,8 @@ private fun renderPages(
         // elements at all) — not just as far as content happened to reach.
         val rowHeight = table.rowHeight
         if (rowHeight != null && table.fillBlank) {
-            val bottom = metrics.contentBottom(index == 0)
-            val contentStart = pageFinalY[index]
+            val bottom = metrics.contentBottom(isDocumentFirst)
+            val contentStart = page.finalY
             val available = bottom - contentStart
 
             // Calculate full rows and remainder
@@ -247,7 +283,7 @@ private fun renderPages(
             repeat(fullRowsCount) { rowIndex ->
                 val isLastRow = rowIndex == fullRowsCount - 1
                 // STRETCH: the last row includes the remainder height; GAP: it stays below the last row
-                val currentRowHeight = if (isLastRow && remainderHeight > Length.ZERO && table.remainderOn(index) == IrFillRemainder.STRETCH) {
+                val currentRowHeight = if (isLastRow && remainderHeight > Length.ZERO && table.remainderOn(page.firstOfSegment) == IrFillRemainder.STRETCH) {
                     rowHeight + remainderHeight
                 } else {
                     rowHeight
@@ -264,12 +300,13 @@ private fun renderPages(
         content
     }
 
-    val totalPages = pageContents.size
     val pages = pageContents.mapIndexed { index, content ->
         val pageNumber = index + 1
+        val page = planned[index]
+        val metrics = page.segment.metrics
         val chrome = mutableListOf<PageElement>()
         chrome += frameRectangle(metrics, setup.frameStyle)
-        if (pageNumber == 1 || metrics.repeatHeader) chrome += headerElements
+        if (page.firstOfSegment || metrics.repeatHeader) chrome += page.segment.headerElements
         // which blocks appear on which pages, and where, is the static template's business
         val bindings = pageData(setup.dataContext, pageNumber, totalPages)
         val blocks = if (pageNumber == 1) staticBlocks.first else staticBlocks.continuation
@@ -285,11 +322,11 @@ private fun renderPages(
 // The last row is the last physical bordered row of the page whatever it is (data line, group title, spacer, total):
 // a bordered row is a fixed-height box with centered text, so a taller box never re-wraps or re-paginates, and the
 // page break rules (keep/keepWithNext) were decided before the stretch, on the original heights.
-private fun IrTable.remainderOn(pageIndex: Int): IrFillRemainder = if (pageIndex == 0) fillRemainder else fillRemainderRest
+private fun IrTable.remainderOn(firstOfTable: Boolean): IrFillRemainder = if (firstOfTable) fillRemainder else fillRemainderRest
 
-private fun lastRowStretch(table: IrTable, pageIndex: Int, available: Length): Length {
+private fun lastRowStretch(table: IrTable, firstOfTable: Boolean, available: Length): Length {
     val rowHeight = table.rowHeight ?: return Length.ZERO
-    if (!table.fillBlank || table.remainderOn(pageIndex) != IrFillRemainder.STRETCH) return Length.ZERO
+    if (!table.fillBlank || table.remainderOn(firstOfTable) != IrFillRemainder.STRETCH) return Length.ZERO
     if ((available.raw / rowHeight.raw).toInt() > 0) return Length.ZERO
     return if (available > Length.ZERO) available else Length.ZERO
 }
