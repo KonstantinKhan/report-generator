@@ -86,6 +86,8 @@ private class ItemRow(
     val format: String? = null,
     val zone: String? = null,
     val notes: List<String> = emptyList(),
+    // Sub-title of the group (product kind in the plural) for standard and other products; null = no sub-title.
+    val subgroup: String? = null,
 )
 
 private fun SpecificationData.rows(): List<ItemRow> = sectionRows(documentation, assemblies, parts, standards, others, materials, kits)
@@ -111,9 +113,9 @@ private fun sectionRows(
     } + parts.map {
         ItemRow(SpecificationSection.PART, it.position, it.designation, it.name, it.quantity, zone = it.zone, format = it.format, notes = it.notes)
     } + standards.map {
-        ItemRow(SpecificationSection.STANDARD, it.position, it.designation, it.name, it.quantity, zone = it.zone, notes = it.notes)
+        ItemRow(SpecificationSection.STANDARD, it.position, it.designation, it.name, it.quantity, zone = it.zone, notes = it.notes, subgroup = SpecificationSubgroups.of(it))
     } + others.map {
-        ItemRow(SpecificationSection.OTHER, it.position, it.designation, it.name, it.quantity, zone = it.zone, notes = it.notes)
+        ItemRow(SpecificationSection.OTHER, it.position, it.designation, it.name, it.quantity, zone = it.zone, notes = it.notes, subgroup = SpecificationSubgroups.of(it))
     } + materials.map {
         ItemRow(SpecificationSection.MATERIAL, it.position, it.designation, it.name, it.quantity, zone = it.zone, notes = it.notes)
     } + kits.map {
@@ -131,4 +133,6 @@ private fun RecordBuilder.itemFields(row: ItemRow?) {
     string("zone", row?.zone)
     // The template has no list binds: the notes of a row are one text, one note per line.
     string("notes", row?.notes?.takeIf { it.isNotEmpty() }?.joinToString("\n"))
+    // Sub-title of the group (product kind, plural) of standard and other products; absent = no sub-title.
+    string("subgroup", row?.subgroup)
 }

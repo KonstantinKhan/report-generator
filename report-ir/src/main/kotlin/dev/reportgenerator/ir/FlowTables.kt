@@ -97,6 +97,14 @@ object FlowTables {
             )
         } ?: IrGroupTitle(spacerBefore = 0, spacerAfter = 0, keepWithRows = spec.keep.titleChain)
 
+        val subTitle = spec.subTitle?.let { s ->
+            IrSubTitle(
+                column = s.column,
+                style = styles.resolve(s.style ?: DEFAULT_TITLE_STYLE, "$path.subTitle.style"),
+                align = s.align.toIr()
+            )
+        }
+
         val rowStyles = spec.columns.associate {
             val cell = spec.rowCells.getValue(it.id)
             it.id to styles.resolve(cell.style ?: DEFAULT_ROW_STYLE, "$path.row.cells.${it.id}.style")
@@ -105,7 +113,7 @@ object FlowTables {
         val renderers = spec.columns.associate { it.id to FlowCellRenderer(spec.rowCells.getValue(it.id), fields) }
         // the cell bound to ${line.number} stays empty here: the layout writes the number of every physical line into it
         val lineColumn = spec.lineNumberColumn()
-        fun row(item: DataValue.Record): IrRow {
+        fun row(item: DataValue.Record, subTitle: String? = null): IrRow {
             val data = MapDataContext(rowSchema, mapOf("item" to item))
             return IrRow(
                 spec.columns.map { column ->
@@ -114,7 +122,8 @@ object FlowTables {
                         if (column.id == lineColumn) "" else renderers.getValue(column.id).render(item, data, rows),
                         style = rowStyles.getValue(column.id), align = (cell.align ?: column.align).toIr()
                     )
-                }
+                },
+                subTitle = subTitle
             )
         }
 
@@ -133,7 +142,7 @@ object FlowTables {
             }
         )
 
-        fun groupElement(g: ShapedGroup) = IrGroup(requireNotNull(g.title), g.rows.map(::row), footer = g.totals.map(::totalRow))
+        fun groupElement(g: ShapedGroup) = IrGroup(requireNotNull(g.title), g.rowsOf(::row), footer = g.totals.map(::totalRow))
 
         fun blank(constraints: LayoutConstraints = LayoutConstraints.Default) = IrRow(columns.map { IrCell("") }, constraints)
 
@@ -193,7 +202,7 @@ object FlowTables {
             return out
         }
 
-        val mainContent: List<IrTableElement> = if (spec.groupBy == null) shaped.groups.flatMap { it.rows }.map(::row)
+        val mainContent: List<IrTableElement> = if (spec.groupBy == null) shaped.groups.flatMap { it.rowsOf(::row) }
         else shaped.groups.map(::groupElement)
 
         return IrTable(
@@ -203,6 +212,7 @@ object FlowTables {
                 notes?.let(::notesElements).orEmpty(),
             rowHeight = spec.rowHeight.mm,
             groupTitle = groupTitle,
+            subTitle = subTitle,
             fillBlank = spec.fill == FlowFill.BLANK,
             fillRemainder = (spec.remainder?.first ?: FlowRemainder.STRETCH).toIr(),
             fillRemainderRest = (spec.remainder?.rest ?: FlowRemainder.STRETCH).toIr(),
@@ -239,6 +249,9 @@ object FlowTables {
             )
         }
     }
+
+    private fun ShapedGroup.rowsOf(row: (DataValue.Record, String?) -> IrRow): List<IrRow> =
+        rows.mapIndexed { i, r -> row(r, subTitles.getOrNull(i)) }
 
     private fun FlowRemainder.toIr(): IrFillRemainder = if (this == FlowRemainder.GAP) IrFillRemainder.GAP else IrFillRemainder.STRETCH
 

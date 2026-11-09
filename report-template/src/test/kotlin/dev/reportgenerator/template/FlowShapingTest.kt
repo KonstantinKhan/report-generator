@@ -396,4 +396,77 @@ class FlowShapingTest {
         val file = DataYaml.parseFile("item:\n  - {kind: !enum A}\n  - {kind: !enum B}")
         assertEquals(DataType.Enum(listOf("A", "B")), file.context.schema.typeOf("item.kind"))
     }
+
+    // ---- subTitle ----
+
+    private fun subTitles(groups: List<ShapedGroup>) = groups.map { g -> g.subTitles }
+
+    private fun noted(vararg notes: String?) = notes.mapIndexed { i, n -> rec("r$i", note = n) }
+
+    @Test
+    fun `subTitle loads with defaults column name, align center`() {
+        assertEquals(FlowSubTitle("note", "name", null, TextAlign.CENTER), spec("subTitle: {field: note}").subTitle)
+        assertEquals(FlowSubTitle("note", "a", "head", TextAlign.LEFT), spec("subTitle: {field: note, column: a, style: head, align: left}").subTitle)
+        assertEquals(null, spec("").subTitle)
+    }
+
+    @Test
+    fun `subTitle takes a field, rejects unknown keys`() {
+        assertEquals("blocks[0].table.subTitle.bogus", parseError("subTitle: {field: note, bogus: 1}").path)
+        assertEquals("blocks[0].table.subTitle", parseError("subTitle: {column: a}").path)
+    }
+
+    @Test
+    fun `validator reports an unknown subTitle column`() {
+        val e = validate("subTitle: {field: note, column: nope}")
+        assertTrue("unknown column 'nope'" in e.getValue("blocks[0].table.subTitle.column"), e.toString())
+    }
+
+    @Test
+    fun `contract checks the subTitle field exists and is a String`() {
+        assertEquals(emptyMap(), contract(spec("subTitle: {field: note}")))
+        assertTrue("unknown item field 'nope'" in contract(spec("subTitle: {field: nope}")).getValue("t.subTitle.field"))
+        assertTrue("needs a String field" in contract(spec("subTitle: {field: n}")).getValue("t.subTitle.field"))
+        assertTrue("needs a String field" in contract(spec("subTitle: {field: kind}")).getValue("t.subTitle.field"))
+        val computed = contract(spec("computed: {pos: {sequence: {}}}\nsubTitle: {field: pos}"))
+        assertTrue("computed field 'pos' is not available here" in computed.getValue("t.subTitle.field"))
+    }
+
+    @Test
+    fun `a sub-title appears when the value changes and not on a repeat`() {
+        val out = FlowShaper.shape(spec("subTitle: {field: note}"), schema, noted("X", "X", "Y", "Y", "X"))
+        assertEquals(listOf(listOf("X", null, "Y", null, "X")), subTitles(out))
+    }
+
+    @Test
+    fun `null and blank values give no sub-title and break the run`() {
+        val out = FlowShaper.shape(spec("subTitle: {field: note}"), schema, noted(null, "X", null, "X", "  ", "X"))
+        assertEquals(listOf(listOf(null, "X", null, "X", null, "X")), subTitles(out))
+    }
+
+    @Test
+    fun `the previous value is tracked per group, the first row of a group starts afresh`() {
+        val rows = listOf(rec("a1", "A", note = "X"), rec("a2", "A", note = "X"), rec("b1", "B", note = "X"), rec("b2", "B", note = "Y"))
+        val out = FlowShaper.shape(spec("$grouping\nsubTitle: {field: note}"), schema, rows)
+        assertEquals(listOf("Аа" to listOf("X", null), "Бб" to listOf("X", "Y")), out.map { it.title to it.subTitles })
+    }
+
+    @Test
+    fun `without subTitle the groups carry none`() {
+        assertEquals(listOf(emptyList()), subTitles(FlowShaper.shape(spec(""), schema, noted("X", "Y"))))
+    }
+
+    @Test
+    fun `sub-titles do not change numbering or totals`() {
+        val extra = "subTitle: {field: note}\ncomputed: {pos: {sequence: {}}}\n" +
+            "totals: [{id: s, scope: table, agg: sum, field: qty, label: Итого, labelColumn: a, valueColumn: a}, {id: c, scope: table, agg: count, label: N, labelColumn: a, valueColumn: a}]"
+        val rows = listOf(rec("r1", qty = "2", note = "X"), rec("r2", qty = "3", note = "X"), rec("r3", qty = "5", note = "Y"))
+        val shaped = FlowShaper.shapeTable(spec(extra), schema, rows)
+        val plain = FlowShaper.shapeTable(spec(extra.replace("subTitle: {field: note}\n", "")), schema, rows)
+
+        assertEquals(listOf(listOf("X", null, "Y")), subTitles(shaped.groups))
+        assertEquals(listOf(1L, 2L, 3L), shaped.groups.single().rows.map { (it.fields["pos"] as DataValue.Integer).value })
+        assertEquals(plain.totals.map { it.text }, shaped.totals.map { it.text })
+        assertEquals(listOf("10", "3"), shaped.totals.map { it.text })
+    }
 }

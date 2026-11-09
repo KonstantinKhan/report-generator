@@ -26,6 +26,8 @@ data class IrTable(
     val rowHeight: Length? = null,
     // How a group's title row looks and what surrounds it; only used when rowHeight is fixed.
     val groupTitle: IrGroupTitle = IrGroupTitle(),
+    // How the sub-title row (IrRow.subTitle) looks; rowHeight != null only. Null: IrRow.subTitle is not allowed.
+    val subTitle: IrSubTitle? = null,
     // rowHeight != null only: cover each page down to the frame with blank bordered rows.
     val fillBlank: Boolean = true,
     // fillBlank only: what becomes of the page height left after the last whole filler row (see IrFillRemainder).
@@ -98,6 +100,14 @@ data class IrGroupTitle(
     val keepWithRows: Boolean = true
 )
 
+// Sub-title row of a fixed-rowHeight table: a row with the text of IrRow.subTitle in `column` (IrColumn.id), no
+// spacers; it is kept on the page together with the data row it introduces (unless IrGroupTitle.keepWithRows is false).
+data class IrSubTitle(
+    val column: String,
+    val style: TextStyle = Styles.groupHeader,
+    val align: TextAlign = TextAlign.CENTER
+)
+
 sealed interface IrTableElement
 
 // footer: total rows right after the group's data rows (rowHeight != null only, see IrTotalRow).
@@ -108,9 +118,11 @@ data class IrGroup(
     val footer: List<IrTotalRow> = emptyList()
 ) : IrTableElement
 
+// subTitle: a sub-title row (IrTable.subTitle) is drawn right before the row.
 data class IrRow(
     val cells: List<IrCell>,
-    val constraints: LayoutConstraints = LayoutConstraints.Default
+    val constraints: LayoutConstraints = LayoutConstraints.Default,
+    val subTitle: String? = null
 ) : IrTableElement
 
 // One cell over the columns from `from` to `to` (column ids, both included), e.g. a section title over two columns.

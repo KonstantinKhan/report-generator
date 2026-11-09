@@ -303,6 +303,22 @@ private fun buildBorderedBlocks(
     fun footerBlocks(footer: List<IrTotalRow>, path: String): List<BorderedRowBlock> =
         footer.flatMapIndexed { i, total -> physicalRowBlocks(IrRow(total.cells), "$path/Total[$i]") }
 
+    // The physical rows of a data record, preceded by its sub-title rows (IrRow.subTitle) bound to the first data
+    // line (like the group title prefix, IrGroupTitle.keepWithRows = false drops the chain).
+    fun recordBlocks(row: IrRow, path: String): List<BorderedRowBlock> {
+        val data = physicalRowBlocks(row, path, numbered = true)
+        val text = row.subTitle ?: return data
+        val sub = requireNotNull(table.subTitle) { "IrRow.subTitle needs IrTable.subTitle (the look of the sub-title row)" }
+        val column = table.columns.indexOfFirst { it.id == sub.column }
+        require(column >= 0) { "sub-title column '${sub.column}' is not a column of the table (${table.columns.joinToString { it.id }})" }
+        val titleRow = IrRow(
+            cells = table.columns.mapIndexed { i, _ -> if (i == column) IrCell(text, style = sub.style, align = sub.align) else IrCell("") },
+            constraints = row.constraints
+        )
+        val titleBlocks = physicalRowBlocks(titleRow, "$path/SubTitle")
+        return (if (title.keepWithRows) titleBlocks.map { it.copy(constraints = it.constraints.copy(keepWithNext = true)) } else titleBlocks) + data
+    }
+
     table.content.forEachIndexed { elementIndex, element ->
         when (element) {
             is IrGroup -> {
@@ -338,9 +354,7 @@ private fun buildBorderedBlocks(
                     blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[${title.spacerBefore + it}]")
                 }
 
-                val rowBlocks = element.rows.flatMapIndexed { rowIndex, row ->
-                    physicalRowBlocks(row, "$headerPath/Row[$rowIndex]", numbered = true)
-                }
+                val rowBlocks = element.rows.flatMapIndexed { rowIndex, row -> recordBlocks(row, "$headerPath/Row[$rowIndex]") }
 
                 val prefix = blanksBefore + headerBlocks + blanksAfter
                 val footer = footerBlocks(element.footer, headerPath)
@@ -365,7 +379,7 @@ private fun buildBorderedBlocks(
             }
 
             is IrRow -> {
-                blocks += physicalRowBlocks(element, "$tablePath/Row[$elementIndex]", numbered = true)
+                blocks += recordBlocks(element, "$tablePath/Row[$elementIndex]")
             }
 
             is IrSpanRow -> blocks += spanRowBlocks(element, table.columns, offsets, rowHeight, textMeasurer, "$tablePath/Span[$elementIndex]")

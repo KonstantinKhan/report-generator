@@ -406,6 +406,13 @@ object TemplateValidator {
             style(g.style, "$gp.style")
         }
 
+        t.subTitle?.let { s ->
+            val sp = "$p.subTitle"
+            if (s.field.isEmpty()) errors += TemplateError("$sp.field", "must not be empty")
+            if (s.column !in ids) errors += TemplateError("$sp.column", "unknown column '${s.column}' (columns: ${ids.joinToString()})")
+            style(s.style, "$sp.style")
+        }
+
         coverage(t.rowCells.keys, "$p.row.cells")
         val lineColumns = mutableListOf<String>()
         t.rowCells.forEach { (id, c) ->

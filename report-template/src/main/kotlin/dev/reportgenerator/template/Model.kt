@@ -200,6 +200,16 @@ data class FlowGroupTitle(
     val spacerAfter: Int = 0
 )
 
+// Sub-title of a group: before a row a title row is inserted when the String item field `field` has a non-blank
+// value that differs from the previous row's value of the same group (or that row has none). The title text goes into
+// `column`; the row is not numbered, has no totals and no spacers.
+data class FlowSubTitle(
+    val field: String,
+    val column: String = "name",
+    val style: String? = null,
+    val align: TextAlign = TextAlign.CENTER
+)
+
 // Structured, closed row predicate (flow table `where`, `groupBy`-less filtering, `cases`). `field` is a field of
 // the row record `item` (no root prefix). Literals are kept as written and typed against the field's type by the
 // contract (Enum: a member of the schema's values, Integer, Decimal, Boolean, ISO Date, String). No expressions.
@@ -372,6 +382,7 @@ data class FlowTableSpec(
     val columns: List<FlowColumn>,
     val header: FlowHeader? = null,
     val groupTitle: FlowGroupTitle? = null,
+    val subTitle: FlowSubTitle? = null,
     val rowCells: Map<String, FlowRowCell>,
     val fill: FlowFill = FlowFill.NONE,
     // null = not written (STRETCH applies); written only together with `fill: blank` (validator)

@@ -411,6 +411,7 @@ blocks:
 | `keep` | `{titleChain: true}` (по умолчанию): пустые строки до, заголовок группы, пустые после и первая строка данных не разрываются границей страницы (заголовок-сирота внизу страницы невозможен); `false` цепочки нет |
 | `styles` | псевдонимы `{имя: стиль}`, стиль строкой (имя встроенного) или объектом `{base, size, bold, italic, underline}` (копия встроенного с переопределениями, см. «Параметризованные стили»); ячейка ссылается на псевдоним или прямо на имя стиля |
 | `where` | предикат фильтра строк (см. «Данные таблицы»); нет = все строки |
+| `subTitle` | `{field, column, style, align}`, необязательно: подзаголовок внутри группы. `field` обязателен, строковое (String) поле `item` (не computed); `column` колонка текста (по умолчанию `name`), `style` по умолчанию `groupHeader`, `align` `center` по умолчанию. Перед строкой вставляется строка-заголовок с текстом поля, если значение непустое и отличается от значения предыдущей строки той же группы (или это первая строка группы с непустым значением); пустое значение (null, пробелы) заголовка не даёт и обрывает серию. Заголовок без пустых строк до и после, без номера (`sequence` и `totals` считают только строки данных), занимает физическую строку и привязан к своей строке данных (`keep.titleChain: false` снимает привязку). Ошибки: неизвестное поле / не String (`…table.subTitle.field`), неизвестная колонка (`…table.subTitle.column`), неизвестный стиль (`…table.subTitle.style`) |
 | `sortBy` | список `{field, order: asc\|desc, nulls: first\|last}`; нет = порядок источника |
 | `groupBy` | `{field, order, titles, skipEmpty, omit}`: разбиение по enum-полю на группы; нет = плоская таблица |
 | `computed` | вычисляемые поля: `{имя: {sequence: {scope, start, step}}}` или арифметика `{имя: {multiply\|add\|subtract\|divide: [операнды], scale, rounding}}` |
@@ -839,6 +840,7 @@ table:
         quantity: {text: "Кол.", rotate: 90, style: head}
         note: {text: "Примечание", lines: ["Приме-", "чание"], style: head}
     groupTitle: {column: name, style: groupTitle, align: center, spacerBefore: 2, spacerAfter: 1}
+    subTitle: {field: subgroup, column: name, style: groupTitle, align: center}
     row:
       cells:
         format: ~
