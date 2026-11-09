@@ -143,6 +143,17 @@ class ProductNodeVariantsTest : ShouldSpec({
         data.variants.single().parts.map { it.designation } shouldBe listOf("АБ.3")
     }
 
+    should("order the items of an execution block by designation") {
+        val root = withVariants(
+            execution("ИЗД.001", link(part(2), 1.0)),
+            execution("ИЗД.001-02", link(part(2), 1.0), link(part(10), 1.0), link(part(3), 1.0)),
+        )
+
+        val data = root.toSpecificationData()
+
+        data.variants.single().parts.map { it.designation } shouldBe listOf("АБ.3", "АБ.10")
+    }
+
     should("give a block to the variant that has an item of its own, and none to a variant without one") {
         val root = withVariants(
             execution("ИЗД.001", link(part(2), 2.0)),

@@ -13,5 +13,17 @@ sealed interface AttributeKey {
 
     data object Format: AttributeKey
 
+    // Вид материала по ЕСКД (материалы).
+    data object MaterialKind : AttributeKey
+
+    // Обозначение стандарта (стандартные и прочие изделия).
+    data object StandardDesignation : AttributeKey
+
+    // Вид изделия (стандартные и прочие изделия).
+    data object ProductVariety : AttributeKey
+
+    // Типоразмер (стандартные и прочие изделия).
+    data object SizeType : AttributeKey
+
     data class Unmapped(val pdmName: String) : AttributeKey
 }

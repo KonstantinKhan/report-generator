@@ -5,6 +5,7 @@ import dev.reportgenerator.domain.LinkAttributeKey
 import dev.reportgenerator.domain.PdmNodeId
 import dev.reportgenerator.domain.Relation
 import io.kotest.core.spec.style.ShouldSpec
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.shouldBe
 
 class SpecificationQueryTest : ShouldSpec({
@@ -29,8 +30,22 @@ class SpecificationQueryTest : ShouldSpec({
     }
 
     should("request designation, product designation, name and format attributes") {
-        specificationQuery(PdmNodeId(1)).attributes shouldBe
+        specificationQuery(PdmNodeId(1)).attributes shouldContainAll
             setOf(AttributeKey.Designation, AttributeKey.ProductDesignation, AttributeKey.Name, AttributeKey.Format)
+    }
+
+    should("request the attributes of the row order: material kind, standard designation, product kind, size type") {
+        specificationQuery(PdmNodeId(1)).attributes shouldContainAll
+            setOf(
+                AttributeKey.MaterialKind,
+                AttributeKey.StandardDesignation,
+                AttributeKey.ProductVariety,
+                AttributeKey.SizeType,
+            )
+    }
+
+    should("request the same attributes for a variant of the root") {
+        specificationQuery(PdmNodeId(2), variants = false).attributes shouldBe specificationQuery(PdmNodeId(1)).attributes
     }
 
     should("request the note, the zone, the application method and the kit purpose of the composition link") {

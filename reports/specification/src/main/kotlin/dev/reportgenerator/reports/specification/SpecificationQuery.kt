@@ -16,7 +16,7 @@ import dev.reportgenerator.domain.VariantUsage
 // one level only (relationDepth), so the children of the children stay out; their documents are read (depth 2).
 // The material of a material form is read by the made-from link of the form (the form is at the depth of the
 // composition, its link is expanded one level further, depth 2).
-// Designation, product designation, name and format are read from attributes, the note and the zone from the link
+// Designation, product designation, name and format are read from attributes (plus four attributes for the order of the rows: material kind, standard designation, product kind, size type), the note and the zone from the link
 // attributes of the composition. The product designation is set for standard and other products only, for the other kinds it is not read.
 // The replacement groups are read for the root only (depth 0): the permissible ones give the replacement notes of the items.
 // The variants (исполнения) of the root are read by the variant link at the first level only (relationDepth 1): their
@@ -33,6 +33,11 @@ fun specificationQuery(rootId: PdmNodeId, variants: Boolean = true): StructureQu
         AttributeKey.ProductDesignation,
         AttributeKey.Name,
         AttributeKey.Format,
+        // Атрибуты только для сортировки строк раздела; для видов без правила в маппинге значение остаётся пустым.
+        AttributeKey.MaterialKind,
+        AttributeKey.StandardDesignation,
+        AttributeKey.ProductVariety,
+        AttributeKey.SizeType,
     ),
     linkAttributes = setOf(
         LinkAttributeKey.Note,

@@ -30,10 +30,11 @@ private fun node(
     productDesignation: AttributeValue? = null,
     name: AttributeValue? = AttributeValue.Text("Имя $id"),
     usages: List<Usage> = emptyList(),
+    extra: Map<AttributeKey, AttributeValue> = emptyMap(),
 ) = PdmNode(
     id = PdmNodeId(id),
     kind = kind,
-    attributes = attributesOf(designation, productDesignation, name),
+    attributes = attributesOf(designation, productDesignation, name) + extra,
     usages = usages,
 )
 
@@ -245,6 +246,19 @@ class ProductNodeSpecificationTest : ShouldSpec({
 
         data.kitBlocks shouldBe emptyList()
         data.kits.map { it.designation } shouldBe listOf("АБ.3")
+    }
+
+    should("order the sections of a kit block by the same rules as the main part") {
+        val kit = node(
+            2, kind = PdmNodeKind.Kit,
+            usages = listOf(
+                composition(node(10), position = Field.Value(1)),
+                composition(node(5), position = Field.Value(2)),
+            ),
+        )
+        val data = root(composition(kit)).toSpecificationData()
+
+        data.kitBlocks.single().parts.map { it.designation } shouldBe listOf("АБ.5", "АБ.10")
     }
 
     should("give no kit block to a kit without any composition") {
@@ -628,7 +642,7 @@ class ProductNodeSpecificationTest : ShouldSpec({
         )
     }
 
-    should("sort the items of a section by position and put the items without position last") {
+    should("sort the items of a section by designation, not by position, and put the items without designation last") {
         val data = root(
             composition(node(2), position = Field.Value(2)),
             composition(node(3), position = Field.Missing),
@@ -637,16 +651,118 @@ class ProductNodeSpecificationTest : ShouldSpec({
             composition(node(6), position = Field.Missing),
         ).toSpecificationData()
 
-        data.parts.map { it.designation } shouldBe listOf("АБ.4", "АБ.2", "АБ.3", "АБ.6", null)
+        data.parts.map { it.designation } shouldBe listOf("АБ.2", "АБ.3", "АБ.4", "АБ.6", null)
     }
 
-    should("keep the usage order of items with the same position") {
+    should("show the position of Loodsman in the item and not order the rows by it") {
         val data = root(
-            composition(node(8), position = Field.Value(1)),
-            composition(node(7), position = Field.Value(1)),
+            composition(node(10, kind = PdmNodeKind.Assembly), position = Field.Value(1)),
+            composition(node(9, kind = PdmNodeKind.Assembly), position = Field.Value(5)),
+            composition(node(11, kind = PdmNodeKind.Assembly), position = Field.Value(3)),
         ).toSpecificationData()
 
-        data.parts.map { it.designation } shouldBe listOf("АБ.8", "АБ.7")
+        data.assemblies.map { it.designation to it.position } shouldBe listOf("АБ.9" to 5, "АБ.10" to 1, "АБ.11" to 3)
+    }
+
+    should("sort designations by their numbers: АБ.2 before АБ.10") {
+        val data = root(
+            composition(node(10)),
+            composition(node(2)),
+            composition(node(9)),
+        ).toSpecificationData()
+
+        data.parts.map { it.designation } shouldBe listOf("АБ.2", "АБ.9", "АБ.10")
+    }
+
+    should("keep the usage order of items equal by the order rules") {
+        val data = root(
+            composition(node(8, designation = AttributeValue.Text("АБ.1"), name = AttributeValue.Text("Вал")), position = Field.Value(2)),
+            composition(node(7, designation = AttributeValue.Text("АБ.1"), name = AttributeValue.Text("Вал")), position = Field.Value(1)),
+        ).toSpecificationData()
+
+        data.parts.map { it.position } shouldBe listOf(2, 1)
+    }
+
+    should("fill the attributes of the standard and other products from the node, trimmed, empty ones are null") {
+        val data = root(
+            composition(
+                node(
+                    2, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Болт М6x20"),
+                    extra = mapOf(
+                        AttributeKey.StandardDesignation to AttributeValue.Text(" ГОСТ 7798-70 "),
+                        AttributeKey.ProductVariety to AttributeValue.Text("Болт"),
+                        AttributeKey.SizeType to AttributeValue.Text("М6x20"),
+                    ),
+                ),
+            ),
+            composition(
+                node(
+                    3, kind = PdmNodeKind.Other, designation = AttributeValue.Text("Заглушка"),
+                    extra = mapOf(
+                        AttributeKey.StandardDesignation to AttributeValue.Text("   "),
+                        AttributeKey.ProductVariety to AttributeValue.Empty,
+                    ),
+                ),
+            ),
+        ).toSpecificationData()
+
+        data.standards.single().let {
+            it.standardDesignation shouldBe "ГОСТ 7798-70"
+            it.productKind shouldBe "Болт"
+            it.sizeType shouldBe "М6x20"
+        }
+        data.others.single().let {
+            it.standardDesignation shouldBe null
+            it.productKind shouldBe null
+            it.sizeType shouldBe null
+        }
+    }
+
+    should("leave the attributes of the order empty when they are not loaded") {
+        val data = root(
+            composition(node(2, kind = PdmNodeKind.Standard)),
+            composition(node(3, kind = PdmNodeKind.Material)),
+        ).toSpecificationData()
+
+        data.standards.single().let { listOf(it.standardDesignation, it.productKind, it.sizeType) } shouldBe listOf(null, null, null)
+        data.materials.single().materialKind shouldBe null
+    }
+
+    should("sort the standard products by category, product kind, standard designation and size") {
+        fun standard(id: Int, name: String, standardDesignation: String, kind: String?, size: String?, position: Int) = composition(
+            node(
+                id, kind = PdmNodeKind.Standard, designation = AttributeValue.Text(name),
+                extra = buildMap {
+                    put(AttributeKey.StandardDesignation, AttributeValue.Text(standardDesignation))
+                    kind?.let { put(AttributeKey.ProductVariety, AttributeValue.Text(it)) }
+                    size?.let { put(AttributeKey.SizeType, AttributeValue.Text(it)) }
+                },
+            ),
+            position = Field.Value(position),
+        )
+        val data = root(
+            standard(2, "Шайба 6", "ГОСТ 11371-78", "Шайба", "6", position = 1),
+            standard(3, "Болт DIN", "DIN 933", "Болт", "М5x16", position = 2),
+            standard(4, "Болт М12x30", "ГОСТ 7798-70", "Болт", "М12x30", position = 3),
+            standard(5, "Болт М6x20", "ГОСТ 7798-70", "Болт", "М6x20", position = 4),
+            composition(node(6, kind = PdmNodeKind.Standard, designation = AttributeValue.Text("Без стандарта")), position = Field.Value(5)),
+            standard(7, "Болт ГОСТ Р", "ГОСТ Р 50-2010", "Болт", "М10x40", position = 6),
+        ).toSpecificationData()
+
+        data.standards.map { it.name } shouldBe
+            listOf("Болт М6x20", "Болт М12x30", "Шайба 6", "Болт ГОСТ Р", "Болт DIN", "Без стандарта")
+    }
+
+    should("sort the other products by the same rules as the standard ones") {
+        fun other(id: Int, name: String, standardDesignation: String) = composition(
+            node(
+                id, kind = PdmNodeKind.Other, designation = AttributeValue.Text(name),
+                extra = mapOf(AttributeKey.StandardDesignation to AttributeValue.Text(standardDesignation)),
+            ),
+        )
+        val data = root(other(2, "Прокладка", "ТУ 1-2"), other(3, "Манжета", "ГОСТ 1"), other(4, "Кольцо", "ОСТ 3")).toSpecificationData()
+
+        data.others.map { it.name } shouldBe listOf("Манжета", "Кольцо", "Прокладка")
     }
 
     should("skip usages whose kind is unmapped") {
@@ -946,15 +1062,30 @@ class ProductNodeSpecificationTest : ShouldSpec({
         data.materials.map { it.name } shouldBe listOf("Первый")
     }
 
-    should("sort material forms and plain materials together by position, then by name") {
+    should("sort material forms and plain materials together by the material kind, then by name") {
+        fun material(id: Int, name: String, kind: String?) = node(
+            id, kind = PdmNodeKind.Material, designation = AttributeValue.Text(name),
+            extra = buildMap { kind?.let { put(AttributeKey.MaterialKind, AttributeValue.Text(it)) } },
+        )
         val data = root(
-            composition(materialFormOf(5, node(15, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Вата"))), position = Field.Value(2)),
-            composition(node(2, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Сталь")), position = Field.Value(1)),
-            composition(materialFormOf(6, node(16, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Ааа"))), position = Field.Missing),
-            composition(node(3, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Лак")), position = Field.Missing),
+            composition(materialFormOf(5, material(15, "Вата", "бумажные и текстильные материалы")), position = Field.Value(1)),
+            composition(material(2, "Сталь", "металлы черные"), position = Field.Value(2)),
+            composition(materialFormOf(6, material(16, "Ааа", null)), position = Field.Value(3)),
+            composition(material(3, "Лак", "лаки, краски, нефтепродукты и химикаты"), position = Field.Value(4)),
+            composition(material(4, "Бронза", "металлы цветные, благородные и редкие"), position = Field.Value(5)),
         ).toSpecificationData()
 
-        data.materials.map { it.name } shouldBe listOf("Сталь", "Вата", "Ааа", "Лак")
+        data.materials.map { it.name } shouldBe listOf("Сталь", "Бронза", "Вата", "Лак", "Ааа")
+    }
+
+    should("take the material kind of a material form from its material") {
+        val steel = node(
+            15, kind = PdmNodeKind.Material, designation = AttributeValue.Text("Сталь"),
+            extra = mapOf(AttributeKey.MaterialKind to AttributeValue.Text(" металлы черные ")),
+        )
+        val data = root(composition(materialFormOf(5, steel))).toSpecificationData()
+
+        data.materials.single().materialKind shouldBe "металлы черные"
     }
 
     should("skip an empty or missing note and a not loaded one") {
@@ -982,11 +1113,12 @@ class ProductNodeSpecificationTest : ShouldSpec({
             ),
         ).toSpecificationData()
 
+        // no attributes of the order: the rows go by name (letters before digits, Cyrillic before Latin)
         data.standards shouldBe listOf(
             StandardItem(position = 5, name = "Болт М12x25", quantity = 4.0, notes = listOf("Допуск. замена на поз. 7 совместно с поз. 8")),
             StandardItem(position = 7, name = "Болт 2М12x25", quantity = null, notes = listOf("4 шт.", "примен. с поз. 8 взамен поз. 5")),
-            StandardItem(position = 8, name = "Шплинт 3,2x28.4", quantity = null, notes = listOf("4 шт.", "примен. с поз. 7 взамен поз. 5")),
             StandardItem(position = 9, name = "Шайба 80", quantity = 1.0),
+            StandardItem(position = 8, name = "Шплинт 3,2x28.4", quantity = null, notes = listOf("4 шт.", "примен. с поз. 7 взамен поз. 5")),
             StandardItem(position = 10, name = "Supporting ring DIN", quantity = 1.0),
         )
     }
@@ -1027,9 +1159,10 @@ class ProductNodeSpecificationTest : ShouldSpec({
             replacements = listOf(group(1, ReplacementType.Permissible, listOf(1), listOf(2))),
         ).toSpecificationData()
 
+        // no material kind: the rows go by name, 09 before 45
         data.materials shouldBe listOf(
-            MaterialItem(position = 5, name = "Сталь 45", quantity = 1.0, notes = listOf("кг", "допуск. замена на поз. 7")),
             MaterialItem(position = 7, name = "Сталь 09Г2С", quantity = null, notes = listOf("2,5 кг", "примен. взамен поз. 5")),
+            MaterialItem(position = 5, name = "Сталь 45", quantity = 1.0, notes = listOf("кг", "допуск. замена на поз. 7")),
         )
     }
 

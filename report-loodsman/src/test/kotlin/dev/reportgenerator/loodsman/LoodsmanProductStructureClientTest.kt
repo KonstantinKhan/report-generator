@@ -811,6 +811,51 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         }
     }
 
+    should("fill the row order attributes only for the kinds that have a rule and keep other kinds empty") {
+        val material = Obj(
+            6, "Материал по КД", "Сталь 09Г2С",
+            mapOf("Наименование" to "Лист", "Вид материала по ЕСКД" to "металлы черные")
+        )
+        val standard = bolt.copy(
+            attrs = bolt.attrs + mapOf("Обозначение стандарта" to "ГОСТ 7798-70", "Вид изделия" to "Болт", "Типоразмер" to "М6x20")
+        )
+        val other = Obj(
+            5, "Прочее изделие", "Заглушка",
+            mapOf("Обозначение изделия" to "ИЗД.5", "Обозначение стандарта" to "ТУ 1", "Вид изделия" to "Заглушка", "Типоразмер" to "10")
+        )
+        val edges = listOf(Edge(1, 2), Edge(1, 3), Edge(1, 5), Edge(1, 6))
+        val keys = arrayOf(
+            AttributeKey.MaterialKind,
+            AttributeKey.StandardDesignation,
+            AttributeKey.ProductVariety,
+            AttributeKey.SizeType,
+        )
+
+        val root = FakeLoodsman(listOf(assembly, shaft, standard, other, material), edges).client().loadTree(query(1, *keys))
+
+        val empty = keys.associateWith { AttributeValue.Empty }
+        root.attributes shouldBe empty
+        root.usages[0].target.attributes shouldBe empty
+        root.usages[1].target.attributes shouldBe mapOf(
+            AttributeKey.MaterialKind to AttributeValue.Empty,
+            AttributeKey.StandardDesignation to AttributeValue.Text("ГОСТ 7798-70"),
+            AttributeKey.ProductVariety to AttributeValue.Text("Болт"),
+            AttributeKey.SizeType to AttributeValue.Text("М6x20"),
+        )
+        root.usages[2].target.attributes shouldBe mapOf(
+            AttributeKey.MaterialKind to AttributeValue.Empty,
+            AttributeKey.StandardDesignation to AttributeValue.Text("ТУ 1"),
+            AttributeKey.ProductVariety to AttributeValue.Text("Заглушка"),
+            AttributeKey.SizeType to AttributeValue.Text("10"),
+        )
+        root.usages[3].target.attributes shouldBe mapOf(
+            AttributeKey.MaterialKind to AttributeValue.Text("металлы черные"),
+            AttributeKey.StandardDesignation to AttributeValue.Empty,
+            AttributeKey.ProductVariety to AttributeValue.Empty,
+            AttributeKey.SizeType to AttributeValue.Empty,
+        )
+    }
+
     should("expose only attributes unknown to the mapping when unmapped ones are requested") {
         val extra = shaft.copy(attrs = shaft.attrs + ("Прочее" to "x"))
 

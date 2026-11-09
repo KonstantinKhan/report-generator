@@ -67,6 +67,21 @@ attributes:
       DETAIL_DRAWING: Формат
       ASSEMBLY_DRAWING: Формат
       OPERATIONAL_DOCUMENTS_LIST: Формат
+  materialKind:
+    byKind:
+      MATERIAL: Вид материала по ЕСКД
+  standardDesignation:
+    byKind:
+      STANDARD: Обозначение стандарта
+      OTHER: Обозначение стандарта
+  productVariety:
+    byKind:
+      STANDARD: Вид изделия
+      OTHER: Вид изделия
+  sizeType:
+    byKind:
+      STANDARD: Типоразмер
+      OTHER: Типоразмер
 
 properties:
   version: VERSION

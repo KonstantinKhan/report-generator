@@ -13,10 +13,14 @@ import dev.reportgenerator.domain.Quantity
 import dev.reportgenerator.domain.VariantUsage
 import java.math.BigDecimal
 import java.math.RoundingMode
+import dev.reportgenerator.reports.specification.SpecificationOrder.sortedByDesignationAndName
+import dev.reportgenerator.reports.specification.SpecificationOrder.sortedByMaterialKind
+import dev.reportgenerator.reports.specification.SpecificationOrder.sortedByStandard
 
 // Converts the product structure of the root node into the specification data. Each section takes the usages whose
 // target has the kind of the section; usages of other kinds (complex, unmapped, drawings other than the assembly
-// drawing) do not get into the sheet. Items with a position are sorted by it, items without one go after them.
+// drawing) do not get into the sheet. The rows of a section are ordered by the rules of [SpecificationOrder] (the position from
+// Loodsman is only shown); kits are sorted by position.
 //
 // Kits (комплекты): a kit with the purpose («Назначение комплекта», link attribute) is not an item of any section, it
 // gives the note of the sheet instead (`kitNotes`, from the root and every execution). A kit without the purpose and with
@@ -118,12 +122,12 @@ private fun PdmNode.sectionsOf(
             .filter { it.isSpecificationDocument() && keep(ItemKey(it.target.id.asInt(), null)) }
             .map { it.target.toDocumentationItem() }
             .sortedWith(documentationOrder),
-        assemblies = composition.ofKind(PdmNodeKind.Assembly).map { it.toAssemblyItem(replacements) }.sortedByPosition(),
-        parts = composition.ofKind(PdmNodeKind.Part).map { it.toPartItem(replacements) }.sortedByPosition(),
-        standards = composition.ofKind(PdmNodeKind.Standard).map { it.toStandardItem(replacements) }.sortedByPosition(),
-        others = composition.ofKind(PdmNodeKind.Other).map { it.toOtherItem(replacements) }.sortedByPosition(),
+        assemblies = composition.ofKind(PdmNodeKind.Assembly).map { it.toAssemblyItem(replacements) }.sortedByDesignationAndName(),
+        parts = composition.ofKind(PdmNodeKind.Part).map { it.toPartItem(replacements) }.sortedByDesignationAndName(),
+        standards = composition.ofKind(PdmNodeKind.Standard).map { it.toStandardItem(replacements) }.sortedByStandard(),
+        others = composition.ofKind(PdmNodeKind.Other).map { it.toOtherItem(replacements) }.sortedByStandard(),
         materials = composition.filter { it.target.kind in materialKinds }
-            .map { it.toMaterialItem(replacements) }.sortedByPosition(),
+            .map { it.toMaterialItem(replacements) }.sortedByMaterialKind(),
         kits = (composition.ofKind(PdmNodeKind.Kit).filter { it.target.hasSpecification() }
             .map { it.toKitItem(replacements) } +
             composition.ofKind(PdmNodeKind.DocumentSet).mapNotNull { usage ->
@@ -394,6 +398,9 @@ private fun CompositionUsage.toStandardItem(replacements: Map<Int, ReplacementNo
         quantity = fields.quantity,
         zone = zone.column,
         notes = fields.notes(zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf())),
+        standardDesignation = target.attributeValue(AttributeKey.StandardDesignation),
+        productKind = target.attributeValue(AttributeKey.ProductVariety),
+        sizeType = target.attributeValue(AttributeKey.SizeType),
     )
 }
 
@@ -408,6 +415,9 @@ private fun CompositionUsage.toOtherItem(replacements: Map<Int, ReplacementNote>
         quantity = fields.quantity,
         zone = zone.column,
         notes = fields.notes(zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf())),
+        standardDesignation = target.attributeValue(AttributeKey.StandardDesignation),
+        productKind = target.attributeValue(AttributeKey.ProductVariety),
+        sizeType = target.attributeValue(AttributeKey.SizeType),
     )
 }
 
@@ -428,6 +438,7 @@ private fun CompositionUsage.toMaterialItem(replacements: Map<Int, ReplacementNo
         quantity = fields.quantity,
         zone = zone.column,
         notes = fields.notes(listOfNotNull(fields.unit.takeIf { fields.countNote == null }) + zone.notes + listOfNotNull(fields.maxQuantityNote, noteOf())),
+        materialKind = target.materialNode().attributeValue(AttributeKey.MaterialKind),
     )
 }
 
@@ -577,6 +588,9 @@ private fun PdmNode.attributeText(key: AttributeKey): TextState = when (val valu
     is AttributeValue.Number -> TextState.Value(value.value.toString())
     AttributeValue.Empty -> TextState.Missing
 }
+
+// Attribute for the order of the rows and the sub-titles: the trimmed text, null for an empty, blank or not loaded value.
+private fun PdmNode.attributeValue(key: AttributeKey): String? = attributes[key].textOrNull()?.trim()?.takeIf { it.isNotEmpty() }
 
 // Optional text of a value (format, note): the text, or null for an empty, blank or not loaded value.
 internal fun AttributeValue?.textOrNull(): String? = when (this) {

@@ -271,7 +271,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 **(а2) Позиция.** Источник — атрибут связи «Позиция» по правилу `link.attributes.position`. Правило есть, а значения
 нет — `Field.Missing` → позиция пустая. Значение в `Field.NotLoaded` в пайплайне не попадает (отсутствие правила или
-значения — не ошибка загрузки). Сортировка по позиции внутри раздела и место элементов без позиции — в
+значения — не ошибка загрузки). Позиция только выводится, порядок строк внутри раздела от неё не зависит — правила порядка в
 [specification-table-format.md](specification-table-format.md).
 
 **(а3) Формат и примечания.** Формат сборочной единицы — из документов самой сборочной единицы (первый «Спецификация»
@@ -428,6 +428,21 @@ attributes:                 # атрибуты узла: id ключа моде�
       DETAIL_DRAWING: Формат
       ASSEMBLY_DRAWING: Формат
       OPERATIONAL_DOCUMENTS_LIST: Формат
+  materialKind:             # атрибуты порядка строк спецификации: только для видов из byKind, для остальных значение Empty
+    byKind:
+      MATERIAL: Вид материала по ЕСКД
+  standardDesignation:
+    byKind:
+      STANDARD: Обозначение стандарта
+      OTHER: Обозначение стандарта
+  productVariety:
+    byKind:
+      STANDARD: Вид изделия
+      OTHER: Вид изделия
+  sizeType:
+    byKind:
+      STANDARD: Типоразмер
+      OTHER: Типоразмер
 
 properties:                 # поля узла из свойств объекта (get-prop-objects): PRODUCT, VERSION, STATE, TYPE
   version: VERSION
@@ -534,7 +549,7 @@ onUnmapped:
 ```kotlin
 Registries.itemKinds          // ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, ASSEMBLY_DRAWING, COMPLEX, KIT
 Registries.relations          // COMPOSITION, DOCUMENT, TECHNOLOGICAL_PART, MADE_FROM, VARIANT
-Registries.attributeKeys      // mass, companyName
+Registries.attributeKeys      // mass, companyName, designation, productDesignation, name, format, materialKind, standardDesignation, productVariety, sizeType
 Registries.linkAttributeKeys  // position, note
 ```
 
@@ -867,6 +882,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 | Версия, состояние | свойства `version`, `state` | `properties` | `PdmNode.version`, `state` |
 | Обозначение, наименование | ключевой атрибут типа (`product`) или атрибут объекта | `attributes.designation`, `attributes.name` (только если запрошены) | `PdmNode.attributes`; ключ узла — `PdmNode.key` |
 | Обозначение изделия (стандартные и прочие изделия) | атрибут объекта «Обозначение изделия» | `attributes.productDesignation` (только если запрошено; у других видов правила нет) | `PdmNode.attributes` |
+| Порядок строк: вид материала по ЕСКД (материалы), обозначение стандарта, вид изделия, типоразмер (стандартные и прочие изделия) | атрибуты объекта «Вид материала по ЕСКД», «Обозначение стандарта», «Вид изделия», «Типоразмер» | `attributes.materialKind`, `standardDesignation`, `productVariety`, `sizeType` (запрашивает `specificationQuery`; у других видов правила нет, значение `Empty`) | `PdmNode.attributes` -> `MaterialItem.materialKind`, `StandardItem` / `OtherItem` `standardDesignation`, `productKind`, `sizeType` |
 | Атрибуты узла | атрибуты объекта (`get-info-about-version-mode-3`) | `attributes` (+ `byKind`) | `PdmNode.attributes` |
 | Количество | поля связи `minQuantity`, `maxQuantity` | `link.fields.quantityMin`, `quantityMax` | `Usage.quantity` |
 | Единица | поле связи `unit` | `link.fields.unit` | `Usage.unit` |

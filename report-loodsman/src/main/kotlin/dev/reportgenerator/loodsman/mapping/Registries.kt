@@ -44,7 +44,11 @@ object Registries {
             "designation" to AttributeKey.Designation,
             "productDesignation" to AttributeKey.ProductDesignation,
             "name" to AttributeKey.Name,
-            "format" to AttributeKey.Format
+            "format" to AttributeKey.Format,
+            "materialKind" to AttributeKey.MaterialKind,
+            "standardDesignation" to AttributeKey.StandardDesignation,
+            "productVariety" to AttributeKey.ProductVariety,
+            "sizeType" to AttributeKey.SizeType
         )
     )
 
