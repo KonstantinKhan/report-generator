@@ -233,22 +233,44 @@ class MappingConfigValidatorTest : ShouldSpec({
 
     should("validate the default loodsman-mapping.yaml against confirmed Loodsman metadata") {
         val mapping = MappingConfigLoader.load(emptyMap())
+        // Срез живых метаданных Loodsman (id и имена как в базе): типы, связи, атрибуты и направления types-links из yaml.
         val confirmed = MetadataSnapshot(
             linkTypes = listOf(
-                LinkTypeInfo(id = 6, name = "Состоит из ..."),
                 LinkTypeInfo(id = 1, name = "Документы"),
-                LinkTypeInfo(id = 7, name = "Технологическая ДСЕ для"),
+                LinkTypeInfo(id = 6, name = "Состоит из ..."),
+                LinkTypeInfo(id = 7, name = "Исполнения"),
+                LinkTypeInfo(id = 8, name = "Изготавливается из ..."),
+                LinkTypeInfo(id = 11, name = "Технологическая ДСЕ для"),
             ),
             objectTypes = listOf(
-                "Деталь", "Сборочная единица", "Сборочный чертеж", "Комплекс",
-                "Стандартное изделие", "Прочее изделие", "Материал по КД", "Комплект",
-                "Спецификация", "Чертеж детали",
-            ).mapIndexed { index, name -> ObjectTypeInfo(id = index + 1, typeName = name, keyAttribute = "Обозначение") },
+                16 to "Комплект документов", 22 to "Материал по КД", 58 to "Комплекс", 59 to "Сборочная единица",
+                60 to "Деталь", 61 to "Комплект", 62 to "Стандартное изделие", 64 to "Прочее изделие",
+                107 to "Ведомость эксплуатационных документов", 121 to "Чертеж детали", 122 to "Спецификация",
+                126 to "Сборочный чертеж", 354 to "Форма материала",
+            ).map { (id, name) -> ObjectTypeInfo(id = id, typeName = name, keyAttribute = "Обозначение") },
             attributeNames = setOf(
                 "Наименование", "Обозначение", "Масса", "Наименование предприятия", "Позиция", "Примечание", "Формат",
+                "Обозначение изделия", "Наименование изделия", "Вид материала по ЕСКД", "Обозначение стандарта",
+                "Вид изделия", "Типоразмер", "Зона", "Способ применения", "Назначение комплекта",
             ),
             version = 1,
-            typeLinks = listOf(TypeLinkInfo(typeId1 = 1, typeId2 = 2, idLinkType = 7, direction = -1)),
+            typeLinks = listOf(
+                // Состоит из ...: сборочная единица и комплект — прямое направление.
+                TypeLinkInfo(typeId1 = 59, typeId2 = 60, idLinkType = 6, direction = 1),
+                TypeLinkInfo(typeId1 = 61, typeId2 = 60, idLinkType = 6, direction = 1),
+                // Документы: прямое направление от изделий и комплекта документов.
+                TypeLinkInfo(typeId1 = 59, typeId2 = 122, idLinkType = 1, direction = 1),
+                TypeLinkInfo(typeId1 = 60, typeId2 = 121, idLinkType = 1, direction = 1),
+                TypeLinkInfo(typeId1 = 64, typeId2 = 122, idLinkType = 1, direction = 1),
+                TypeLinkInfo(typeId1 = 61, typeId2 = 122, idLinkType = 1, direction = 1),
+                TypeLinkInfo(typeId1 = 16, typeId2 = 122, idLinkType = 1, direction = 1),
+                // Технологическая ДСЕ для: деталь читает её только в обратном направлении.
+                TypeLinkInfo(typeId1 = 60, typeId2 = 44, idLinkType = 11, direction = -1),
+                // Изготавливается из ...: форма материала — прямое направление (к материалу по КД).
+                TypeLinkInfo(typeId1 = 354, typeId2 = 22, idLinkType = 8, direction = 1),
+                // Исполнения: сборочная единица — прямое направление (к исполнениям).
+                TypeLinkInfo(typeId1 = 59, typeId2 = 59, idLinkType = 7, direction = 1),
+            ),
         )
 
         MappingConfigValidator.validate(mapping, confirmed).shouldBeEmpty()
