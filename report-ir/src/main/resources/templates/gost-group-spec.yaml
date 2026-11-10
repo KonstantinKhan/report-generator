@@ -172,7 +172,7 @@ blocks:
     columns: [14, 53, 53]
     rows:
       - {height: 14, cells: [~, ~, ~]}
-      - {height: 8, cells: [{span: 3}]}
+      - {height: 8, cells: [{bind: "${doc.customerIndex}", optional: true, span: 3, align: center, style: frameText, fontSize: 7}]}
     attach: {self: bottomRight, to: sheet.contentBottomRight, offset: {x: 0, y: -40}}
 
   # "Копировал" / "Формат" captions in the sheet's bottom-right gutter, below the frame (borderless). The bottom margin

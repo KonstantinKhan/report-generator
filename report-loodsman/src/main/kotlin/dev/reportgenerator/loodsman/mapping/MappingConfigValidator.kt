@@ -61,7 +61,8 @@ object MappingConfigValidator {
             }
         }
 
-        config.attributes.forEach { (key, rule) ->
+        // Обязательные атрибуты: отсутствие в метаданных — ошибка. Optional — см. [optionalMissing].
+        config.attributes.filterValues { !it.optional }.forEach { (key, rule) ->
             errors.checkAttribute("attributes.$key.name", rule.name, attributes)
             rule.byKind.forEach { (kind, name) ->
                 errors.checkAttribute("attributes.$key.byKind.$kind", name, attributes)
@@ -75,6 +76,21 @@ object MappingConfigValidator {
         }
 
         return errors
+    }
+
+    /**
+     * Предупреждения для optional-атрибутов, которых нет в метаданных Loodsman: такие атрибуты не запрашиваются.
+     * Не ошибки, поэтому отдельно от [validate]; вызывается при старте и логируется.
+     */
+    fun optionalMissing(config: MappingConfig, snapshot: MetadataSnapshot): List<String> {
+        val attributes = snapshot.attributeNames
+        return config.attributes.filterValues { it.optional }.flatMap { (key, rule) ->
+            (listOfNotNull(rule.name?.let { "name" to it }) + rule.byKind.map { (kind, name) -> "byKind.$kind" to name })
+                .filter { (_, name) -> name !in attributes }
+                .map { (path, name) ->
+                    "attributes.$key.$path: optional attribute '$name' not found in Loodsman, it is not requested"
+                }
+        }
     }
 
     /** Список доступных имён из Loodsman, отсортированный, чтобы пользователь скопировал точное имя. */

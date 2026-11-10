@@ -33,6 +33,8 @@ fun specificationQuery(rootId: PdmNodeId, variants: Boolean = true): StructureQu
         AttributeKey.ProductDesignation,
         AttributeKey.Name,
         AttributeKey.Format,
+        // Индекс заказчика читается у всех узлов запроса, в отчёт берётся только у корня (см. customerIndex()).
+        AttributeKey.CustomerIndex,
         // Атрибуты только для сортировки строк раздела; для видов без правила в маппинге значение остаётся пустым.
         AttributeKey.MaterialKind,
         AttributeKey.StandardDesignation,

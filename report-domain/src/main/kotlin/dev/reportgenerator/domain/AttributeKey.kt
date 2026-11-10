@@ -25,5 +25,8 @@ sealed interface AttributeKey {
     // Типоразмер (стандартные и прочие изделия).
     data object SizeType : AttributeKey
 
+    // Индекс заказчика (корневой объект отчёта; выводится в основную надпись с представителем заказчика).
+    data object CustomerIndex : AttributeKey
+
     data class Unmapped(val pdmName: String) : AttributeKey
 }

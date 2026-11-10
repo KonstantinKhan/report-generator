@@ -101,6 +101,7 @@ fun PdmNode.toSpecificationData(): SpecificationData {
         kitBlocks = main.kitBlocks,
         variants = variants,
         kitNotes = kitNotes,
+        customerIndex = customerIndex(),
     )
 }
 
@@ -579,6 +580,10 @@ private fun PdmNode.standardDesignationAndName(): Pair<String?, String> {
     }
     return designationText to nameText
 }
+
+// The customer index of the root object («Индекс заказчика») for the customer representative table: the trimmed text, null when
+// the attribute is missing, blank or not loaded (the sheet then leaves the cell empty; it is not an error).
+internal fun PdmNode.customerIndex(): String? = attributeValue(AttributeKey.CustomerIndex)
 
 // Intermediate state of a text attribute: file-private, used only while building the specification.
 internal sealed interface TextState {

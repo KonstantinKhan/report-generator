@@ -21,6 +21,8 @@ data class SpecificationData(
     // Блоки комплектов без назначения и без Спецификации: состав каждого комплекта, после строк комплектов со
     // Спецификацией. Пусто, если таких комплектов нет.
     val kitBlocks: List<KitBlock> = emptyList(),
+    // «Индекс заказчика» корня (null = атрибута нет или он пуст): в нижнюю ячейку основной надписи с представителем заказчика.
+    val customerIndex: String? = null,
 )
 
 // One execution (исполнение) of the product in the "Переменные данные для исполнений" section: its designation and the

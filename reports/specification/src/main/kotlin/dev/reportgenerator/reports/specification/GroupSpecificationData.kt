@@ -25,6 +25,8 @@ data class GroupSpecificationData(
     val rows: List<GroupRow>,
     // Notes of the kits and document sets with a purpose, the tail of every table (as in the specification).
     val kitNotes: List<String> = emptyList(),
+    // «Индекс заказчика» корня (null = атрибута нет или он пуст): в нижнюю ячейку основной надписи с представителем заказчика.
+    val customerIndex: String? = null,
 )
 
 // `values` = the text of the row in every column (the size is the number of the executions): "х" for documentation,
@@ -118,6 +120,7 @@ fun PdmNode.toGroupSpecificationData(): GroupSpecificationData {
         executions = designations,
         rows = rows,
         kitNotes = kitNotes,
+        customerIndex = customerIndex(),
     )
 }
 

@@ -47,6 +47,10 @@ requiredRelations:
 attributes:
   designation:
     name: Обозначение
+  customerIndex:
+    name: Индекс заказчика
+    # Не на всех серверах Loodsman есть этот атрибут: если его нет, проверка не падает, атрибут не запрашивается.
+    optional: true
   productDesignation:
     byKind:
       STANDARD: Обозначение изделия

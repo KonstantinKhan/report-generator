@@ -412,6 +412,9 @@ requiredRelations:          # смыслы из relations (поле as), кот�
 
 attributes:                 # атрибуты узла: id ключа модели -> имя атрибута в PDM
   designation:              # обозначение: для типа с ключом «Обозначение» читается из product
+  customerIndex:            # индекс заказчика корня: для всех видов; в отчёте только у корня (основная надпись с представителем)
+    name: Индекс заказчика
+    optional: true          # атрибута может не быть на сервере Loodsman: см. «Необязательные атрибуты» ниже
     name: Обозначение
   name:
     name: Наименование
@@ -448,6 +451,13 @@ attributes:                 # атрибуты узла: id ключа моде�
     byKind:
       STANDARD: Типоразмер
       OTHER: Типоразмер
+
+**Необязательные атрибуты (`optional: true`).** Атрибут может отсутствовать в метаданных конкретного сервера Loodsman.
+- Проверка маппинга (`MappingConfigValidator.validate`) не даёт ошибку, если имени нет среди метаданных; обязательные атрибуты проверяются как раньше.
+- При старте (`LoodsmanContext.bootstrap`) для каждого отсутствующего optional-атрибута пишется одно предупреждение (`optionalMissing`).
+- Запрос атрибутов (`AttributeRequests.attributeRequest`, `availableNames`) такой атрибут не запрашивает; значение узла — NotLoaded.
+  Отчёт трактует это как отсутствие: `PdmNode.customerIndex()` даёт null, нижняя ячейка остаётся пустой, отчёт не падает.
+- Сейчас `optional: true` стоит только у `customerIndex` («Индекс заказчика»): на сервере без этого атрибута сервис стартует.
 
 properties:                 # поля узла из свойств объекта (get-prop-objects): PRODUCT, VERSION, STATE, TYPE
   version: VERSION
@@ -560,7 +570,7 @@ onUnmapped:
 ```kotlin
 Registries.itemKinds          // ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, ASSEMBLY_DRAWING, COMPLEX, KIT
 Registries.relations          // COMPOSITION, DOCUMENT, TECHNOLOGICAL_PART, MADE_FROM, VARIANT
-Registries.attributeKeys      // mass, companyName, designation, productDesignation, name, format, materialKind, standardDesignation, productVariety, sizeType
+Registries.attributeKeys      // mass, companyName, designation, productDesignation, name, format, materialKind, standardDesignation, productVariety, sizeType, customerIndex
 Registries.linkAttributeKeys  // position, note
 ```
 
@@ -895,6 +905,7 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 | Вид объекта | свойство `type` (`get-prop-objects`) | `kinds` | `PdmNode.kind` |
 | Версия, состояние | свойства `version`, `state` | `properties` | `PdmNode.version`, `state` |
 | Обозначение, наименование | ключевой атрибут типа (`product`) или атрибут объекта | `attributes.designation`, `attributes.name` (только если запрошены) | `PdmNode.attributes`; ключ узла — `PdmNode.key` |
+| Индекс заказчика (корень отчёта) | атрибут объекта «Индекс заказчика» | `attributes.customerIndex` (запрашивает `specificationQuery`; пустой или из пробелов — не выводится) | `SpecificationData.customerIndex` / `GroupSpecificationData.customerIndex` -> `doc.customerIndex` (нижняя ячейка представителя заказчика) |
 | Обозначение изделия (стандартные и прочие изделия) | атрибут объекта «Обозначение изделия» | `attributes.productDesignation` (только если запрошено; у других видов правила нет) | `PdmNode.attributes` |
 | Порядок строк: вид материала по ЕСКД (материалы), обозначение стандарта, вид изделия, типоразмер (стандартные и прочие изделия) | атрибуты объекта «Вид материала по ЕСКД», «Обозначение стандарта», «Вид изделия», «Типоразмер» | `attributes.materialKind`, `standardDesignation`, `productVariety`, `sizeType` (запрашивает `specificationQuery`; у других видов правила нет, значение `Empty`) | `PdmNode.attributes` -> `MaterialItem.materialKind`, `StandardItem` / `OtherItem` `standardDesignation`, `productKind`, `sizeType` |
 | Атрибуты узла | атрибуты объекта (`get-info-about-version-mode-3`) | `attributes` (+ `byKind`) | `PdmNode.attributes` |

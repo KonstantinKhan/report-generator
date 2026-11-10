@@ -19,6 +19,8 @@ fun SpecificationData.toDataContext(): DataContext = dataContext {
     doc {
         string("designation", documentDesignation)
         string("name", documentName)
+        // null = no value: the bind of the customer representative table is `optional`, its cell stays empty.
+        string("customerIndex", customerIndex)
     }
     item { itemFields(null) }
 }
