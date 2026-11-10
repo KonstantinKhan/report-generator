@@ -67,6 +67,7 @@ object FlowTables {
                     cells = emptyList(),
                     height = rowHeights.reduce { a, b -> a + b },
                     repeat = h.repeat,
+                    thinGroupLine = h.thinGroupLine,
                     grid = IrHeaderGrid(
                         rowHeights = rowHeights,
                         cells = h.placeCells(spec.columns.size).map {

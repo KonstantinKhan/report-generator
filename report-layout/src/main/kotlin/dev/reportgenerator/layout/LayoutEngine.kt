@@ -12,6 +12,8 @@ import dev.reportgenerator.ir.IrCell
 import dev.reportgenerator.ir.IrColumn
 import dev.reportgenerator.ir.IrDocument
 import dev.reportgenerator.ir.IrFillRemainder
+import dev.reportgenerator.ir.IrHeaderCell
+import dev.reportgenerator.ir.IrHeaderGrid
 import dev.reportgenerator.ir.IrLineScope
 import dev.reportgenerator.ir.IrRow
 import dev.reportgenerator.ir.IrTable
@@ -456,20 +458,64 @@ private fun drawRichHeader(
         val endRow = minOf(placed.row + placed.rowSpan, grid.rowHeights.size)
         val height = rowTops[endRow] - y
 
-        val border = Rectangle(
-            rect = Rect(x, y, width, height),
-            style = LayoutBorderStyle(width = ptToLength(Styles.tableBorder.widthPt))
-        )
+        val border = if (header.thinGroupLine) {
+            groupLineBorder(grid, placed, x, y, width, height, endRow)
+        } else {
+            listOf<PageElement>(
+                Rectangle(
+                    rect = Rect(x, y, width, height),
+                    style = LayoutBorderStyle(width = ptToLength(Styles.tableBorder.widthPt))
+                )
+            )
+        }
 
+        // Left-aligned text keeps clear of the cell's left edge, as in the cells of the frame tables.
+        val (textX, textWidth) = if (cell.align == TextAlign.LEFT && cell.orientation == IrTextOrientation.HORIZONTAL) {
+            (x + FRAME_CELL_PADDING) to (width - FRAME_CELL_PADDING)
+        } else {
+            x to width
+        }
         val text = when (cell.orientation) {
             IrTextOrientation.HORIZONTAL ->
-                drawHorizontalHeaderCell(cell, x, y, width, height, textMeasurer, fontResolver)
+                drawHorizontalHeaderCell(cell, textX, y, textWidth, height, textMeasurer, fontResolver)
             IrTextOrientation.VERTICAL_BOTTOM_TO_TOP ->
                 drawVerticalHeaderCell(cell, x, y, width, height, textMeasurer, fontResolver)
         }
 
-        listOf<PageElement>(border) + text
+        border + text
     }
+}
+
+// The cell's frame with the edge between a group cell (span > 1) and the cells under it thin: the group is a
+// heading of the cells below, not a separate column; the verticals between the cells under a group are thin too. The horizontal thick edges run half a line past the corners,
+// as the corners of a rectangle do.
+private fun groupLineBorder(
+    grid: IrHeaderGrid,
+    placed: IrHeaderCell,
+    x: Length,
+    y: Length,
+    width: Length,
+    height: Length,
+    endRow: Int
+): List<PageElement> {
+    val isGroup = placed.span > 1 && endRow < grid.rowHeights.size
+    val group = grid.cells.firstOrNull { above ->
+        above.span > 1 && above.row + above.rowSpan == placed.row &&
+            above.col < placed.col + placed.span && placed.col < above.col + above.span
+    }
+    val thick = ptToLength(Styles.tableBorder.widthPt)
+    val thin = ptToLength(Styles.tableBorderThin.widthPt)
+    val black = Color(0, 0, 0)
+    fun horizontal(at: Length, isThin: Boolean): Line {
+        val extend = if (isThin) Length.ZERO else thick / 2
+        return Line(Point(x - extend, at), Point(x + width + extend, at), LineStyle(width = if (isThin) thin else thick, color = black))
+    }
+    fun vertical(at: Length, isThin: Boolean) =
+        Line(Point(at, y), Point(at, y + height), LineStyle(width = if (isThin) thin else thick, color = black))
+    // Between the cells under one group the verticals are thin; the edges of the group stay thick.
+    val leftInside = group != null && placed.col > group.col
+    val rightInside = group != null && placed.col + placed.span < group.col + group.span
+    return listOf(horizontal(y, group != null), horizontal(y + height, isGroup), vertical(x, leftInside), vertical(x + width, rightInside))
 }
 
 // Fixed row height (unlike data rows): text is vertically centered within it rather than

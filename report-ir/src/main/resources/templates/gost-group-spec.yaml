@@ -235,6 +235,7 @@ blocks:
         - {id: note, width: 34, stick: last, align: left}
       header:
         repeat: true               # on every page; the height is the sum of the two rows (7 + 8 = 15)
+        thinGroupLine: true        # a thin line between "Кол. на исполнение" and the execution numbers
         rows:
           - height: 7
             cells:

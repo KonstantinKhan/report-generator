@@ -79,7 +79,9 @@ data class IrTableHeader(
     val cells: List<IrCell>,
     val height: Length? = null,
     val repeat: Boolean = true,
-    val grid: IrHeaderGrid? = null
+    val grid: IrHeaderGrid? = null,
+    // the line between a cell with span > 1 and the cells under it is thin (grid header only)
+    val thinGroupLine: Boolean = false
 ) {
     // The grid of a fixed-height header; a single-row header is the one-row grid of its cells. Null: auto height.
     fun asGrid(): IrHeaderGrid? = grid ?: height?.let { h ->

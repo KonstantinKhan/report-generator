@@ -183,11 +183,13 @@ data class FlowHeaderRow(val height: Double, val cells: List<FlowHeaderCell>)
 // Single-row form: `cells` keyed by column id, must cover every column, `height` is the row height.
 // Multi-level form: `rows` (not empty, `cells` empty), `height` = the sum of the row heights.
 // `repeat`: header on every page, not only the first.
+// `thinGroupLine` (multi-level form): the line between a cell with `span` > 1 and the cells under it is thin.
 data class FlowHeader(
     val height: Double,
     val repeat: Boolean = true,
     val cells: Map<String, FlowHeaderCell>,
-    val rows: List<FlowHeaderRow> = emptyList()
+    val rows: List<FlowHeaderRow> = emptyList(),
+    val thinGroupLine: Boolean = false
 )
 
 // The group title row has the same per-column cells as a row; the title text goes into `column`.

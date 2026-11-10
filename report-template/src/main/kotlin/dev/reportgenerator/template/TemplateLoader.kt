@@ -450,14 +450,15 @@ private class Reader {
 
     private fun flowHeader(node: YamlNode, path: String): FlowHeader {
         val m = node.asMap(path)
-        m.allow(path, "height", "repeat", "cells", "rows")
+        m.allow(path, "height", "repeat", "cells", "rows", "thinGroupLine")
         val repeat = m.optional("repeat")?.let { bool(it, "$path.repeat") } ?: true
         val rowsNode = m.optional("rows")
         if (rowsNode != null) {
             val single = listOf("height", "cells").filter { m.optional(it) != null }
             if (single.isNotEmpty()) fail(path, node, "'rows' excludes ${single.joinToString { "'$it'" }} (use 'rows' or 'height' + 'cells')")
             val rows = rowsNode.asList("$path.rows").items.mapIndexed { i, n -> flowHeaderRow(n, "$path.rows[$i]") }
-            return FlowHeader(height = rows.sumOf { it.height }, repeat = repeat, cells = emptyMap(), rows = rows)
+            val thinGroupLine = m.optional("thinGroupLine")?.let { bool(it, "$path.thinGroupLine") } ?: false
+            return FlowHeader(height = rows.sumOf { it.height }, repeat = repeat, cells = emptyMap(), rows = rows, thinGroupLine = thinGroupLine)
         }
         if (m.optional("height") == null && m.optional("cells") == null) fail(path, node, "expected 'rows' or 'height' + 'cells'")
         return FlowHeader(
