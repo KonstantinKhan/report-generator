@@ -1,3 +1,5 @@
+name: report-generator
+
 services:
   report-server:
     image: report-server
