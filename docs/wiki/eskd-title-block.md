@@ -59,6 +59,10 @@ data class FrameBindings(val designation: String? = null, val name: String? = nu
 > (`GostSpecTemplate`). Размеры и состав ячеек ниже остались верными (их проверяет
 > `FrameSpecsTemplateParityTest`), но править их надо в YAML. Старый хардкод сохранён
 > только в тестовом `LegacyFrameSpecs.kt`. Формат YAML: [template-yaml.md](template-yaml.md).
+>
+> `GostSpecTemplate` и `FrameSpecs` — классы, а не объекты: экземпляры `GostSpecTemplate.PORTRAIT` (`gost-spec.yaml`,
+> портрет A4) и `GostSpecTemplate.GROUP_LANDSCAPE` (`gost-group-spec.yaml`, ландшафт A4, см.
+> [group-specification.md](group-specification.md)); пресеты `FrameSpecs.SPECIFICATION` и `FrameSpecs.GROUP`.
 
 ### `firstPageStamp` — основная надпись, 185×40мм
 

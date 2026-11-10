@@ -6,8 +6,9 @@
   Класс `LoodsmanApi` с группами эндпоинтов, DTO, сессия. Ничего не знает о доменной модели.
 - **`report-loodsman`** (`dev.reportgenerator.loodsman`) — слой DTO → домен: `LoodsmanProductStructureClient`
   реализует `PdmNodeStructureClient` из `report-domain` поверх `LoodsmanApi`, по YAML-конфигу маппинга.
-- **`report-server`** (`dev.reportgenerator.server`) — Ktor REST: `POST /specifications/{versionId}` тянет структуру
-  изделия, собирает спецификацию (`reports/specification`) и рендерит PDF.
+- **`report-server`** (`dev.reportgenerator.server`) — Ktor REST: `POST /specifications/{versionId}` и
+  `POST /group-specifications/{versionId}` ([group-specification.md](group-specification.md)) тянут структуру изделия,
+  собирают спецификацию (`reports/specification`) и рендерят PDF.
 
 Старый путь сборки (`PdmClient`, модуль `report-pdm`, `LoodsmanKtorPdmClient`, `Pdm2Domain`, а раньше `LoodsmanPdmClient` и
 `SpecificationAssembly`) удалён в ветке `refactor/loodsman-api`. Единственный путь к структуре изделия — `PdmNodeStructureClient`.
@@ -992,7 +993,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 ### HTTP-статусы маршрута спецификации
 
-`POST /specifications/{versionId}` (параметр `customerRepresentative`, по умолчанию `true`). Маппинг ошибок — `StatusPages`
+`POST /specifications/{versionId}` и `POST /group-specifications/{versionId}` (параметр `customerRepresentative`, по умолчанию `true`;
+одни и те же коды). Маппинг ошибок — `StatusPages`
 в `Routing.kt`:
 
 | Ситуация | HTTP |

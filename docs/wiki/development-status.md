@@ -92,7 +92,7 @@
 
 - `loodsman-client`: клиент Loodsman API v4 (библиотека, `LoodsmanApi`)
 - `report-loodsman`: DTO → домен (`LoodsmanProductStructureClient`, маппинг по YAML)
-- `report-server`: REST server (Ktor) обслуживает `POST /specifications/{versionId}`
+- `report-server`: REST server (Ktor) обслуживает `POST /specifications/{versionId}` и `POST /group-specifications/{versionId}`
 
 Все особенности и грабли API (авторизация, разделение свойств/атрибутов, правило
 ключевого атрибута по типу объекта, путаница `idType` связи vs типа объекта,
