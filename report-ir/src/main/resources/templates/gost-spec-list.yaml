@@ -1,0 +1,219 @@
+# Static blocks and the flow table of the SPECIFICATION LIST sheet ("Ведомость спецификаций", ВС): A3 landscape, the
+# title blocks of the group specification (gost-group-spec.yaml), the body with the columns "Куда входит" (the parents).
+# Units: mm. Read by report-ir (GostSpecTemplate): content -> FrameSpec, placement/reservation -> LayoutEngine.
+#
+# Slots (block ids) are bound to PageSetup fields by report-ir StaticSlot:
+#   stamp = frame, continuationStamp = continuationFrame, belowFrame = belowFrame, mainTitleRight = mainTitleRightTable.
+#
+# Geometry of the landscape sheet (the margins are PageSetup's; this block is the same as the PageSetup the report passes):
+#   sheet 420 x 297 (A3), margins top 5 / right 5 / bottom 5 / left 20 -> frame (working area) 395 x 287 at (20, 5).
+# Left of the frame: 20 mm, no static block there (the strips of the portrait sheet are not on this sheet).
+# Anything else (stamp, continuationStamp, mainTitleRight, belowFrame) is the same as on the group sheet, anchored to the
+# frame's or the sheet's corners.
+name: gost-spec-list
+
+sheet:
+  format: A3
+  orientation: landscape
+  margins: {top: 5, right: 5, bottom: 5, left: 20}
+
+blocksets:
+  # 65 x 15 header strip: Изм / Лист / № докум. / Подп. / Дата on the 3rd of 3 physical rows.
+  headerStrip:
+    blocks:
+      - id: grid
+        type: table
+        columns: [7, 10, 23, 15, 10]
+        rows:
+          - {height: 5, cells: [~, ~, ~, ~, ~]}
+          - {height: 5, cells: [~, ~, ~, ~, ~]}
+          - height: 5
+            cells:
+              - {text: "Изм", align: center}
+              - {text: "Лист", align: center}
+              - {text: "№ докум.", align: center}
+              - {text: "Подп.", align: center}
+              - {text: "Дата", align: center}
+
+  # 185 x 40 first-page title block: header strip + merged designation (120 x 15) + 5 signature rows.
+  # (The same as gost-group-spec.yaml: the title block is not changed for the landscape sheet.)
+  firstStamp:
+    blocks:
+      - {id: head, use: headerStrip}
+      - id: designation
+        type: table
+        columns: [120]
+        rows:
+          - height: 15
+            cells: [{bind: "${doc.designation}", align: center, style: frameText, fontSize: 7}]
+        attach: {self: topLeft, to: head.topRight}
+      - id: signatures
+        type: table
+        columns: [7, 10, 23, 15, 10, 70, 5, 5, 5, 15, 20]
+        rows:
+          - height: 5
+            cells:
+              - {text: "Разраб.", span: 2, borders: {bottom: thin}}
+              - {borders: {bottom: thin}}
+              - {borders: {bottom: thin}}
+              - {borders: {bottom: thin}}
+              - {bind: "${doc.name}", rowSpan: 5, align: center, style: frameText, fontSize: 7}
+              - {text: "Лит.", span: 3, align: center}
+              - {text: "Лист", align: center}
+              - {text: "Листов", align: center}
+          - height: 5
+            cells:
+              - {text: "Пров.", span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - ~
+              - ~
+              - ~
+              - {bind: "${page.number}", align: center}
+              - {bind: "${page.total}", align: center}
+          - height: 5
+            cells:
+              - {span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {span: 5, rowSpan: 3}
+          - height: 5
+            cells:
+              - {text: "Н. контр.", span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+          - height: 5
+            cells:
+              - {text: "Утв.", span: 2, borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+              - {borders: {top: thin, bottom: thin}}
+        attach: {self: topLeft, to: head.bottomLeft}
+
+  # 185 x 15 continuation stamp (ESKD 2.104 §34.3): header strip + designation + sheet number column.
+  restStamp:
+    blocks:
+      - {id: head, use: headerStrip}
+      - id: designation
+        type: table
+        columns: [120]
+        rows:
+          - height: 15
+            cells: [{bind: "${doc.designation}", align: center, style: frameText, fontSize: 7}]
+        attach: {self: topLeft, to: head.topRight}
+      - id: sheetColumn
+        type: table
+        columns: [10]
+        rows:
+          - {height: 5, cells: [{text: "Лист", align: center}]}
+          - {height: 10, cells: [{bind: "${page.number}", align: center}]}
+        attach: {self: topRight, to: designation.topRight}
+
+blocks:
+  # first-page stamp nests into the frame's bottom-right corner
+  - id: stamp
+    use: firstStamp
+    when: first
+    reserves: true
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  # continuation stamp (pages 2+)
+  - id: continuationStamp
+    use: restStamp
+    when: rest
+    reserves: true
+    attach: {self: bottomRight, to: sheet.contentBottomRight}
+
+  # 120 x 22 table in the frame's bottom-right corner, 40mm up (above the first-page stamp). The customer representative
+  # table: the report turns it off (mainTitleRightTable = null) like on the other sheets.
+  - id: mainTitleRight
+    type: table
+    when: first
+    reserves: true
+    columns: [14, 53, 53]
+    rows:
+      - {height: 14, cells: [~, ~, ~]}
+      - {height: 8, cells: [{bind: "${doc.customerIndex}", optional: true, span: 3, align: center, style: frameText, fontSize: 7}]}
+    attach: {self: bottomRight, to: sheet.contentBottomRight, offset: {x: 0, y: -40}}
+
+  # "Копировал" / "Формат" captions in the sheet's bottom-right gutter, below the frame (borderless). The bottom margin
+  # is 5 mm, the block is 5 mm high: it fits exactly. Anchored to the SHEET corner.
+  - id: belowFrame
+    type: table
+    when: first
+    reserves: true
+    borders: none
+    columns: [10, 40, 25, 30, 15]
+    rows:
+      - height: 5
+        cells: [~, {text: "Копировал", align: center}, ~, {text: "Формат", align: center}, ~]
+    attach: {self: bottomRight, to: sheet.bottomRight}
+
+  # The main (flow) table of the specification list: the paginated body, filling the flow region (395 x 287 frame).
+  # One row = one object (an assembly unit or a kit). "Куда входит" is two columns (the designation and the quantity of the
+  # parent): the parents of an object are one line each, so the height of the row is 8 mm per parent (the lines of the
+  # record). The total quantity is on the first line only; the number of the line is on every line.
+  # Columns: 7+70+130+70+10+12+96 = 395 mm = the sheet's content width (checked, no tolerance).
+  # The header is two levels (6 + 14 mm): the top row holds "Куда входит" over the two parent columns, the bottom row their
+  # names. The other header cells span both levels (rowSpan 2).
+  - id: body
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank                  # cover each page down to the frame with blank bordered rows
+      remainder: {first: gap, rest: stretch}
+      keep: {titleChain: true}     # spacers + title + first data line are never split by a page break
+      # "№ строки": the engine numbers every physical line of a data record and every blank filler row down to the frame,
+      # one running counter through the groups and the pages (scope: table). Group titles, spacers and totals get no
+      # number (the engine has no option for them, see the wiki page).
+      lines: {start: 1, scope: table, fill: true}
+      styles: {head: tableHeader, data: tableText, groupTitle: groupHeader}
+      # Sections: the assembly units, then the kits (a section without rows makes no group: skipEmpty).
+      groupBy:
+        field: section
+        order: [ASSEMBLY, KIT]
+        titles:
+          ASSEMBLY: "Сборочные единицы"
+          KIT: "Комплекты"
+        skipEmpty: true
+      columns:
+        - {id: number, width: 7, align: center}
+        - {id: designation, width: 70, stick: first}
+        - {id: name, width: 130, stick: first}
+        - {id: parentDesignation, width: 70}
+        - {id: parentQuantity, width: 10, align: center}
+        - {id: total, width: 12, stick: first, align: center}
+        - {id: notes, width: 96, stick: first, align: left}
+      header:
+        repeat: true               # on every page; the height is the sum of the two rows (6 + 14 = 20)
+        thinGroupLine: true        # a thin line between "Куда входит" and its two columns
+        rows:
+          - height: 6
+            cells:
+              - {text: "№ строки", rotate: 90, style: head, rowSpan: 2}
+              - {text: "Обозначение", style: head, rowSpan: 2}
+              - {text: "Наименование", style: head, rowSpan: 2}
+              - {text: "Куда входит", align: center, style: head, span: 2}
+              - {text: "Общее кол.", rotate: 90, style: head, rowSpan: 2}
+              - {text: "Примечание", style: head, rowSpan: 2}
+          - height: 14
+            cells:
+              - {text: "Обозначение", style: head}
+              - {text: "Кол.", style: head}
+      groupTitle: {column: name, style: groupTitle, align: center, spacerBefore: 2, spacerAfter: 1}
+      row:
+        cells:
+          # the number of the physical line (engine: lines above): every line of a row has its own number
+          number: {bind: "${line.number}", style: data, align: center}
+          designation: {bind: "${item.designation}", optional: true, style: data}
+          name: {bind: "${item.name}", style: data}
+          # one line per parent: the designation of the parent's specification, the quantity of the link (same line)
+          parentDesignation: {bind: "${item.parentDesignation}", optional: true, style: data}
+          parentQuantity: {bind: "${item.parentQuantity}", optional: true, style: data, align: center}
+          # the sum of the quantities of the parents: the first line only
+          total: {bind: "${item.total}", optional: true, style: data, align: center}
+          # the notes of the sheet: empty in this version
+          notes: {bind: "${item.notes}", optional: true, style: data}

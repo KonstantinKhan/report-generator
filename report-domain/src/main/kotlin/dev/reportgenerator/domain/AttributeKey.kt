@@ -28,5 +28,8 @@ sealed interface AttributeKey {
     // Индекс заказчика (корневой объект отчёта; выводится в основную надпись с представителем заказчика).
     data object CustomerIndex : AttributeKey
 
+    // Код документа (ведомость эксплуатационных документов: «ВС» — ведомость спецификаций).
+    data object DocumentCode : AttributeKey
+
     data class Unmapped(val pdmName: String) : AttributeKey
 }

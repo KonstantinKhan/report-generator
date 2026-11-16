@@ -49,7 +49,8 @@ object Registries {
             "standardDesignation" to AttributeKey.StandardDesignation,
             "productVariety" to AttributeKey.ProductVariety,
             "sizeType" to AttributeKey.SizeType,
-            "customerIndex" to AttributeKey.CustomerIndex
+            "customerIndex" to AttributeKey.CustomerIndex,
+            "documentCode" to AttributeKey.DocumentCode,
         )
     )
 

@@ -12,9 +12,12 @@ import dev.reportgenerator.renderpdf.renderToPdf
 import dev.reportgenerator.reports.specification.specification
 import dev.reportgenerator.reports.specification.SpecificationDataException
 import dev.reportgenerator.reports.specification.groupSpecification
+import dev.reportgenerator.reports.specification.loadSpecificationListStructure
 import dev.reportgenerator.reports.specification.loadSpecificationStructure
+import dev.reportgenerator.reports.specification.specificationList
 import dev.reportgenerator.reports.specification.toGroupSpecificationData
 import dev.reportgenerator.reports.specification.toSpecificationData
+import dev.reportgenerator.reports.specification.toSpecificationListData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -163,6 +166,33 @@ fun Application.reportServerModule(
                 val data = structure.toGroupSpecificationData()
 
                 val document = groupSpecification(data, customerRepresentative = customerRepresentative)
+                val laidOut = layOut(document, textMeasurer, fonts::resolve)
+                val pdfBytes = renderToPdf(laidOut, fonts.registry)
+
+                outputDir.mkdirs()
+                File(outputDir, "$id.pdf").apply { writeBytes(pdfBytes) }
+            }
+
+            call.respond(HttpStatusCode.OK, SpecificationResponse(id = id, path = file.absolutePath))
+        }
+
+        // Ведомость спецификаций: the whole product structure at any depth, one row per object, the parents in "Куда входит"
+        // (A3 landscape sheet). The structure is loaded with its own query (the documents of every object).
+        post("/specification-lists/{versionId}") {
+            val versionId = call.parameters["versionId"]?.toIntOrNull()
+            if (versionId == null) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("versionId must be an integer"))
+                return@post
+            }
+
+            val customerRepresentative = call.parameters["customerRepresentative"]?.toBooleanStrictOrNull() ?: true
+
+            val id = UUID.randomUUID().toString()
+            val structure = structureClient.loadSpecificationListStructure(PdmNodeId(versionId))
+            val file = withContext(Dispatchers.IO) {
+                val data = structure.toSpecificationListData()
+
+                val document = specificationList(data, customerRepresentative = customerRepresentative)
                 val laidOut = layOut(document, textMeasurer, fonts::resolve)
                 val pdfBytes = renderToPdf(laidOut, fonts.registry)
 
