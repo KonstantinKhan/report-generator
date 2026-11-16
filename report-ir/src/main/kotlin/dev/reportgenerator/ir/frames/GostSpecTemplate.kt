@@ -26,15 +26,15 @@ import dev.reportgenerator.template.TemplateLoader
 import dev.reportgenerator.template.TemplateResolver
 import dev.reportgenerator.template.TextAlign as TemplateTextAlign
 
-// The GOST specification page template (resources/templates/gost-spec.yaml) and the adapter from a
-// resolved template block to the IR's FrameSpec (cells in the block's own top-left-origin space).
-// Placement of these blocks on a page is done by the layout engine from the same template.
-object GostSpecTemplate {
-    private const val RESOURCE = "/templates/gost-spec.yaml"
+// A GOST (ESKD) sheet template (a YAML resource: static blocks, the flow table) and the adapter from a resolved template
+// block to the IR's FrameSpec (cells in the block's own top-left-origin space). Placement of these blocks on a page is
+// done by the layout engine from the same template. The sheets: PORTRAIT (the specification, A4) and GROUP_LANDSCAPE
+// (the group specification, A4 landscape), LIST_LANDSCAPE (the specification list, A3 landscape).
+class GostSpecTemplate private constructor(private val resource: String) {
 
     val template: Template by lazy {
-        val yaml = requireNotNull(GostSpecTemplate::class.java.getResourceAsStream(RESOURCE)) {
-            "template resource missing: $RESOURCE"
+        val yaml = requireNotNull(GostSpecTemplate::class.java.getResourceAsStream(resource)) {
+            "template resource missing: $resource"
         }.readBytes().toString(Charsets.UTF_8)
         TemplateLoader.load(yaml, Styles.named.keys)
     }
@@ -100,9 +100,22 @@ object GostSpecTemplate {
         LineWeight.THICK -> BorderWeight.THICK
     }
 
-    // Style keys usable as `style:` in the YAML.
-    private val STYLES: Map<String, TextStyle> = mapOf(
-        "frameText" to Styles.frameText,
-        "frameTextLarge" to Styles.frameTextLarge
-    )
+    companion object {
+        // Style keys usable as `style:` in the YAML.
+        private val STYLES: Map<String, TextStyle> = mapOf(
+            "frameText" to Styles.frameText,
+            "frameTextLarge" to Styles.frameTextLarge
+        )
+
+        // A4 portrait specification sheet (resources/templates/gost-spec.yaml).
+        val PORTRAIT = GostSpecTemplate("/templates/gost-spec.yaml")
+
+        // A4 landscape group specification sheet (resources/templates/gost-group-spec.yaml).
+        val GROUP_LANDSCAPE = GostSpecTemplate("/templates/gost-group-spec.yaml")
+
+        // A3 landscape specification list sheet "Ведомость спецификаций" (resources/templates/gost-spec-list.yaml).
+        // It has no left-margin and spec-left blocks: only the slots FRAME, CONTINUATION_FRAME, MAIN_TITLE_RIGHT and
+        // BELOW_FRAME are read from it (FrameSpecs cannot be used for it: its constructor reads every slot).
+        val LIST_LANDSCAPE = GostSpecTemplate("/templates/gost-spec-list.yaml")
+    }
 }

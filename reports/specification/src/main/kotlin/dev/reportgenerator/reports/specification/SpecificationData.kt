@@ -21,6 +21,8 @@ data class SpecificationData(
     // Блоки комплектов без назначения и без Спецификации: состав каждого комплекта, после строк комплектов со
     // Спецификацией. Пусто, если таких комплектов нет.
     val kitBlocks: List<KitBlock> = emptyList(),
+    // «Индекс заказчика» корня (null = атрибута нет или он пуст): в нижнюю ячейку основной надписи с представителем заказчика.
+    val customerIndex: String? = null,
 )
 
 // One execution (исполнение) of the product in the "Переменные данные для исполнений" section: its designation and the
@@ -45,6 +47,14 @@ sealed interface PositionedItem {
     val position: Int?
     val designation: String?
     val name: String
+}
+
+// Standard and other products: besides the cells they carry the attributes of the order of the rows (SpecificationOrder) and of
+// the sub-titles (SpecificationSubgroups): the standard designation, the kind and the size type of the product, null when empty.
+sealed interface CatalogItem : PositionedItem {
+    val standardDesignation: String?
+    val productKind: String?
+    val sizeType: String?
 }
 
 data class DocumentationItem(
@@ -86,7 +96,10 @@ data class StandardItem(
     val quantity: Double?,
     val zone: String? = null,
     val notes: List<String> = emptyList(),
-) : PositionedItem
+    override val standardDesignation: String? = null,
+    override val productKind: String? = null,
+    override val sizeType: String? = null,
+) : CatalogItem
 
 data class OtherItem(
     override val position: Int? = null,
@@ -95,7 +108,10 @@ data class OtherItem(
     val quantity: Double?,
     val zone: String? = null,
     val notes: List<String> = emptyList(),
-) : PositionedItem
+    override val standardDesignation: String? = null,
+    override val productKind: String? = null,
+    override val sizeType: String? = null,
+) : CatalogItem
 
 data class MaterialItem(
     override val position: Int? = null,
@@ -104,6 +120,8 @@ data class MaterialItem(
     val quantity: Double?,
     val zone: String? = null,
     val notes: List<String> = emptyList(),
+    // Вид материала по ЕСКД (порядок строк раздела); null, если пуст.
+    val materialKind: String? = null,
 ) : PositionedItem
 
 // A kit with a specification: the same cells as an assembly unit; the format is the format of the kit's specification.

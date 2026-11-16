@@ -24,15 +24,28 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-// Имена совпадают с подтверждёнными метаданными Loodsman из MappingConfigValidatorTest.
-private val confirmedLinkTypes = listOf("Состоит из ...", "Документы", "Технологическая ДСЕ для")
+// Срез живых метаданных Loodsman (id и имена как в базе), достаточный для default loodsman-mapping.yaml.
+// Согласован с MappingConfigValidatorTest.
+private val confirmedLinkTypes = listOf(
+    1 to "Документы", 6 to "Состоит из ...", 7 to "Исполнения", 8 to "Изготавливается из ...",
+    11 to "Технологическая ДСЕ для",
+)
 private val confirmedObjectTypes = listOf(
-    "Деталь", "Сборочная единица", "Сборочный чертеж", "Комплекс",
-    "Стандартное изделие", "Прочее изделие", "Материал по КД", "Комплект",
-    "Спецификация", "Чертеж детали",
+    16 to "Комплект документов", 22 to "Материал по КД", 58 to "Комплекс", 59 to "Сборочная единица",
+    60 to "Деталь", 61 to "Комплект", 62 to "Стандартное изделие", 64 to "Прочее изделие",
+    107 to "Ведомость эксплуатационных документов", 121 to "Чертеж детали", 122 to "Спецификация",
+    126 to "Сборочный чертеж", 354 to "Форма материала",
 )
 private val confirmedAttributes = listOf(
     "Наименование", "Обозначение", "Масса", "Наименование предприятия", "Позиция", "Примечание", "Формат",
+    "Обозначение изделия", "Наименование изделия", "Вид материала по ЕСКД", "Обозначение стандарта",
+    "Вид изделия", "Типоразмер", "Зона", "Способ применения", "Назначение комплекта",
+)
+// Направления types-links, нужные правилам yaml: (тип, связь, направление).
+private val confirmedTypeLinks = listOf(
+    Triple(59, 6, 1), Triple(61, 6, 1),
+    Triple(59, 1, 1), Triple(60, 1, 1), Triple(64, 1, 1), Triple(61, 1, 1), Triple(16, 1, 1),
+    Triple(60, 11, -1), Triple(354, 8, 1), Triple(59, 7, 1),
 )
 
 private fun api(typeListStatus: HttpStatusCode = HttpStatusCode.OK): LoodsmanApi {
@@ -45,9 +58,9 @@ private fun api(typeListStatus: HttpStatusCode = HttpStatusCode.OK): LoodsmanApi
             }
             "/api/v4/MetaData/cache/version" -> JsonPrimitive(1)
             "/api/v4/MetaData/get-link-list" -> buildJsonArray {
-                confirmedLinkTypes.forEachIndexed { index, name ->
+                confirmedLinkTypes.forEachIndexed { index, (id, name) ->
                     add(buildJsonObject {
-                        put("id", index + 6)
+                        put("id", id)
                         put("name", name)
                         put("type", 0)
                         put("order", index)
@@ -66,22 +79,23 @@ private fun api(typeListStatus: HttpStatusCode = HttpStatusCode.OK): LoodsmanApi
                 }
             }
             "/api/v4/MetaDataCustom/types-links" -> buildJsonArray {
-                // Деталь (id 1) читает «Технологическая ДСЕ для» (id 8, см. get-link-list) только в обратном направлении.
-                add(buildJsonObject {
-                    put("typeId1", 1)
-                    put("typeId2", 2)
-                    put("idLinkType", 8)
-                    put("direction", -1)
-                })
+                confirmedTypeLinks.forEach { (type, link, direction) ->
+                    add(buildJsonObject {
+                        put("typeId1", type)
+                        put("typeId2", type)
+                        put("idLinkType", link)
+                        put("direction", direction)
+                    })
+                }
             }
             "/api/v4/MetaData/get-type-list" -> {
                 if (typeListStatus != HttpStatusCode.OK) {
                     return@MockEngine respond("boom", typeListStatus)
                 }
                 buildJsonArray {
-                    confirmedObjectTypes.forEachIndexed { index, name ->
+                    confirmedObjectTypes.forEach { (id, name) ->
                         add(buildJsonObject {
-                            put("id", index + 1)
+                            put("id", id)
                             put("typeName", name)
                             put("attrName", "Обозначение")
                             put("document", 0)

@@ -13,7 +13,7 @@ class FrameSpecsTest {
 
     @Test
     fun `first page stamp is 185 by 40mm`() {
-        val spec = FrameSpecs.firstPageStamp
+        val spec = FrameSpecs.SPECIFICATION.firstPageStamp
 
         assertEquals(185.mm, spec.size.width)
         assertEquals(40.mm, spec.size.height)
@@ -21,7 +21,7 @@ class FrameSpecsTest {
 
     @Test
     fun `designation cell spans the full header strip width`() {
-        val designation = FrameSpecs.firstPageStamp.cells
+        val designation = FrameSpecs.SPECIFICATION.firstPageStamp.cells
             .filterIsInstance<FrameCell.Dynamic>()
             .single { it.path == "doc.designation" }
 
@@ -31,7 +31,7 @@ class FrameSpecsTest {
 
     @Test
     fun `name cell merges the five signature rows`() {
-        val name = FrameSpecs.firstPageStamp.cells
+        val name = FrameSpecs.SPECIFICATION.firstPageStamp.cells
             .filterIsInstance<FrameCell.Dynamic>()
             .single { it.path == "doc.name" }
 
@@ -41,7 +41,7 @@ class FrameSpecsTest {
 
     @Test
     fun `sheet number and sheets total each appear exactly once`() {
-        val dynamicFields = FrameSpecs.firstPageStamp.cells
+        val dynamicFields = FrameSpecs.SPECIFICATION.firstPageStamp.cells
             .filterIsInstance<FrameCell.Dynamic>()
             .map { it.path }
 
@@ -51,7 +51,7 @@ class FrameSpecsTest {
 
     @Test
     fun `left margin table is a 12 by 135mm vertical strip`() {
-        val spec = FrameSpecs.leftMarginTable
+        val spec = FrameSpecs.SPECIFICATION.leftMarginTable
 
         assertEquals(12.mm, spec.size.width)
         assertEquals(135.mm, spec.size.height)
@@ -59,7 +59,7 @@ class FrameSpecsTest {
 
     @Test
     fun `left margin table labels read bottom to top with the 5mm column outermost`() {
-        val labeled = FrameSpecs.leftMarginTable.cells
+        val labeled = FrameSpecs.SPECIFICATION.leftMarginTable.cells
             .filterIsInstance<FrameCell.Constant>()
             .filter { it.text.isNotEmpty() }
 
@@ -79,7 +79,7 @@ class FrameSpecsTest {
 
     @Test
     fun `below-frame notes are borderless and centered at the requested distance from the sheet edge`() {
-        val cells = FrameSpecs.belowFrameNotes.cells.filterIsInstance<FrameCell.Constant>()
+        val cells = FrameSpecs.SPECIFICATION.belowFrameNotes.cells.filterIsInstance<FrameCell.Constant>()
         assertEquals(2, cells.size)
         cells.forEach {
             assertEquals(BorderWeight.NONE, it.borders.top)
@@ -90,7 +90,7 @@ class FrameSpecsTest {
 
         // belowFrameOrigin anchors the block's right edge at the sheet's right edge, so a cell's
         // distance from that edge is (spec.width - cell.rect.x - cell.rect.width/2).
-        val specWidth = FrameSpecs.belowFrameNotes.size.width
+        val specWidth = FrameSpecs.SPECIFICATION.belowFrameNotes.size.width
         fun distanceFromSheetEdge(cell: FrameCell.Constant) =
             specWidth - cell.rect.x - cell.rect.width / 2
 
@@ -102,7 +102,7 @@ class FrameSpecsTest {
 
     @Test
     fun `designation and name cells are Type A Italic 7mm via fontSize override`() {
-        val dynamic = FrameSpecs.firstPageStamp.cells.filterIsInstance<FrameCell.Dynamic>()
+        val dynamic = FrameSpecs.SPECIFICATION.firstPageStamp.cells.filterIsInstance<FrameCell.Dynamic>()
         for (path in listOf("doc.designation", "doc.name")) {
             val style = dynamic.single { it.path == path }.style
             assertEquals(Styles.frameText.copy(fontSizeMm = 7.0), style)

@@ -183,11 +183,13 @@ data class FlowHeaderRow(val height: Double, val cells: List<FlowHeaderCell>)
 // Single-row form: `cells` keyed by column id, must cover every column, `height` is the row height.
 // Multi-level form: `rows` (not empty, `cells` empty), `height` = the sum of the row heights.
 // `repeat`: header on every page, not only the first.
+// `thinGroupLine` (multi-level form): the line between a cell with `span` > 1 and the cells under it is thin.
 data class FlowHeader(
     val height: Double,
     val repeat: Boolean = true,
     val cells: Map<String, FlowHeaderCell>,
-    val rows: List<FlowHeaderRow> = emptyList()
+    val rows: List<FlowHeaderRow> = emptyList(),
+    val thinGroupLine: Boolean = false
 )
 
 // The group title row has the same per-column cells as a row; the title text goes into `column`.
@@ -198,6 +200,16 @@ data class FlowGroupTitle(
     val align: TextAlign = TextAlign.CENTER,
     val spacerBefore: Int = 0,
     val spacerAfter: Int = 0
+)
+
+// Sub-title of a group: before a row a title row is inserted when the String item field `field` has a non-blank
+// value that differs from the previous row's value of the same group (or that row has none). The title text goes into
+// `column`; the row is not numbered, has no totals and no spacers.
+data class FlowSubTitle(
+    val field: String,
+    val column: String = "name",
+    val style: String? = null,
+    val align: TextAlign = TextAlign.CENTER
 )
 
 // Structured, closed row predicate (flow table `where`, `groupBy`-less filtering, `cases`). `field` is a field of
@@ -372,6 +384,7 @@ data class FlowTableSpec(
     val columns: List<FlowColumn>,
     val header: FlowHeader? = null,
     val groupTitle: FlowGroupTitle? = null,
+    val subTitle: FlowSubTitle? = null,
     val rowCells: Map<String, FlowRowCell>,
     val fill: FlowFill = FlowFill.NONE,
     // null = not written (STRETCH applies); written only together with `fill: blank` (validator)

@@ -4,6 +4,7 @@ import dev.reportgenerator.domain.PdmNodeStructureClient
 import dev.reportgenerator.loodsman.mapping.MappingConfig
 import dev.reportgenerator.loodsman.mapping.MappingConfigValidator
 import io.github.konstantinkhan.loodsman.LoodsmanApi
+import org.slf4j.LoggerFactory
 
 /**
  * Согласованный набор Loodsman-компонентов: клиент структуры и кэш метаданных, которые работают с одним маппингом.
@@ -16,6 +17,8 @@ class LoodsmanContext private constructor(
 
     companion object {
 
+        private val log = LoggerFactory.getLogger(LoodsmanContext::class.java)
+
         /**
          * Загружает метаданные и проверяет [mapping] против них. Ошибка загрузки или любые ошибки проверки
          * пробрасываются, контекст не создаётся: приложение не должно стартовать с неполными метаданными.
@@ -23,6 +26,7 @@ class LoodsmanContext private constructor(
         suspend fun bootstrap(api: LoodsmanApi, mapping: MappingConfig): LoodsmanContext {
             val metadata = MetadataCache(api) { MappingConfigValidator.validate(mapping, it) }
             metadata.initialize()
+            MappingConfigValidator.optionalMissing(mapping, metadata.snapshot()).forEach { log.warn(it) }
             val client = LoodsmanProductStructureClient(api, mapping, metadata = metadata)
             return LoodsmanContext(client, metadata)
         }

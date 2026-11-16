@@ -247,7 +247,7 @@ private class Reader {
 
     private fun flowTable(node: YamlNode, path: String): FlowTableSpec {
         val m = node.asMap(path)
-        m.allow(path, "rowHeight", "columns", "header", "groupTitle", "row", "fill", "remainder", "keep", "styles", "where", "sortBy", "groupBy", "computed", "totals", "lines")
+        m.allow(path, "rowHeight", "columns", "header", "groupTitle", "subTitle", "row", "fill", "remainder", "keep", "styles", "where", "sortBy", "groupBy", "computed", "totals", "lines")
         val rowPath = "$path.row"
         val row = m.required("row", path).asMap(rowPath)
         row.allow(rowPath, "cells")
@@ -256,6 +256,7 @@ private class Reader {
             columns = m.required("columns", path).asList("$path.columns").items.mapIndexed { i, n -> flowColumn(n, "$path.columns[$i]") },
             header = m.optional("header")?.let { flowHeader(it, "$path.header") },
             groupTitle = m.optional("groupTitle")?.let { flowGroupTitle(it, "$path.groupTitle") },
+            subTitle = m.optional("subTitle")?.let { flowSubTitle(it, "$path.subTitle") },
             rowCells = cellMap(row.required("cells", rowPath), "$rowPath.cells", ::flowRowCell),
             fill = m.optional("fill")?.let { n ->
                 when (n.scalar("$path.fill").lowercase()) {
@@ -449,14 +450,15 @@ private class Reader {
 
     private fun flowHeader(node: YamlNode, path: String): FlowHeader {
         val m = node.asMap(path)
-        m.allow(path, "height", "repeat", "cells", "rows")
+        m.allow(path, "height", "repeat", "cells", "rows", "thinGroupLine")
         val repeat = m.optional("repeat")?.let { bool(it, "$path.repeat") } ?: true
         val rowsNode = m.optional("rows")
         if (rowsNode != null) {
             val single = listOf("height", "cells").filter { m.optional(it) != null }
             if (single.isNotEmpty()) fail(path, node, "'rows' excludes ${single.joinToString { "'$it'" }} (use 'rows' or 'height' + 'cells')")
             val rows = rowsNode.asList("$path.rows").items.mapIndexed { i, n -> flowHeaderRow(n, "$path.rows[$i]") }
-            return FlowHeader(height = rows.sumOf { it.height }, repeat = repeat, cells = emptyMap(), rows = rows)
+            val thinGroupLine = m.optional("thinGroupLine")?.let { bool(it, "$path.thinGroupLine") } ?: false
+            return FlowHeader(height = rows.sumOf { it.height }, repeat = repeat, cells = emptyMap(), rows = rows, thinGroupLine = thinGroupLine)
         }
         if (m.optional("height") == null && m.optional("cells") == null) fail(path, node, "expected 'rows' or 'height' + 'cells'")
         return FlowHeader(
@@ -484,6 +486,17 @@ private class Reader {
             align = m.optional("align")?.let { flowAlign(it, "$path.align") } ?: TextAlign.CENTER,
             spacerBefore = m.optional("spacerBefore")?.let { integer(it, "$path.spacerBefore") } ?: 0,
             spacerAfter = m.optional("spacerAfter")?.let { integer(it, "$path.spacerAfter") } ?: 0
+        )
+    }
+
+    private fun flowSubTitle(node: YamlNode, path: String): FlowSubTitle {
+        val m = node.asMap(path)
+        m.allow(path, "field", "column", "style", "align")
+        return FlowSubTitle(
+            field = m.string("field", path) ?: fail(path, node, "missing required field 'field'"),
+            column = m.string("column", path) ?: "name",
+            style = m.string("style", path),
+            align = m.optional("align")?.let { flowAlign(it, "$path.align") } ?: TextAlign.CENTER
         )
     }
 

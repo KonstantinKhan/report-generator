@@ -35,7 +35,7 @@ relations:
     as: MADE_FROM
     from: [Форма материала]
   # Исполнения: FORWARD от основного исполнения к остальным (обратное имя «Базовое исполнение», id 7).
-  # from = Сборочная единица: ПРЕДПОЛОЖЕНИЕ, id типа в types-links не проверен на сервере (см. wiki).
+  # from = Сборочная единица: подтверждено types-links живого Loodsman 2026-11-09 (59 -> 59, направление 1).
   - link: "Исполнения"
     as: VARIANT
     from: [Сборочная единица]
@@ -47,6 +47,16 @@ requiredRelations:
 attributes:
   designation:
     name: Обозначение
+  customerIndex:
+    name: Индекс заказчика
+    # Не на всех серверах Loodsman есть этот атрибут: если его нет, проверка не падает, атрибут не запрашивается.
+    optional: true
+  # Код документа ведомости: «ВС» — ведомость спецификаций, такой объект не попадает в список спецификаций.
+  # Не на всех серверах Loodsman есть этот атрибут: если его нет, проверка не падает, ведомость без кода не пропускает объект.
+  documentCode:
+    byKind:
+      OPERATIONAL_DOCUMENTS_LIST: Код документа
+    optional: true
   productDesignation:
     byKind:
       STANDARD: Обозначение изделия
@@ -67,6 +77,21 @@ attributes:
       DETAIL_DRAWING: Формат
       ASSEMBLY_DRAWING: Формат
       OPERATIONAL_DOCUMENTS_LIST: Формат
+  materialKind:
+    byKind:
+      MATERIAL: Вид материала по ЕСКД
+  standardDesignation:
+    byKind:
+      STANDARD: Обозначение стандарта
+      OTHER: Обозначение стандарта
+  productVariety:
+    byKind:
+      STANDARD: Вид изделия
+      OTHER: Вид изделия
+  sizeType:
+    byKind:
+      STANDARD: Типоразмер
+      OTHER: Типоразмер
 
 properties:
   version: VERSION

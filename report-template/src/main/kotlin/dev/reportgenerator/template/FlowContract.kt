@@ -28,6 +28,10 @@ internal object FlowContract {
             field(s.field, "$p.sortBy[$i].field", sortable, computedNames - arithmeticNames, errors)
         }
         t.groupBy?.let { groupBy(it, "$p.groupBy", raw, computedNames, errors) }
+        t.subTitle?.let { s ->
+            val type = field(s.field, "$p.subTitle.field", raw, computedNames, errors)
+            if (type != null && type != DataType.Str) errors += TemplateError("$p.subTitle.field", "subTitle needs a String field, '${s.field}' is ${type.typeName}")
+        }
         t.totals.forEachIndexed { i, total -> total(total, "$p.totals[$i]", extended, errors) }
 
         val itemSchema = t.itemSchema(schema)

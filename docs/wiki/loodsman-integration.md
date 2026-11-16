@@ -6,8 +6,9 @@
   Класс `LoodsmanApi` с группами эндпоинтов, DTO, сессия. Ничего не знает о доменной модели.
 - **`report-loodsman`** (`dev.reportgenerator.loodsman`) — слой DTO → домен: `LoodsmanProductStructureClient`
   реализует `PdmNodeStructureClient` из `report-domain` поверх `LoodsmanApi`, по YAML-конфигу маппинга.
-- **`report-server`** (`dev.reportgenerator.server`) — Ktor REST: `POST /specifications/{versionId}` тянет структуру
-  изделия, собирает спецификацию (`reports/specification`) и рендерит PDF.
+- **`report-server`** (`dev.reportgenerator.server`) — Ktor REST: `POST /specifications/{versionId}` и
+  `POST /group-specifications/{versionId}` ([group-specification.md](group-specification.md)) тянут структуру изделия,
+  собирают спецификацию (`reports/specification`) и рендерят PDF.
 
 Старый путь сборки (`PdmClient`, модуль `report-pdm`, `LoodsmanKtorPdmClient`, `Pdm2Domain`, а раньше `LoodsmanPdmClient` и
 `SpecificationAssembly`) удалён в ветке `refactor/loodsman-api`. Единственный путь к структуре изделия — `PdmNodeStructureClient`.
@@ -222,7 +223,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 Связи: `relations` в YAML — список правил («Состоит из ...» → `COMPOSITION`, «Документы» → `DOCUMENT`,
 «Технологическая ДСЕ для» → `TECHNOLOGICAL_PART`; правила — в [«Правила связей»](#правила-связей-relations)). Состав идёт по `COMPOSITION`,
-документация (сборочный чертеж) — по `DOCUMENT` (имя связи не проверено на живом стенде; нет связи — группа пуста).
+документация (сборочный чертеж) — по `DOCUMENT` (связь «Документы» подтверждена живым Loodsman 2026-11-09, id 1; нет связи — группа пуста).
 Количество у документации не нужно. `TECHNOLOGICAL_PART` в спецификацию не попадает (`ProductNodeSpecification` его не выводит).
 
 **Форма материала и «Изготавливается из ...».** Форма (`MaterialForm`) входит в состав сборочной единицы по `COMPOSITION`
@@ -240,9 +241,12 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 столбец «Наименование». Список атрибутов объекта (`get-info-about-version-mode-3`) читается только по необходимости
 (см. «Что попадает в PdmNode и Usage»).
 
-> **Риск (не подтверждено на сервере).** Наличие атрибута «Обозначение изделия» у типов «Стандартное изделие» и
-> «Прочее изделие» не проверено на живом стенде. Если атрибута нет, `MappingConfigValidator` упадёт при старте с
-> `attribute 'Обозначение изделия' not found in Loodsman`: это и есть проверка.
+> **Подтверждено на сервере (2026-11-09).** Атрибут «Обозначение изделия» есть в `get-attribute-list-2` (id 276); так же
+> подтверждены остальные атрибуты из `loodsman-mapping.yaml` (в том числе «Наименование изделия», «Вид материала по ЕСКД»,
+> «Обозначение стандарта», «Вид изделия», «Типоразмер», «Зона», «Способ применения», «Назначение комплекта»).
+> Не подтверждено: принадлежность атрибута конкретному типу («Стандартное изделие», «Прочее изделие») — список атрибутов
+> глобальный. Если атрибута нет в списке, `MappingConfigValidator` упадёт при старте с
+> `attribute '...' not found in Loodsman`: это и есть проверка.
 
 ## Прочее
 
@@ -271,7 +275,7 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 
 **(а2) Позиция.** Источник — атрибут связи «Позиция» по правилу `link.attributes.position`. Правило есть, а значения
 нет — `Field.Missing` → позиция пустая. Значение в `Field.NotLoaded` в пайплайне не попадает (отсутствие правила или
-значения — не ошибка загрузки). Сортировка по позиции внутри раздела и место элементов без позиции — в
+значения — не ошибка загрузки). Позиция только выводится, порядок строк внутри раздела от неё не зависит — правила порядка в
 [specification-table-format.md](specification-table-format.md).
 
 **(а3) Формат и примечания.** Формат сборочной единицы — из документов самой сборочной единицы (первый «Спецификация»
@@ -324,8 +328,10 @@ LinkedObjectDto(idLink → linkId, idChild → versionId, idType → linkTypeId,
 (нет `MadeFromUsage` с видом `Material`) — `SpecificationDataException` с id формы. Код: `materialNode()` в `ProductNodeSpecification.kt`.
 
 **(г) Неизвестные виды.** `PdmNodeKind.Unmapped` (политика `onUnmapped.kind: KEEP` сохраняет такой вид в домене) и
-`UnmappedUsage` спецификация пропускает, в отчёт не попадают. Узел с неизвестным видом при `KEEP` раскрывается дальше:
-его связи читаются, потомки попадают в дерево (пример: «Технологическая деталь»). Если неизвестен вид самого корня, загрузка падает
+`UnmappedUsage` спецификация пропускает, в отчёт не попадают. Узел с неизвестным видом при `KEEP` остаётся в дереве, но его
+связи читаются только по правилам, у которых тип узла входит в `from` (или `from` пуст). Состав («Состоит из ...») имеют
+только «Сборочная единица» и «Комплект», поэтому у узла вида вне `from` (например, «Деталь», «Технологическая деталь»)
+состав не раскрывается. Если неизвестен вид самого корня, загрузка падает
 `LoodsmanApiException` (`Root object ... has unmapped type`).
 
 **(д) Исполнения и переменные данные.** Исполнения корня (`VariantUsage`, связь «Исполнения») — это тот же изделие в другом
@@ -407,6 +413,9 @@ requiredRelations:          # смыслы из relations (поле as), кот�
 
 attributes:                 # атрибуты узла: id ключа модели -> имя атрибута в PDM
   designation:              # обозначение: для типа с ключом «Обозначение» читается из product
+  customerIndex:            # индекс заказчика корня: для всех видов; в отчёте только у корня (основная надпись с представителем)
+    name: Индекс заказчика
+    optional: true          # атрибута может не быть на сервере Loodsman: см. «Необязательные атрибуты» ниже
     name: Обозначение
   name:
     name: Наименование
@@ -428,6 +437,28 @@ attributes:                 # атрибуты узла: id ключа моде�
       DETAIL_DRAWING: Формат
       ASSEMBLY_DRAWING: Формат
       OPERATIONAL_DOCUMENTS_LIST: Формат
+  materialKind:             # атрибуты порядка строк спецификации: только для видов из byKind, для остальных значение Empty
+    byKind:
+      MATERIAL: Вид материала по ЕСКД
+  standardDesignation:
+    byKind:
+      STANDARD: Обозначение стандарта
+      OTHER: Обозначение стандарта
+  productVariety:
+    byKind:
+      STANDARD: Вид изделия
+      OTHER: Вид изделия
+  sizeType:
+    byKind:
+      STANDARD: Типоразмер
+      OTHER: Типоразмер
+
+**Необязательные атрибуты (`optional: true`).** Атрибут может отсутствовать в метаданных конкретного сервера Loodsman.
+- Проверка маппинга (`MappingConfigValidator.validate`) не даёт ошибку, если имени нет среди метаданных; обязательные атрибуты проверяются как раньше.
+- При старте (`LoodsmanContext.bootstrap`) для каждого отсутствующего optional-атрибута пишется одно предупреждение (`optionalMissing`).
+- Запрос атрибутов (`AttributeRequests.attributeRequest`, `availableNames`) такой атрибут не запрашивает; значение узла — NotLoaded.
+  Отчёт трактует это как отсутствие: `PdmNode.customerIndex()` даёт null, нижняя ячейка остаётся пустой, отчёт не падает.
+- Сейчас `optional: true` стоит только у `customerIndex` («Индекс заказчика»): на сервере без этого атрибута сервис стартует.
 
 properties:                 # поля узла из свойств объекта (get-prop-objects): PRODUCT, VERSION, STATE, TYPE
   version: VERSION
@@ -499,6 +530,11 @@ onUnmapped:
 группирует их по направлению и делает один запрос `linkedObjects` на группу. Правило, не подошедшее по `from`,
 отсеивается до запроса: узел без подходящих правил не получает ни одного вызова `linkedObjects`.
 
+**Фильтр `from`.** Правило применяется только к узлам, чей тип входит в `from`. Узлы вида вне `from` состав
+(и любую другую связь с непустым `from`) не раскрывают, даже если политика `onUnmapped.kind: KEEP` оставила их в дереве.
+В частности, у «Деталь» и «Технологическая деталь» состава нет: в `from` связи «Состоит из ...» только
+«Сборочная единица» и «Комплект».
+
 **Цена ошибки в `from` — тихая.** Дети типов вне списка не загружаются и в `usages` не попадают без единой ошибки.
 Пример: `from: [Сборочная единица]` на `COMPOSITION` отсекал бы состав комплектов (сейчас в `from` добавлен «Комплект»;
 комплексы и тех. ДСЕ отсечены), а заодно
@@ -519,9 +555,10 @@ onUnmapped:
 
 **Исполнения (`VARIANT`).** Связь «Исполнения», id 7 (обратное имя «Базовое исполнение»). Правило:
 `link: "Исполнения"`, `as: VARIANT`, `direction` FORWARD (от основного исполнения к остальным), `from: [Сборочная единица]`.
-`from` — **предположение**: id типа «Сборочная единица» в `types-links` для связи 7 на живом сервере не проверен (имена типов
-58, 59, 61, 65 в репозитории неизвестны). Если валидатор на старте укажет на `from`, поправить `from` по строке
-`types-links` (direction 1 или 0 для пары тип → связь 7).
+`from` подтверждён на живом сервере (2026-11-09): в `types-links` для связи 7 тип «Сборочная единица» (id 59) имеет
+направление 1 (пара 59 → 59; есть и -1, а также 59 → 65 с -1), валидатор на старте проходит. Так же направление 1
+по связи 7 есть у «Комплекс» (58) и «Комплект» (61), но в `from` они не включены. Если валидатор на старте укажет на `from`,
+поправить его по строке `types-links` (direction 1 или 0 для пары тип → связь 7).
 В `specificationQuery` связь читается на первом уровне (`relationDepth: {Variant: 1}`): исполнения корня с их документами.
 Состав каждого исполнения одним запросом состава не читается (предел `Composition: 1` относится ко всему дереву), поэтому
 `loadSpecificationStructure` (`reports/specification`) грузит состав каждого исполнения отдельным `loadTree` с тем же
@@ -534,7 +571,7 @@ onUnmapped:
 ```kotlin
 Registries.itemKinds          // ASSEMBLY, PART, STANDARD, OTHER, MATERIAL, ASSEMBLY_DRAWING, COMPLEX, KIT
 Registries.relations          // COMPOSITION, DOCUMENT, TECHNOLOGICAL_PART, MADE_FROM, VARIANT
-Registries.attributeKeys      // mass, companyName
+Registries.attributeKeys      // mass, companyName, designation, productDesignation, name, format, materialKind, standardDesignation, productVariety, sizeType, customerIndex
 Registries.linkAttributeKeys  // position, note
 ```
 
@@ -549,7 +586,8 @@ onUnmapped:
   relation: SKIP  # или KEEP, FAIL
 ```
 
-- **KEEP** — неизвестный тип сохраняется как `PdmNodeKind.Unmapped` и узел раскрывается дальше.
+- **KEEP** — неизвестный тип сохраняется как `PdmNodeKind.Unmapped`; связи узла читаются только по правилам с пустым `from`
+  (тип неизвестного узла не может входить в `from`).
 - **SKIP** — объект неизвестного типа пропускается (ребёнок не появляется в `usages`). Если неизвестен тип
   самого корня — `LoodsmanApiException`.
 - **FAIL** — исключение при неизвестном типе.
@@ -749,9 +787,11 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 - Группы замен: один `get-info-about-version-mode-20` на узел уровней `0..min(replacementDepth, depth - 1)` — только при
   `replacements = true`; при `false` запросов нет, `PdmNode.replacements` пуст.
 
-Неустранимый остаток без `from`: у каждого документного узла на разрешённых уровнях спрашиваются его документы —
-у чертежей и спецификаций такой запрос обычно пуст (один лишний вызов на узел-документ). Лечится `from` на
-`DOCUMENT` с перечнем типов-носителей документов.
+Лишних запросов документов нет: правило `DOCUMENT` ограничено `from` (Сборочная единица, Деталь, Прочее изделие,
+Комплект, Комплект документов). Узлы-документы (чертежи, «Спецификация», «Ведомость эксплуатационных документов») в
+`from` не входят, их документы не запрашиваются, и вызова на узел-документ нет. Если появится новый тип-носитель
+документов, его нужно добавить в `from` этой связи в `loodsman-mapping.yaml`: без этого его документы не будут
+загружены.
 
 **Стоимость запроса спецификации (`specificationQuery`, depth 2, состав до детей корня).** Относительно прежнего
 запроса с depth 1 добавляются вызовы только за документами детей корня. Пусть N — число детей корня видов «Сборочная
@@ -866,7 +906,9 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 | Вид объекта | свойство `type` (`get-prop-objects`) | `kinds` | `PdmNode.kind` |
 | Версия, состояние | свойства `version`, `state` | `properties` | `PdmNode.version`, `state` |
 | Обозначение, наименование | ключевой атрибут типа (`product`) или атрибут объекта | `attributes.designation`, `attributes.name` (только если запрошены) | `PdmNode.attributes`; ключ узла — `PdmNode.key` |
+| Индекс заказчика (корень отчёта) | атрибут объекта «Индекс заказчика» | `attributes.customerIndex` (запрашивает `specificationQuery`; пустой или из пробелов — не выводится) | `SpecificationData.customerIndex` / `GroupSpecificationData.customerIndex` -> `doc.customerIndex` (нижняя ячейка представителя заказчика) |
 | Обозначение изделия (стандартные и прочие изделия) | атрибут объекта «Обозначение изделия» | `attributes.productDesignation` (только если запрошено; у других видов правила нет) | `PdmNode.attributes` |
+| Порядок строк: вид материала по ЕСКД (материалы), обозначение стандарта, вид изделия, типоразмер (стандартные и прочие изделия) | атрибуты объекта «Вид материала по ЕСКД», «Обозначение стандарта», «Вид изделия», «Типоразмер» | `attributes.materialKind`, `standardDesignation`, `productVariety`, `sizeType` (запрашивает `specificationQuery`; у других видов правила нет, значение `Empty`) | `PdmNode.attributes` -> `MaterialItem.materialKind`, `StandardItem` / `OtherItem` `standardDesignation`, `productKind`, `sizeType` |
 | Атрибуты узла | атрибуты объекта (`get-info-about-version-mode-3`) | `attributes` (+ `byKind`) | `PdmNode.attributes` |
 | Количество | поля связи `minQuantity`, `maxQuantity` | `link.fields.quantityMin`, `quantityMax` | `Usage.quantity` |
 | Единица | поле связи `unit` | `link.fields.unit` | `Usage.unit` |
@@ -951,7 +993,8 @@ val config = MappingConfigLoader.parse(yamlText)  // из строки
 
 ### HTTP-статусы маршрута спецификации
 
-`POST /specifications/{versionId}` (параметр `customerRepresentative`, по умолчанию `true`). Маппинг ошибок — `StatusPages`
+`POST /specifications/{versionId}` и `POST /group-specifications/{versionId}` (параметр `customerRepresentative`, по умолчанию `true`;
+одни и те же коды). Маппинг ошибок — `StatusPages`
 в `Routing.kt`:
 
 | Ситуация | HTTP |

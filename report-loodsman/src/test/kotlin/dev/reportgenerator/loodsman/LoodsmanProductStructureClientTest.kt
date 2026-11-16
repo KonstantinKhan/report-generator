@@ -513,7 +513,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     }
 
     should("return quantity as missing when the link has no quantity") {
-        val root = FakeLoodsman(tree, treeEdges).client().loadTree(query(2))
+        // Узел 2 — сборочная единица: состав раскрывают только сборочные единицы и комплекты.
+        val root = FakeLoodsman(listOf(assembly, subAssembly, bolt, pin), treeEdges).client().loadTree(query(2))
 
         val composition = root.usages[0].target.usages.single() as CompositionUsage
         composition.quantity shouldBe Quantity.Missing
@@ -548,7 +549,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     }
 
     should("load grandchildren when depth is 2 and request properties once per level") {
-        val fake = FakeLoodsman(tree, treeEdges)
+        // Узел 2 — сборочная единица: состав раскрывают только сборочные единицы и комплекты.
+        val fake = FakeLoodsman(listOf(assembly, subAssembly, bolt, pin), treeEdges)
 
         val root = fake.client().loadTree(query(2))
 
@@ -567,7 +569,8 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
             Edge(2, 5, link = "Документы"),
             Edge(4, 5, link = "Документы"),
         )
-        val fake = FakeLoodsman(tree + spec, edges)
+        // Узел 2 — сборочная единица (состав раскрывается, но отсекается по relationDepth); у спецификации документы не грузятся.
+        val fake = FakeLoodsman(listOf(assembly, subAssembly, bolt, pin, spec), edges)
 
         val root = fake.client().loadTree(
             StructureQuery(
@@ -586,9 +589,10 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         specUsage.target.id shouldBe PdmNodeId(5)
         specUsage.target.usages shouldBe emptyList()
 
-        // Штифт (состав уровня 2) не запрошен вовсе; у вала и спецификации запрошены только документы.
+        // Штифт (состав уровня 2) не запрошен вовсе; у узла запрошены только документы, у спецификации связи не запрашиваются
+        // (вид «Спецификация» не входит в from связи «Документы»).
         fake.propsCalls shouldBe listOf(listOf(1), listOf(2), listOf(5))
-        fake.linkRequests.map { it.linkTypeIds } shouldBe listOf(listOf(1, 2), listOf(2), listOf(2))
+        fake.linkRequests.map { it.linkTypeIds } shouldBe listOf(listOf(1, 2), listOf(2))
     }
 
     should("cap relationDepth by the query depth") {
@@ -635,10 +639,12 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
     }
 
     should("fail on a cycle") {
+        // Цикл 1 -> 2 -> 4 -> 1 из сборочных единиц: состав раскрывают только сборочные единицы и комплекты.
+        val cyclicObjects = listOf(assembly, subAssembly, bolt, Obj(4, "Сборочная единица", "АБ.003"))
         val cyclic = treeEdges + Edge(4, 1)
 
         shouldThrow<LoodsmanApiException> {
-            FakeLoodsman(tree, cyclic).client().loadTree(query(Int.MAX_VALUE))
+            FakeLoodsman(cyclicObjects, cyclic).client().loadTree(query(Int.MAX_VALUE))
         }
     }
 
@@ -809,6 +815,51 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         shouldThrow<LoodsmanApiException> {
             FakeLoodsman(tree, treeEdges).client(mapping).loadTree(query(1, AttributeKey.Mass))
         }
+    }
+
+    should("fill the row order attributes only for the kinds that have a rule and keep other kinds empty") {
+        val material = Obj(
+            6, "Материал по КД", "Сталь 09Г2С",
+            mapOf("Наименование" to "Лист", "Вид материала по ЕСКД" to "металлы черные")
+        )
+        val standard = bolt.copy(
+            attrs = bolt.attrs + mapOf("Обозначение стандарта" to "ГОСТ 7798-70", "Вид изделия" to "Болт", "Типоразмер" to "М6x20")
+        )
+        val other = Obj(
+            5, "Прочее изделие", "Заглушка",
+            mapOf("Обозначение изделия" to "ИЗД.5", "Обозначение стандарта" to "ТУ 1", "Вид изделия" to "Заглушка", "Типоразмер" to "10")
+        )
+        val edges = listOf(Edge(1, 2), Edge(1, 3), Edge(1, 5), Edge(1, 6))
+        val keys = arrayOf(
+            AttributeKey.MaterialKind,
+            AttributeKey.StandardDesignation,
+            AttributeKey.ProductVariety,
+            AttributeKey.SizeType,
+        )
+
+        val root = FakeLoodsman(listOf(assembly, shaft, standard, other, material), edges).client().loadTree(query(1, *keys))
+
+        val empty = keys.associateWith { AttributeValue.Empty }
+        root.attributes shouldBe empty
+        root.usages[0].target.attributes shouldBe empty
+        root.usages[1].target.attributes shouldBe mapOf(
+            AttributeKey.MaterialKind to AttributeValue.Empty,
+            AttributeKey.StandardDesignation to AttributeValue.Text("ГОСТ 7798-70"),
+            AttributeKey.ProductVariety to AttributeValue.Text("Болт"),
+            AttributeKey.SizeType to AttributeValue.Text("М6x20"),
+        )
+        root.usages[2].target.attributes shouldBe mapOf(
+            AttributeKey.MaterialKind to AttributeValue.Empty,
+            AttributeKey.StandardDesignation to AttributeValue.Text("ТУ 1"),
+            AttributeKey.ProductVariety to AttributeValue.Text("Заглушка"),
+            AttributeKey.SizeType to AttributeValue.Text("10"),
+        )
+        root.usages[3].target.attributes shouldBe mapOf(
+            AttributeKey.MaterialKind to AttributeValue.Text("металлы черные"),
+            AttributeKey.StandardDesignation to AttributeValue.Empty,
+            AttributeKey.ProductVariety to AttributeValue.Empty,
+            AttributeKey.SizeType to AttributeValue.Empty,
+        )
     }
 
     should("expose only attributes unknown to the mapping when unmapped ones are requested") {
@@ -1102,8 +1153,14 @@ class LoodsmanProductStructureClientTest : ShouldSpec({
         fake.linkRequests.filter { it.inverse } shouldBe listOf(LinkRequest(objectId = 10, linkTypeIds = listOf(3), inverse = true))
     }
 
-    should("not apply the inverse rule of the root kind to a technological part and expand its composition") {
-        val fake = technologicalFake()
+    should("not apply the inverse rule of the root kind to a node of another kind and expand its composition") {
+        // Технологическая деталь состава не имеет, поэтому узел 11 здесь — сборочная единица (вид, у которого состав раскрывается).
+        val technologicalAssembly = Obj(11, "Сборочная единица", "ТД.011", mapOf("Наименование" to "Технологическая"))
+        val fake = FakeLoodsman(
+            listOf(detail, technologicalAssembly, pin),
+            technologicalEdges,
+            linkNames = listOf(COMPOSITION, "Документы", TECHNOLOGICAL_PART),
+        )
 
         val root = fake.client(technologicalMapping()).loadTree(technologicalQuery(2))
 

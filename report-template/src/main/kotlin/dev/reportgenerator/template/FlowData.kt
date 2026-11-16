@@ -113,7 +113,13 @@ internal fun compilePredicate(p: Predicate, fields: Map<String, DataType>): (Dat
 
 // One group of the shaped table; `title` is null for a flat table (no `groupBy`). `totals` = the group's `totals`
 // (scope group) in spec order, empty without any.
-class ShapedGroup(val title: String?, val rows: List<DataValue.Record>, val totals: List<TotalValue> = emptyList())
+// `subTitles[i]` = the sub-title shown before `rows[i]` (FlowSubTitle), null = none; empty without `subTitle`.
+class ShapedGroup(
+    val title: String?,
+    val rows: List<DataValue.Record>,
+    val totals: List<TotalValue> = emptyList(),
+    val subTitles: List<String?> = emptyList()
+)
 
 // The whole shaped table: groups plus the table-scope totals (over the rows of all groups, as drawn).
 class ShapedTable(val groups: List<ShapedGroup>, val totals: List<TotalValue>)
@@ -148,11 +154,11 @@ object FlowShaper {
             }
         } ?: listOf(null to sorted)
 
-        val numbered = numbered(spec, groups)
+        val numbered = numbered(spec, groups).map { g -> spec.subTitle?.let { g.withSubTitles(subTitles(it, g.rows)) } ?: g }
         if (spec.totals.isEmpty()) return ShapedTable(numbered, emptyList())
         val totals = FlowTotals(spec.totals, raw + computedTypes.types)
         return ShapedTable(
-            numbered.map { ShapedGroup(it.title, it.rows, totals.group(it.rows)) },
+            numbered.map { ShapedGroup(it.title, it.rows, totals.group(it.rows), it.subTitles) },
             totals.table(numbered.flatMap { it.rows })
         )
     }
@@ -187,6 +193,19 @@ object FlowShaper {
             }
             0
         }
+
+    private fun ShapedGroup.withSubTitles(subTitles: List<String?>) = ShapedGroup(title, rows, totals, subTitles)
+
+    // A row gets the text of its `subTitle` field when it is not blank and differs from the previous row's value.
+    private fun subTitles(spec: FlowSubTitle, rows: List<DataValue.Record>): List<String?> {
+        var previous: String? = null
+        return rows.map { row ->
+            val value = (row.fields[spec.field] as? DataValue.Str)?.value?.takeIf { it.isNotBlank() }
+            val title = value?.takeIf { it != previous }
+            previous = value
+            title
+        }
+    }
 
     // Adds the sequence fields; `scope: table` counts through all groups in table order.
     private fun numbered(spec: FlowTableSpec, groups: List<Pair<String?, List<DataValue.Record>>>): List<ShapedGroup> {

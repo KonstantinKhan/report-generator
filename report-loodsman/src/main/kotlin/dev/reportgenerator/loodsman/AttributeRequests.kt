@@ -27,21 +27,31 @@ internal class AttributeRequests(private val mapping: MappingConfig) {
         return snapshot.keyAttributeOf(typeName)
     }
 
-    /** Единое правило чтения для загрузки дерева и одного узла: имена атрибутов разрешаются для вида. */
+    /**
+     * Единое правило чтения для загрузки дерева и одного узла: имена атрибутов разрешаются для вида.
+     * [availableNames] — имена атрибутов метаданных Loodsman: optional-атрибут, которого там нет, не запрашивается
+     * (его ключ опускается, значение NotLoaded). null — без отбора (как до введения optional).
+     */
     fun attributeRequest(
         kind: PdmNodeKind,
         keyAttribute: String?,
         attributeKeys: Set<AttributeKey>,
         includeUnmapped: Boolean,
+        availableNames: Set<String>? = null,
     ): AttributeRequest {
         val keyKey = keyAttribute?.let { name ->
             mapping.attributes.entries.firstOrNull { (_, rule) -> rule.nameFor(kind) == name }
                 ?.let { (id, _) -> Registries.attributeKeys.resolve(id) }
         }
+        val requested = attributeKeys.filter { key ->
+            val rule = ruleOf(key)
+            val name = rule.nameFor(kind)
+            !(rule.optional && availableNames != null && name != null && name !in availableNames)
+        }
         return AttributeRequest(
             keyAttribute = keyAttribute,
             keyKey = keyKey,
-            names = attributeKeys.associateWith { key -> ruleOf(key).nameFor(kind) },
+            names = requested.associateWith { key -> ruleOf(key).nameFor(kind) },
             mappedNames = mapping.attributes.values.mapNotNullTo(HashSet()) { it.nameFor(kind) },
             includeUnmapped = includeUnmapped,
         )

@@ -40,6 +40,7 @@ internal class NodeLoader(
             attributeRequests.keyAttributeOf(snapshot, id.asInt(), props),
             attributeKeys,
             includeUnmapped,
+            availableNames = snapshot.attributeNames,
         )
         val attributes = if (request.needsObjectAttributes()) api.objectInfo.infoAboutVersion(id.asInt()) else emptyList()
         return toPdmNode(props, kind, attributes, request)
@@ -69,7 +70,8 @@ internal class NodeLoader(
         val requests = prepared.mapNotNull { (id, pair) ->
             val kind = pair.second ?: return@mapNotNull null
             id to attributeRequests.attributeRequest(
-                kind, keyAttributes[id], query.attributes, query.includeUnmappedAttributes
+                kind, keyAttributes[id], query.attributes, query.includeUnmappedAttributes,
+                availableNames = snapshot.attributeNames,
             )
         }.toMap()
         val attributeKeys = requests.filterValues { it.needsObjectAttributes() }.map { (id, request) ->

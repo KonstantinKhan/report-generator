@@ -34,10 +34,16 @@ data class UnmappedPolicy(
     val relation: OnUnmapped = OnUnmapped.SKIP
 )
 
+/**
+ * Правило чтения атрибута объекта. [optional] = true: атрибута может не быть в метаданных Loodsman на конкретном сервере.
+ * Такой атрибут не валит проверку маппинга (только предупреждение при старте) и не запрашивается, если его нет;
+ * значение тогда отсутствует (NotLoaded), отчёт трактует это как отсутствие значения.
+ */
 @Serializable
 data class AttributeRule(
     val name: String? = null,
-    val byKind: Map<String, String> = emptyMap()
+    val byKind: Map<String, String> = emptyMap(),
+    val optional: Boolean = false,
 )
 
 @Serializable
