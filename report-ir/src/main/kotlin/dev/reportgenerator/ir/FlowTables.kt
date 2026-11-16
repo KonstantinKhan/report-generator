@@ -227,7 +227,8 @@ object FlowTables {
                     scope = if (lines.scope == LinesScope.PAGE) IrLineScope.PAGE else IrLineScope.TABLE,
                     fillBlank = lines.fill,
                     style = rowStyles.getValue(id),
-                    align = (cell.align ?: spec.columns.first { it.id == id }.align).toIr()
+                    align = (cell.align ?: spec.columns.first { it.id == id }.align).toIr(),
+                    numberStructural = lines.structural
                 )
             }
         )

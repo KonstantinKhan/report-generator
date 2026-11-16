@@ -27,6 +27,7 @@ relations:
       - Прочее изделие
       - Комплект
       - Комплект документов
+      - Комплекс
   - link: "Технологическая ДСЕ для"
     direction: INVERSE
     from: [Деталь]
@@ -92,6 +93,26 @@ attributes:
     byKind:
       STANDARD: Типоразмер
       OTHER: Типоразмер
+  sourceReceipt:
+    name: Источник поступления
+  productCode:
+    name: Код ОКП / по классификатору
+  alternativeProductCode:
+    name: Код ОКПД 2
+  supplyDocument:
+    name: Обозначение стандарта
+  supplier:
+    name: Поставщик
+  adjustmentQuantity:
+    name: Количество на регулировку
+  developedBy:
+    name: Разработал
+  lastModifiedNumber:
+    name: Номер последнего изменения
+  primaryApplicability:
+    name: Первичное применение
+  department:
+    name: Подразделение
 
 properties:
   version: VERSION
@@ -118,6 +139,9 @@ link:
     kitPurpose:
       - relation: COMPOSITION
         name: Назначение комплекта
+    specificationSection:
+      - relation: COMPOSITION
+        name: Раздел спецификации
 
 onUnmapped:
   kind: KEEP

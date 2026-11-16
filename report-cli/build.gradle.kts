@@ -10,6 +10,7 @@ application {
 dependencies {
     implementation(projects.reportDomain)
     implementation(projects.reports.specification)
+    implementation(projects.reports.purchasedItems)
     implementation(projects.reportLayout)
     implementation(projects.reportTemplate)
     implementation(projects.reportRenderSvg)
@@ -28,6 +29,14 @@ tasks.register<JavaExec>("runTemplate") {
     workingDir = projectDir
     val extra = providers.gradleProperty("args")
     argumentProviders.add(CommandLineArgumentProvider { extra.orNull?.split(" ")?.filter { it.isNotBlank() } ?: emptyList() })
+}
+
+tasks.register<JavaExec>("runPurchasedItems") {
+    group = "application"
+    description = "Render the typed purchased-items fixture to PDF"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("dev.reportgenerator.cli.PurchasedItemsMainKt")
+    workingDir = projectDir
 }
 
 // The flow table test lays out several pages; PdfBoxTextMeasurer re-parses the TTF on every measure() call,

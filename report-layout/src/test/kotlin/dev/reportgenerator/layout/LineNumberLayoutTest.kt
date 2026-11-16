@@ -171,6 +171,16 @@ class LineNumberLayoutTest {
     }
 
     @Test
+    fun `structural numbering includes group spacers and title`() {
+        // One group occupies blank + title + blank + data, then seven filler rows: every one of the 11 grid rows is numbered.
+        val group = IrGroup("Детали", listOf(row("a")))
+        val lineNumbers = IrLineNumbers("n", fillBlank = true, numberStructural = true)
+        val doc = layOut(table(listOf(group), numbers = lineNumbers, fillBlank = true))
+
+        assertEquals((1..11).map(Int::toString), numbers(doc, 1))
+    }
+
+    @Test
     fun `the number cell keeps its style and alignment on a filler row`() {
         val numbers = IrLineNumbers("n", fillBlank = true, style = Styles.tableText, align = TextAlign.CENTER)
         val doc = layOut(table(listOf(row("a")), numbers = numbers, fillBlank = true))

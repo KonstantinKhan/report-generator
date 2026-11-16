@@ -52,7 +52,8 @@ data class IrLineNumbers(
     val scope: IrLineScope = IrLineScope.TABLE,
     val fillBlank: Boolean = false,
     val style: TextStyle = Styles.tableText,
-    val align: TextAlign = TextAlign.LEFT
+    val align: TextAlign = TextAlign.LEFT,
+    val numberStructural: Boolean = false
 )
 
 enum class IrLineScope { TABLE, PAGE }

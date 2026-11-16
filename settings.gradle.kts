@@ -18,6 +18,7 @@ include(
     "report-render-pdf",
     "report-domain",
     "reports:specification",
+    "reports:purchased-items",
     "report-cli",
     "loodsman-client",
     "report-loodsman",

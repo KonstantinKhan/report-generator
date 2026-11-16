@@ -51,6 +51,16 @@ object Registries {
             "sizeType" to AttributeKey.SizeType,
             "customerIndex" to AttributeKey.CustomerIndex,
             "documentCode" to AttributeKey.DocumentCode,
+            "sourceReceipt" to AttributeKey.SourceReceipt,
+            "productCode" to AttributeKey.ProductCode,
+            "alternativeProductCode" to AttributeKey.AlternativeProductCode,
+            "supplyDocument" to AttributeKey.SupplyDocument,
+            "supplier" to AttributeKey.Supplier,
+            "adjustmentQuantity" to AttributeKey.AdjustmentQuantity,
+            "developedBy" to AttributeKey.DevelopedBy,
+            "lastModifiedNumber" to AttributeKey.LastModifiedNumber,
+            "primaryApplicability" to AttributeKey.PrimaryApplicability,
+            "department" to AttributeKey.Department
         )
     )
 
@@ -61,7 +71,8 @@ object Registries {
             "note" to LinkAttributeKey.Note,
             "zone" to LinkAttributeKey.Zone,
             "applicationMethod" to LinkAttributeKey.ApplicationMethod,
-            "kitPurpose" to LinkAttributeKey.KitPurpose
+            "kitPurpose" to LinkAttributeKey.KitPurpose,
+            "specificationSection" to LinkAttributeKey.SpecificationSection
         )
     )
 }

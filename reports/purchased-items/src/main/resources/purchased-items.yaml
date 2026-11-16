@@ -1,0 +1,252 @@
+# Base form copied from the unmodified report-cli/templates/sheet-frame.yaml.
+# Only report data bindings, grouping and sorting are report-specific.
+name: purchased-items
+sheet:
+  format: A3
+  orientation: landscape
+  margins: { left: 20, top: 5, right: 5, bottom: 5 }
+
+blocksets:
+  organizationSet:
+    blocks:
+      - id: organization
+        type: table
+        columns: [50]
+        rows:
+          - height: 15
+            cells:
+              - { bind: "${doc.companyName}", optional: true, align: center }
+
+  parametersSet:
+    blocks:
+      - id: parameters
+        type: table
+        columns: [5, 5, 5, 17, 18]
+        rows:
+          - height: 5
+            cells:
+              - { text: "Лит.", span: 3, align: center }
+              - { text: "Масса", align: center }
+              - { text: "Масштаб", align: center }
+          - height: 5
+            cells:
+              - ~
+              - ~
+              - ~
+              - ~
+              - ~
+
+  nameSet:
+    blocks:
+      - id: name
+        type: table
+        columns: [70]
+        rows:
+          - height: 12
+            cells:
+              - { bind: "${doc.name}", align: center }
+          - height: 13
+            cells:
+              - { text: "Ведомость покупных изделий", align: center }
+
+  designationSet:
+    blocks:
+      - id: designation
+        type: table
+        columns: [120]
+        rows:
+          - height: 15
+            cells:
+              - { bind: "${doc.designation}", align: center }
+
+  signSet:
+    blocks:
+      - id: sign
+        type: table
+        columns: [7, 10, 23, 15, 10]
+        rows:
+          - height: 5
+            cells: [ { borders: { bottom: thin } }, { borders: { bottom: thin } }, { borders: { bottom: thin } }, { borders: { bottom: thin } }, { borders: { bottom: thin } } ]
+          - height: 5
+            cells: [ { borders: { top: thin } }, { borders: { top: thin } }, { borders: { top: thin } }, { borders: { top: thin } }, { borders: { top: thin } } ]
+          - height: 5
+            cells:
+              - { text: "Изм", align: center }
+              - { text: "Лист", align: center }
+              - { text: "№ докум.", align: center }
+              - { text: "Подп.", align: center }
+              - { text: "Дата", align: center }
+          - height: 5
+            cells:
+              - { text: "Разраб.", span: 2, borders: { bottom: thin } }
+              - { bind: "${doc.developedBy}", optional: true, borders: { bottom: thin } }
+              - { borders: { bottom: thin } }
+              - { borders: { bottom: thin } }
+          - height: 5
+            cells:
+              - { text: "Пров.", span: 2, borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+          - height: 5
+            cells:
+              - { span: 2, borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+          - height: 5
+            cells:
+              - { text: "Н. контр.", span: 2, borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+              - { borders: { bottom: thin, top: thin } }
+          - height: 5
+            cells:
+              - { text: "Утв.", span: 2, borders: { top: thin } }
+              - { borders: { top: thin } }
+              - { borders: { top: thin } }
+              - { borders: { top: thin } }
+
+  mainInscriptionSet:
+    blocks:
+      - { id: organization, use: organizationSet }
+      - id: parameters
+        use: parametersSet
+        attach: { self: bottomRight, to: organization.topRight }
+      - id: name
+        use: nameSet
+        attach: { self: bottomRight, to: organization.bottomLeft }
+      - id: designation
+        use: designationSet
+        attach: { self: bottomRight, to: parameters.topRight }
+      - id: sign
+        use: signSet
+        attach: { self: bottomRight, to: name.bottomLeft }
+
+  bottomLeftTableSet:
+    blocks:
+      - id: bottomLeftTable
+        type: table
+        rotate: 90
+        columns: [25, 35, 25, 25, 35]
+        rows:
+          - height: 5
+            cells:
+              - { text: "Инв. № подл.", align: center }
+              - { text: "Подп. и дата", align: center }
+              - { text: "Взам. инв. №", align: center }
+              - { text: "Инв. № дубл.", align: center }
+              - { text: "Подп. и дата", align: center }
+          - height: 5
+            cells: [~, ~, ~, ~, ~]
+
+  topLeftTableSet:
+    blocks:
+      - id: topLeftTable
+        type: table
+        rotate: 90
+        columns: [60, 60]
+        rows:
+          - height: 5
+            cells:
+              - { text: "Справ. №", align: center }
+              - { text: "Перв. примен.", align: center }
+          - height: 7
+            cells:
+              - ~
+              - { bind: "${doc.primaryApplicability}", optional: true, align: center }
+
+blocks:
+  - id: frame
+    type: frame
+    thickness: thick
+    size: { width: 395, height: 287 }
+    attach: { self: topLeft, to: sheet.contentTopLeft }
+  - id: mainInscription
+    use: mainInscriptionSet
+    when: first
+    reserves: true
+    attach: { self: bottomRight, to: frame.bottomRight }
+
+  - id: bottomLeftTable
+    use: bottomLeftTableSet
+    attach: { self: bottomRight, to: frame.bottomLeft }
+
+  - id: topLeftTable
+    use: topLeftTableSet
+    attach: { self: topRight, to: frame.topLeft }
+
+  - id: content
+    type: flow
+    table:
+      rowHeight: 8
+      fill: blank
+      remainder: gap
+      keep: { titleChain: true }
+      styles:
+        head: { base: tableHeader, size: 7 }
+        small: { base: tableHeader, size: 4.5 }
+        data: tableText
+        group: { base: groupHeader, underline: true }
+      groupBy:
+        field: section
+        order: [BOLT, SCREW, RING, BEARING, OTHER, WASHER, KEY, DOCUMENT_REFERENCE]
+        titles:
+          BOLT: "Болты"
+          SCREW: "Винты"
+          RING: "Кольца"
+          BEARING: "Подшипники"
+          OTHER: "Прочие покупные изделия"
+          WASHER: "Шайбы"
+          KEY: "Шпонки"
+          DOCUMENT_REFERENCE: "Ведомость покупных изделий составных частей"
+        skipEmpty: true
+      groupTitle: { column: name, style: group, spacerBefore: 1, spacerAfter: 1 }
+      sortBy:
+        - { field: selectionRank, order: asc }
+        - { field: name, order: asc }
+        - { field: inclusion, order: asc }
+      columns:
+        - { id: n, width: 7, align: center }
+        - { id: name, width: 60 }
+        - { id: productCode, width: 45, align: center }
+        - { id: supplyDocument, width: 70, align: center }
+        - { id: supplier, width: 55, align: center }
+        - { id: inclusion, width: 70, align: center }
+        - { id: onProduct, width: 16, align: center }
+        - { id: inKits, width: 16, align: center }
+        - { id: adjustment, width: 16, align: center }
+        - { id: total, width: 16, align: center }
+        - { id: note, width: 24, align: center }
+      header:
+        repeat: true
+        rows:
+          - height: 9
+            cells:
+              - { text: "№ строки", rowSpan: 2, rotate: 90, style: small }
+              - { text: "Наименование", rowSpan: 2, style: head }
+              - { text: "Код\nпродукции", rowSpan: 2, style: head }
+              - { text: "Обозначение документа\nна поставку", rowSpan: 2, style: head }
+              - { text: "Поставщик", rowSpan: 2, style: head }
+              - { text: "Куда входит\n(обозначение)", rowSpan: 2, style: head }
+              - { text: "Количество", span: 4, style: head }
+              - { text: "Приме-\nчание", rowSpan: 2, style: small }
+          - height: 18
+            cells:
+              - { text: "на изделие", lines: ["на из-", "делие"], style: small }
+              - { text: "в комплекты", lines: ["в комп-", "лекты"], style: small }
+              - { text: "на регулирование", lines: ["на ре-", "гулир."], style: small }
+              - { text: "всего", lines: ["всего"], style: small }
+      row:
+        cells:
+          n: { bind: "${line.number}", style: data }
+          name: { bind: "${item.name}", style: data }
+          productCode: { bind: "${item.productCode}", optional: true, style: data }
+          supplyDocument: { bind: "${item.supplyDocument}", optional: true, style: data }
+          supplier: { bind: "${item.supplier}", optional: true, style: data }
+          inclusion: { bind: "${item.inclusion}", style: data }
+          onProduct: { bind: "${item.onProduct}", optional: true, style: data, format: { pattern: "0.##", locale: ru, rounding: HALF_UP } }
+          inKits: { bind: "${item.inKits}", optional: true, style: data, format: { pattern: "0.##", locale: ru, rounding: HALF_UP } }
+          adjustment: { bind: "${item.adjustment}", optional: true, style: data, format: { pattern: "0.##", locale: ru, rounding: HALF_UP } }
+          total: { bind: "${item.total}", optional: true, style: data, format: { pattern: "0.##", locale: ru, rounding: HALF_UP } }
+          note: { bind: "${item.note}", optional: true, style: data }

@@ -5,10 +5,12 @@ import dev.reportgenerator.domain.PdmNodeStructureClient
 import dev.reportgenerator.layout.DefaultFontRegistry
 import dev.reportgenerator.layout.PdfBoxTextMeasurer
 import dev.reportgenerator.layout.layOut
+import dev.reportgenerator.layout.layOutStandaloneTemplate
 import dev.reportgenerator.loodsman.MetadataCache
 import dev.reportgenerator.loodsman.RefreshResult
 import io.github.konstantinkhan.loodsman.LoodsmanApiException
 import dev.reportgenerator.renderpdf.renderToPdf
+import dev.reportgenerator.rendersvg.render as renderToSvg
 import dev.reportgenerator.reports.specification.specification
 import dev.reportgenerator.reports.specification.SpecificationDataException
 import dev.reportgenerator.reports.specification.groupSpecification
@@ -18,6 +20,10 @@ import dev.reportgenerator.reports.specification.specificationList
 import dev.reportgenerator.reports.specification.toGroupSpecificationData
 import dev.reportgenerator.reports.specification.toSpecificationData
 import dev.reportgenerator.reports.specification.toSpecificationListData
+import dev.reportgenerator.reports.purchaseditems.PurchasedItemsDataException
+import dev.reportgenerator.reports.purchaseditems.loadPurchasedItemsStructure
+import dev.reportgenerator.reports.purchaseditems.purchasedItemsReport
+import dev.reportgenerator.reports.purchaseditems.toPurchasedItemsData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -44,6 +50,25 @@ import java.util.UUID
 
 @Serializable
 data class SpecificationResponse(val id: String, val path: String)
+
+@Serializable
+data class PurchasedItemsResponse(
+    val id: String,
+    /** Backward-compatible primary output: PDF, or the first SVG when format=svg. */
+    val path: String,
+    val format: String,
+    val pdfPath: String? = null,
+    val svgPaths: List<String> = emptyList(),
+)
+
+internal enum class ReportOutputFormat { PDF, SVG, BOTH }
+
+internal fun reportOutputFormat(value: String?): ReportOutputFormat? = when (value?.lowercase() ?: "pdf") {
+    "pdf" -> ReportOutputFormat.PDF
+    "svg" -> ReportOutputFormat.SVG
+    "both" -> ReportOutputFormat.BOTH
+    else -> null
+}
 
 @Serializable
 data class ErrorResponse(val error: String)
@@ -76,6 +101,10 @@ fun Application.reportServerModule(
         // is an upstream data problem, not a server bug: 502 as before the migration.
         exception<SpecificationDataException> { call, cause ->
             call.application.log.warn("Invalid product data for specification: ${cause.message}")
+            call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "invalid product data"))
+        }
+        exception<PurchasedItemsDataException> { call, cause ->
+            call.application.log.warn("Invalid product data for purchased-items report: ${cause.message}")
             call.respond(HttpStatusCode.BadGateway, ErrorResponse(cause.message ?: "invalid product data"))
         }
         exception<MetadataRefreshException> { call, cause ->
@@ -123,6 +152,27 @@ fun Application.reportServerModule(
                 ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, "$uuid.pdf").toString(),
             )
             call.respondBytes(bytes, ContentType.Application.Pdf)
+        }
+
+        get("/reports/{id}/pages/{page}.svg") {
+            val id = call.parameters["id"]
+            val uuid = id?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            val page = call.parameters["page"]?.toIntOrNull()
+            if (uuid == null || uuid.toString() != id.lowercase() || page == null || page <= 0) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("report id must be a UUID and page must be positive"))
+                return@get
+            }
+            val file = File(outputDir, "$uuid-page-$page.svg")
+            if (!file.isFile) {
+                call.respond(HttpStatusCode.NotFound, ErrorResponse("SVG page not found: $uuid/$page"))
+                return@get
+            }
+            val bytes = withContext(Dispatchers.IO) { file.readBytes() }
+            call.response.header(
+                HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, file.name).toString(),
+            )
+            call.respondBytes(bytes, ContentType.parse("image/svg+xml"))
         }
 
         post("/specifications/{versionId}") {
@@ -201,6 +251,44 @@ fun Application.reportServerModule(
             }
 
             call.respond(HttpStatusCode.OK, SpecificationResponse(id = id, path = file.absolutePath))
+        }
+
+        post("/purchased-items/{versionId}") {
+            val versionId = call.parameters["versionId"]?.toIntOrNull()
+            if (versionId == null || versionId <= 0) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("versionId must be a positive integer"))
+                return@post
+            }
+
+            val outputFormat = reportOutputFormat(call.request.queryParameters["format"])
+            if (outputFormat == null) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("format must be pdf, svg or both"))
+                return@post
+            }
+            val id = UUID.randomUUID().toString()
+            val structure = structureClient.loadPurchasedItemsStructure(PdmNodeId(versionId))
+            val files = withContext(Dispatchers.IO) {
+                val document = purchasedItemsReport(structure.toPurchasedItemsData())
+                val laidOut = layOutStandaloneTemplate(document, textMeasurer, fonts::resolve)
+                outputDir.mkdirs()
+                val pdf = if (outputFormat != ReportOutputFormat.SVG) {
+                    File(outputDir, "$id.pdf").apply { writeBytes(renderToPdf(laidOut, fonts.registry)) }
+                } else null
+                val svg = if (outputFormat != ReportOutputFormat.PDF) {
+                    renderToSvg(laidOut, fonts.registry).mapIndexed { index, page ->
+                        File(outputDir, "$id-page-${index + 1}.svg").apply { writeText(page, Charsets.UTF_8) }
+                    }
+                } else emptyList()
+                pdf to svg
+            }
+            val (pdf, svg) = files
+            call.respond(HttpStatusCode.OK, PurchasedItemsResponse(
+                id = id,
+                path = pdf?.absolutePath ?: svg.first().absolutePath,
+                format = outputFormat.name.lowercase(),
+                pdfPath = pdf?.absolutePath,
+                svgPaths = svg.map { it.absolutePath },
+            ))
         }
 
         // Admin endpoint without authentication by decision of the user. Returns 502 with the reason on failure;

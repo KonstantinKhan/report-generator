@@ -64,10 +64,10 @@ class LineNumbersTemplateTest {
 
     @Test
     fun `lines section loads start, scope and fill`() {
-        val t = spec(with("lines: {start: 5, scope: page, fill: true}"))
+        val t = spec(with("lines: {start: 5, scope: page, fill: true, structural: true}"))
 
-        assertEquals(FlowLines(start = 5, scope = LinesScope.PAGE, fill = true), t.lines)
-        assertEquals(emptyMap(), errors(with("lines: {start: 5, scope: page, fill: true}")))
+        assertEquals(FlowLines(start = 5, scope = LinesScope.PAGE, fill = true, structural = true), t.lines)
+        assertEquals(emptyMap(), errors(with("lines: {start: 5, scope: page, fill: true, structural: true}")))
     }
 
     @Test

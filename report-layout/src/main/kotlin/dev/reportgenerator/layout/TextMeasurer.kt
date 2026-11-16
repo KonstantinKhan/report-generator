@@ -27,13 +27,18 @@ class PdfBoxTextMeasurer(
 ) : TextMeasurer {
 
     private val measurementDocument = PDDocument()
+    private val fontCache = mutableMapOf<String, PDFont>()
 
+    @Synchronized
     override fun measure(text: String, style: TextStyle, maxWidth: Length, breakLongWords: Boolean): TextMeasurement {
         // '\n' is a hard line break: every segment is wrapped on its own; trailing breaks are dropped, see hardBreakSegments
         val segments = hardBreakSegments(text)
         if (segments.isEmpty()) return TextMeasurement(Length.ZERO, Length.ZERO, 0, emptyList())
 
-        val font = fontRegistry.loadInto(measurementDocument, fontResolver(style))
+        val ref = fontResolver(style)
+        // PDType0Font loading parses and embeds the whole TTF. Loading it for every cell caused
+        // unbounded heap growth across reports; one measurement document needs one instance per font.
+        val font = fontCache.getOrPut(ref.id) { fontRegistry.loadInto(measurementDocument, ref) }
         val sizePt = style.fontSizeMm / PT_TO_MM
         val lines = segments.flatMap { wrapIntoLines(it, font, sizePt, maxWidth, breakLongWords) }
         val width = lines.maxOf { lineWidth(it, font, sizePt) }

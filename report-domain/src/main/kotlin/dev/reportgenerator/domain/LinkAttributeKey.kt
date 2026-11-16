@@ -11,5 +11,7 @@ sealed interface LinkAttributeKey {
 
     data object KitPurpose : LinkAttributeKey
 
+    data object SpecificationSection : LinkAttributeKey
+
     data class Unmapped(val pdmName: String) : LinkAttributeKey
 }

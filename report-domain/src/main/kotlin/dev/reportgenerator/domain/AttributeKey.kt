@@ -30,6 +30,16 @@ sealed interface AttributeKey {
 
     // Код документа (ведомость эксплуатационных документов: «ВС» — ведомость спецификаций).
     data object DocumentCode : AttributeKey
+    data object SourceReceipt : AttributeKey
+    data object ProductCode : AttributeKey
+    data object AlternativeProductCode : AttributeKey
+    data object SupplyDocument : AttributeKey
+    data object Supplier : AttributeKey
+    data object AdjustmentQuantity : AttributeKey
+    data object DevelopedBy : AttributeKey
+    data object LastModifiedNumber : AttributeKey
+    data object PrimaryApplicability : AttributeKey
+    data object Department : AttributeKey
 
     data class Unmapped(val pdmName: String) : AttributeKey
 }
