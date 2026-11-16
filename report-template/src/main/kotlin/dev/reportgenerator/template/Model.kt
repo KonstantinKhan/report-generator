@@ -321,8 +321,14 @@ enum class LinesScope { TABLE, PAGE }
 // `lines:` of a flow table: numbering of the PHYSICAL rows (every line a record occupies once its text is wrapped), shown
 // by the row cell bound to `${line.number}`. `start` = the number of the first line (of the table / of every page).
 // `fill`: the blank filler rows (`fill: blank`) take numbers too (default: they stay empty, the owner decides per form).
-// Group titles, spacers and total rows are never numbered.
-data class FlowLines(val start: Long = 1, val scope: LinesScope = LinesScope.TABLE, val fill: Boolean = false)
+// `structural`: group titles, their spacers and total rows take numbers too. It is disabled by default so existing
+// templates keep their numbering; Form 5 of the purchased-items report enables it to number every grid row.
+data class FlowLines(
+    val start: Long = 1,
+    val scope: LinesScope = LinesScope.TABLE,
+    val fill: Boolean = false,
+    val structural: Boolean = false
+)
 
 // `titleChain`: spacers + group title + the first data line stay together (a title is never left alone
 // at the bottom of a page).

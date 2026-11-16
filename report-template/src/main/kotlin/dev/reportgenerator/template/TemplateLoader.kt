@@ -305,16 +305,17 @@ private class Reader {
         )
     }
 
-    // `{start, scope: table|page, fill}`, see FlowLines.
+    // `{start, scope: table|page, fill, structural}`, see FlowLines.
     private fun flowLines(node: YamlNode, path: String): FlowLines {
         val m = node.asMap(path)
-        m.allow(path, "start", "scope", "fill")
+        m.allow(path, "start", "scope", "fill", "structural")
         return FlowLines(
             start = m.optional("start")?.let { long(it, "$path.start") } ?: 1,
             scope = m.optional("scope")?.let { n ->
                 LinesScope.entries.firstOrNull { it.name == n.scalar("$path.scope").uppercase() } ?: fail("$path.scope", n, "expected table|page")
             } ?: LinesScope.TABLE,
-            fill = m.optional("fill")?.let { bool(it, "$path.fill") } ?: false
+            fill = m.optional("fill")?.let { bool(it, "$path.fill") } ?: false,
+            structural = m.optional("structural")?.let { bool(it, "$path.structural") } ?: false
         )
     }
 

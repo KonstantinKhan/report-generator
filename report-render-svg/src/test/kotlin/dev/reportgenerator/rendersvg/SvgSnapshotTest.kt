@@ -61,7 +61,7 @@ class SvgSnapshotTest {
             golden.writeText(svg)
         }
 
-        assertEquals(golden.readText(), svg)
+        assertEquals(golden.readText().replace("\r\n", "\n"), svg.replace("\r\n", "\n"))
     }
 
     @Test
@@ -73,5 +73,27 @@ class SvgSnapshotTest {
         assertTrue(svg.contains("Вал"))
         assertTrue(svg.contains("Втулка"))
         assertTrue(svg.contains("Наименование"))
+    }
+
+    @Test
+    fun `standalone SVG embeds the resolved font`() {
+        val registry = FontRegistry()
+        val fontBytes = requireNotNull(javaClass.getResourceAsStream("/fonts/PT_Sans-Regular.ttf")).readBytes()
+        val fontRef = registry.register("pt-sans", fontBytes)
+        val textMeasurer = PdfBoxTextMeasurer(registry) { fontRef }
+        val document = IrDocument(
+            PageSetup(PageFormat("test", 100.mm, 60.mm), Insets(5.mm, 5.mm, 5.mm, 5.mm)),
+            listOf(IrTable(
+                columns = listOf(IrColumn("name", 40.mm)),
+                header = null,
+                content = listOf(IrRow(listOf(IrCell("Текст"))))
+            ))
+        )
+
+        val svg = render(layOut(document, textMeasurer) { fontRef }, registry).single()
+
+        assertTrue(svg.contains("@font-face"))
+        assertTrue(svg.contains("data:font/ttf;base64,"))
+        assertTrue(svg.contains("font-family=\"pt-sans\""))
     }
 }

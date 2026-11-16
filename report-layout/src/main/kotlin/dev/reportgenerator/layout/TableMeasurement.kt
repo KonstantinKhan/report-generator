@@ -292,6 +292,7 @@ private fun buildBorderedBlocks(
 ): List<LayoutBlock> {
     val blocks = mutableListOf<LayoutBlock>()
     val title = table.groupTitle
+    val numberStructural = table.lineNumbers?.numberStructural == true
 
     // `numbered`: the lines of a data record (IrLineNumbers); titles and totals pass false.
     fun physicalRowBlocks(row: IrRow, path: String, numbered: Boolean = false): List<BorderedRowBlock> =
@@ -301,7 +302,9 @@ private fun buildBorderedBlocks(
 
     // The physical rows of a footer, each one a plain bordered row.
     fun footerBlocks(footer: List<IrTotalRow>, path: String): List<BorderedRowBlock> =
-        footer.flatMapIndexed { i, total -> physicalRowBlocks(IrRow(total.cells), "$path/Total[$i]") }
+        footer.flatMapIndexed { i, total ->
+            physicalRowBlocks(IrRow(total.cells), "$path/Total[$i]", numbered = numberStructural)
+        }
 
     // The physical rows of a data record, preceded by its sub-title rows (IrRow.subTitle) bound to the first data
     // line (like the group title prefix, IrGroupTitle.keepWithRows = false drops the chain).
@@ -335,7 +338,7 @@ private fun buildBorderedBlocks(
                         },
                         constraints = element.constraints
                     )
-                    physicalRowBlocks(titleRow, headerPath)
+                    physicalRowBlocks(titleRow, headerPath, numbered = numberStructural)
                 } else {
                     listOf(
                         BorderedRowBlock(
@@ -344,14 +347,18 @@ private fun buildBorderedBlocks(
                             offsets = listOf(contentLeft),
                             rowHeight = rowHeight,
                             constraints = element.constraints,
-                            path = headerPath
+                            path = headerPath,
+                            numbered = numberStructural
                         )
                     )
                 }
 
-                val blanksBefore = (0 until title.spacerBefore).map { blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[$it]") }
+                val blanksBefore = (0 until title.spacerBefore).map {
+                    blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[$it]").copy(numbered = numberStructural)
+                }
                 val blanksAfter = (0 until title.spacerAfter).map {
                     blankBorderedRow(table.columns, offsets, rowHeight, "$headerPath/Blank[${title.spacerBefore + it}]")
+                        .copy(numbered = numberStructural)
                 }
 
                 val rowBlocks = element.rows.flatMapIndexed { rowIndex, row -> recordBlocks(row, "$headerPath/Row[$rowIndex]") }

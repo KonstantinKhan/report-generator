@@ -1,5 +1,6 @@
 package dev.reportgenerator.rendersvg
 
+import dev.reportgenerator.layout.FontRegistry
 import dev.reportgenerator.layoutir.BASELINE_RATIO
 import dev.reportgenerator.layoutir.Color
 import dev.reportgenerator.layoutir.LaidOutDocument
@@ -10,10 +11,15 @@ import dev.reportgenerator.layoutir.PositionedImage
 import dev.reportgenerator.layoutir.PositionedText
 import dev.reportgenerator.layoutir.Rectangle
 import dev.reportgenerator.layoutir.TextOrientation
+import java.util.Base64
 
 private const val PT_TO_MM = 25.4 / 72.0
 
 fun render(document: LaidOutDocument): List<String> = document.pages.map { renderPage(it) }
+
+/** Standalone SVG pages with every used TTF embedded, so the browser cannot substitute GOST fonts. */
+fun render(document: LaidOutDocument, fontRegistry: FontRegistry): List<String> =
+    document.pages.map { page -> renderPage(page, fontRegistry) }
 
 fun renderPage(page: Page): String {
     val widthMm = page.format.width.toMillimeters()
@@ -28,11 +34,41 @@ fun renderPage(page: Page): String {
     """.trimMargin()
 }
 
+fun renderPage(page: Page, fontRegistry: FontRegistry): String {
+    val fonts = page.elements.filterIsInstance<PositionedText>().map { it.style.font }.distinct()
+    val css = fonts.joinToString("\n") { font ->
+        val encoded = Base64.getEncoder().encodeToString(fontRegistry.bytesFor(font))
+        "@font-face{font-family:'${font.id}';src:url(data:font/ttf;base64,$encoded) format('truetype');}"
+    }
+    val widthMm = page.format.width.toMillimeters()
+    val heightMm = page.format.height.toMillimeters()
+    val body = page.elements.joinToString("\n") { renderElement(it, embeddedFonts = true) }
+    return """
+        |<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="0 0 $widthMm $heightMm">
+        |<defs><style>$css</style></defs>
+        |<rect x="0" y="0" width="$widthMm" height="$heightMm" fill="white"/>
+        |$body
+        |</svg>
+    """.trimMargin()
+}
+
 private fun renderElement(element: PageElement): String = when (element) {
     is PositionedText -> renderText(element)
     is Line -> renderLine(element)
     is Rectangle -> renderRectangle(element)
     is PositionedImage -> renderImagePlaceholder(element)
+}
+
+private fun renderElement(element: PageElement, embeddedFonts: Boolean): String = when (element) {
+    is PositionedText -> renderText(element, embeddedFonts)
+    is Line -> renderLine(element)
+    is Rectangle -> renderRectangle(element)
+    is PositionedImage -> renderImagePlaceholder(element)
+}
+
+private fun renderText(text: PositionedText, embeddedFonts: Boolean): String = when (text.orientation) {
+    TextOrientation.HORIZONTAL -> renderHorizontalText(text, embeddedFonts)
+    TextOrientation.VERTICAL_BOTTOM_TO_TOP -> renderVerticalText(text, embeddedFonts)
 }
 
 private fun renderText(text: PositionedText): String = when (text.orientation) {
@@ -41,6 +77,10 @@ private fun renderText(text: PositionedText): String = when (text.orientation) {
 }
 
 private fun renderHorizontalText(text: PositionedText): String {
+    return renderHorizontalText(text, embeddedFonts = false)
+}
+
+private fun renderHorizontalText(text: PositionedText, embeddedFonts: Boolean): String {
     val x = text.rect.x.toMillimeters()
     val top = text.rect.y.toMillimeters()
     val height = text.rect.height.toMillimeters()
@@ -48,7 +88,8 @@ private fun renderHorizontalText(text: PositionedText): String {
     val fontSizeMm = text.style.sizePt * PT_TO_MM
     val fontStyle = if (text.style.italic) """ font-style="italic"""" else ""
 
-    return """<text x="$x" y="$baseline" font-size="$fontSizeMm" font-family="sans-serif"$fontStyle>${escapeXml(text.text)}</text>"""
+    val family = if (embeddedFonts) text.style.font.id else "sans-serif"
+    return """<text x="$x" y="$baseline" font-size="$fontSizeMm" font-family="$family"$fontStyle>${escapeXml(text.text)}</text>"""
 }
 
 // rotate(-90) = counterclockwise in SVG's clockwise-positive convention: local +x (reading
@@ -65,12 +106,17 @@ private fun renderHorizontalText(text: PositionedText): String {
 // sitting 80% of the way across, not 50% — gives ascent the 80%-sized margin it actually needs and
 // centers the visible glyphs, not the baseline point.
 private fun renderVerticalText(text: PositionedText): String {
+    return renderVerticalText(text, embeddedFonts = false)
+}
+
+private fun renderVerticalText(text: PositionedText, embeddedFonts: Boolean): String {
     val px = (text.rect.x + text.rect.width * BASELINE_RATIO).toMillimeters()
     val py = (text.rect.y + text.rect.height).toMillimeters()
     val fontSizeMm = text.style.sizePt * PT_TO_MM
     val fontStyle = if (text.style.italic) """ font-style="italic"""" else ""
 
-    return """<text x="0" y="0" font-size="$fontSizeMm" font-family="sans-serif" transform="translate($px, $py) rotate(-90)"$fontStyle>${escapeXml(text.text)}</text>"""
+    val family = if (embeddedFonts) text.style.font.id else "sans-serif"
+    return """<text x="0" y="0" font-size="$fontSizeMm" font-family="$family" transform="translate($px, $py) rotate(-90)"$fontStyle>${escapeXml(text.text)}</text>"""
 }
 
 private fun renderLine(line: Line): String {

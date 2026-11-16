@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     api(projects.reportLayoutIr)
+    implementation(projects.reportLayout)
 
     testImplementation(projects.reportIr)
     testImplementation(projects.reportLayout)

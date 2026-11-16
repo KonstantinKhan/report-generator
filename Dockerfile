@@ -12,9 +12,12 @@ RUN --mount=type=cache,target=/root/.gradle ./gradlew :report-server:shadowJar -
 FROM eclipse-temurin:21-jre AS runtime
 WORKDIR /app
 
-RUN mkdir -p /data/reports
+RUN mkdir -p /data/reports \
+    && groupadd --system report \
+    && useradd --system --gid report --home-dir /nonexistent --shell /usr/sbin/nologin report \
+    && chown report:report /data/reports
 
-COPY --from=build /workspace/report-server/build/libs/report-server-all.jar /app/report-server.jar
+COPY --from=build --chown=report:report /workspace/report-server/build/libs/report-server-all.jar /app/report-server.jar
 
 ENV REPORT_OUTPUT_DIR=/data/reports
 ENV SERVER_PORT=8080
@@ -23,5 +26,7 @@ ENV SERVER_PORT=8080
 # must be provided at `docker run` time (-e ...); the server fails fast at startup if missing.
 
 EXPOSE 8080
+
+USER report
 
 ENTRYPOINT ["java", "-jar", "/app/report-server.jar"]

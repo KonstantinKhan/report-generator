@@ -13,8 +13,10 @@ dependencies {
     implementation(projects.reportLoodsman)
     implementation(projects.reportDomain)
     implementation(projects.reports.specification)
+    implementation(projects.reports.purchasedItems)
     implementation(projects.reportLayout)
     implementation(projects.reportRenderPdf)
+    implementation(projects.reportRenderSvg)
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
