@@ -252,6 +252,9 @@ class MappingConfigValidatorTest : ShouldSpec({
                 "Наименование", "Обозначение", "Масса", "Наименование предприятия", "Позиция", "Примечание", "Формат",
                 "Обозначение изделия", "Наименование изделия", "Вид материала по ЕСКД", "Обозначение стандарта",
                 "Вид изделия", "Типоразмер", "Зона", "Способ применения", "Назначение комплекта",
+                "Источник поступления", "Код ОКП / по классификатору", "Код ОКПД 2", "Поставщик",
+                "Количество на регулировку", "Разработал", "Номер последнего изменения", "Первичное применение",
+                "Подразделение", "Раздел спецификации",
             ),
             version = 1,
             typeLinks = listOf(
@@ -264,6 +267,7 @@ class MappingConfigValidatorTest : ShouldSpec({
                 TypeLinkInfo(typeId1 = 64, typeId2 = 122, idLinkType = 1, direction = 1),
                 TypeLinkInfo(typeId1 = 61, typeId2 = 122, idLinkType = 1, direction = 1),
                 TypeLinkInfo(typeId1 = 16, typeId2 = 122, idLinkType = 1, direction = 1),
+                TypeLinkInfo(typeId1 = 58, typeId2 = 122, idLinkType = 1, direction = 1),
                 // Технологическая ДСЕ для: деталь читает её только в обратном направлении.
                 TypeLinkInfo(typeId1 = 60, typeId2 = 44, idLinkType = 11, direction = -1),
                 // Изготавливается из ...: форма материала — прямое направление (к материалу по КД).
