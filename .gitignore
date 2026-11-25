@@ -20,3 +20,4 @@ report-cli/output/
 
 # generated reports (docker-compose mounts ./reports as REPORT_OUTPUT_DIR; reports/specification/ is a source module, do not ignore it)
 /reports/*.pdf
+@.pi/

@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "knowledge": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
